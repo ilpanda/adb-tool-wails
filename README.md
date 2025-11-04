@@ -17,3 +17,12 @@ to this in your browser, and you can call your Go code from devtools.
 ## Building
 
 To build a redistributable, production mode package, use `wails build`.
+
+
+---
+## TODO
+1. 支持 Terminal 输入命令。
+2. 支持录屏。
+3. 支持设置 adb 路径。
+4. 支持实时显示 logcat 。
+5. 文件管理。
