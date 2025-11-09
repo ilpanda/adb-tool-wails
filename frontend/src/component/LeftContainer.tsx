@@ -53,9 +53,9 @@ function LeftContainer() {
 
     const menuItems = [
         {key: '1', icon: 'fa-bolt', label: '快捷功能', iconColor: 'text-amber-500'},
-        {key: '2', icon: 'fa-folder', label: '文件管理', iconColor: 'text-blue-500'},
-        {key: '3', icon: 'fa-terminal', label: 'Logcat', iconColor: 'text-green-500'},
-        {key: '4', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
+        // {key: '2', icon: 'fa-folder', label: '文件管理', iconColor: 'text-blue-500'},
+        // {key: '3', icon: 'fa-terminal', label: 'Logcat', iconColor: 'text-green-500'},
+        // {key: '4', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
     ];
 
     return (
