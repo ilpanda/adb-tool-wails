@@ -24,6 +24,7 @@ export type ActionType =
     | 'grant-permissions'
     | 'install-app-path'
     | 'export-app'
+    | 'get-system-info'
     ;
 
 
@@ -80,6 +81,7 @@ export const quickActions: QuickActionSection[] = [
     {
         title: "系统",
         items: [
+            { icon: 'fa-info', label: '系统信息', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'get-system-info' },
             { icon: 'fa-cog', label: '系统属性', color: 'text-cyan-600', bgColor: 'bg-cyan-50', action: 'get-system-property' },
             { icon: 'fa-rotate', label: '重启手机', color: 'text-red-500', bgColor: 'bg-red-50', action: 'reboot-device' },
             { icon: 'fa-power-off', label: '关机', color: 'text-gray-600', bgColor: 'bg-gray-100', action: 'shutdown-device' }

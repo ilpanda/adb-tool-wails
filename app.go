@@ -123,6 +123,8 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.InstallApp(param)
 	case "uninstall-app":
 		return adb.UninstallApp(param)
+	case "get-system-info":
+		return adb.GetDeviceInfo(param)
 	case "get-system-property":
 		return adb.GetAllSystemProperties(param)
 	case "export-app":

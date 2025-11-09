@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -497,6 +498,132 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 	}
 
 	return types.NewExecResultSuccess("screenshot", fmt.Sprintf("截图已保存到: %s", savePath))
+}
+
+func GetDeviceInfo(param ExecuteParams) types.ExecResult {
+	// 定义所有命令
+	commands := []string{
+		"getprop ro.product.model",
+		"getprop ro.build.version.release",
+		"wm density",
+		"dumpsys window displays",
+		"settings get secure android_id",
+		"getprop ro.build.version.sdk",
+		"ifconfig | grep Mask",
+		`service call iphonesubinfo 1 s16 com.android.shell | cut -c 52-66 | tr -d '.[:space:]'`,
+		"getprop ro.build.version.codename",
+	}
+
+	// 构建所有命令字符串（用于日志）
+	var cmdStrs []string
+	for _, cmd := range commands {
+		cmdStrs = append(cmdStrs, buildAdbShellCmd(param.DeviceId, cmd))
+	}
+	allCmds := strings.Join(cmdStrs, "\n")
+
+	// 执行所有 ADB 命令
+	model, _ := util.Exec(cmdStrs[0], false, nil)
+	version, _ := util.Exec(cmdStrs[1], false, nil)
+	density, _ := util.Exec(cmdStrs[2], false, nil)
+	display, _ := util.Exec(cmdStrs[3], false, nil)
+	androidID, _ := util.Exec(cmdStrs[4], false, nil)
+	sdkVersion, _ := util.Exec(cmdStrs[5], false, nil)
+	ipAddress, _ := util.Exec(cmdStrs[6], true, nil)
+	imei, _ := util.Exec(cmdStrs[7], false, nil)
+	codeName, _ := util.Exec(cmdStrs[8], false, nil)
+
+	model = strings.TrimSpace(model)
+	version = strings.TrimSpace(version)
+	density = strings.TrimSpace(density)
+	androidID = strings.TrimSpace(androidID)
+	sdkVersion = strings.TrimSpace(sdkVersion)
+	imei = strings.TrimSpace(imei)
+	codeName = strings.ToUpper(strings.TrimSpace(codeName))
+
+	if codeName == "REL" {
+		codeName = ""
+	}
+
+	// 解析显示信息
+	displayLines := util.MultiLine(display)
+	var displayRes string
+	for _, line := range displayLines {
+		if strings.Contains(line, "init=") {
+			displayRes = strings.TrimSpace(line)
+			if idx := strings.Index(displayRes, "rng"); idx != -1 {
+				displayRes = displayRes[:idx]
+			}
+			break
+		}
+	}
+
+	// 解析 IP 地址
+	ipAddressRes := ""
+	permissionDeny := strings.Contains(ipAddress, "Permission denied")
+	if !permissionDeny {
+		ipAddressRes = fmt.Sprintf("ipAddress: %s", strings.TrimSpace(strings.ReplaceAll(ipAddress, "\n", "")))
+	}
+
+	// 解析密度
+	var densityRes string
+	var densityScale float64
+	var overrideRes string
+
+	if !strings.Contains(density, "Override density") {
+		idx := strings.Index(density, ":")
+		if idx != -1 {
+			densityRes = strings.TrimSpace(density[idx+1:])
+			if d, err := strconv.ParseFloat(densityRes, 64); err == nil {
+				densityScale = d / 160
+			}
+		}
+	} else {
+		lines := util.MultiLine(density)
+		if len(lines) >= 2 {
+			idx := strings.Index(lines[0], ":")
+			if idx != -1 {
+				densityRes = strings.TrimSpace(lines[0][idx+1:])
+			}
+
+			idx = strings.Index(lines[1], ":")
+			if idx != -1 {
+				overrideDensity := strings.TrimSpace(lines[1][idx+1:])
+				if d, err := strconv.ParseFloat(overrideDensity, 64); err == nil {
+					densityScale = d / 160
+				}
+				overrideRes = fmt.Sprintf("Override density: %sdpi", overrideDensity)
+			}
+		}
+	}
+
+	// 获取版本构建信息
+	versionBuild := util.GetVersionBuild(sdkVersion)
+	if versionBuild == "" {
+		versionBuild = fmt.Sprintf("Android %s", version)
+	}
+
+	// 格式化结果
+	result := fmt.Sprintf(`model: %s
+imei: %s
+version: %s %s
+display: %s
+Physical density: %sdpi  %s
+density scale: %.2f
+android_id: %s
+%s`,
+		model,
+		imei,
+		versionBuild,
+		codeName,
+		displayRes,
+		densityRes,
+		overrideRes,
+		densityScale,
+		androidID,
+		ipAddressRes,
+	)
+
+	return types.NewExecResultSuccess(allCmds, result)
 }
 
 func execCmd(cmd string) types.ExecResult {
