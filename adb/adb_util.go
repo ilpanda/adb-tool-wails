@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -447,14 +446,20 @@ func UninstallApp(param ExecuteParams) types.ExecResult {
 }
 
 func Screenshot(param ExecuteParams) types.ExecResult {
+	// 1. 先获取保存路径
 	timestamp := time.Now().Format("2006_01_02_15_04_05")
 	defaultFilename := fmt.Sprintf("screenshot_%s.png", timestamp)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		homeDir = ""
+		homeDir = "."
 	}
 	desktopDir := filepath.Join(homeDir, "Desktop")
+
+	// 确保桌面目录存在，如果不存在则使用主目录
+	if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
+		desktopDir = homeDir
+	}
 
 	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
 		DefaultDirectory: desktopDir,
@@ -473,32 +478,43 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 	})
 
 	if err != nil {
-		return types.NewExecResultError("screenshot", err)
+		return types.NewExecResultErrorString("screenshot", fmt.Sprintf("保存对话框错误: %v", err))
 	}
 
 	if savePath == "" {
 		return types.NewExecResultErrorString("screenshot", "用户取消保存")
 	}
 
-	// ✅ 修改：支持指定设备的截图
-	var cmd *exec.Cmd
-	if param.DeviceId != "" {
-		cmd = exec.Command("adb", "-s", param.DeviceId, "exec-out", "screencap", "-p")
-	} else {
-		cmd = exec.Command("adb", "exec-out", "screencap", "-p")
-	}
+	// 2. 执行截图命令
+	// 方案：先保存到设备，再拉取（最稳定）
+	devicePath := "/sdcard/screenshot_temp.png"
 
-	output, err := cmd.Output()
+	// 步骤1: 截图到设备
+	cmdScreencap := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("screencap -p %s", devicePath))
+	res, err := util.Exec(cmdScreencap, false, nil)
 	if err != nil {
-		return types.NewExecResultError("screenshot", err)
+		return types.NewExecResultErrorString(cmdScreencap, fmt.Sprintf("截图失败: %v, 输出: %s", err, res))
 	}
 
-	err = os.WriteFile(savePath, output, 0644)
+	// 步骤2: 拉取到本地
+	cmdPull := buildAdbCmd(param.DeviceId, fmt.Sprintf("pull %s \"%s\"", devicePath, savePath))
+	res, err = util.Exec(cmdPull, false, nil)
 	if err != nil {
-		return types.NewExecResultError("screenshot", err)
+		return types.NewExecResultErrorString(cmdPull, fmt.Sprintf("拉取文件失败: %v, 输出: %s", err, res))
 	}
 
-	return types.NewExecResultSuccess("screenshot", fmt.Sprintf("截图已保存到: %s", savePath))
+	// 步骤3: 清理设备临时文件
+	cmdRm := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("rm %s", devicePath))
+	_, _ = util.Exec(cmdRm, false, nil) // 忽略删除错误
+
+	finalCmd := cmdScreencap + "\n" + cmdPull + "\n" + cmdRm
+
+	// 步骤4: 验证文件是否存在
+	if _, err := os.Stat(savePath); os.IsNotExist(err) {
+		return types.NewExecResultErrorString(finalCmd, "截图保存失败，文件不存在")
+	}
+
+	return types.NewExecResultSuccess(finalCmd, fmt.Sprintf("截图已保存到: %s", savePath))
 }
 
 func GetDeviceInfo(param ExecuteParams) types.ExecResult {
