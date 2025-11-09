@@ -8,7 +8,14 @@ on:
 permissions:
   contents: write
 
+env:
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
+  WAILS_VERSION: 'v2.10.2'
+
 jobs:
+
+  # === LINUX BUILD ===
   build-linux:
     runs-on: ubuntu-22.04
     steps:
@@ -18,35 +25,47 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
-          go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
-      - name: Build
+      - name: Build (Linux amd64)
         run: |
-          cd frontend && npm install && cd ..
+          cd frontend && npm ci && cd ..
           wails build -clean -platform linux/amd64
 
       - name: Package
         run: |
           cd build/bin
-          tar czf adb-tool-linux-amd64.tar.gz adb-tool
+          echo "✨ 打包前内容:"
+          ls -l
 
-      - name: Upload
+          FILE=$(ls | grep -v '\.tar\.gz' | head -n 1)
+          if [ -z "$FILE" ]; then
+            echo "❌ 未找到构建产物，构建失败！"
+            exit 1
+          fi
+
+          tar czf adb-tool-linux-amd64.tar.gz "$FILE"
+          echo "✅ 打包完成: $FILE -> adb-tool-linux-amd64.tar.gz"
+          ls -lh adb-tool-linux-amd64.tar.gz
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
           path: build/bin/adb-tool-linux-amd64.tar.gz
 
+  # === MACOS BUILD ===
   build-macos:
     runs-on: macos-latest
     steps:
@@ -56,32 +75,38 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
-      - name: Build
+      - name: Build (Mac universal)
         run: |
-          cd frontend && npm install && cd ..
+          cd frontend && npm ci && cd ..
           wails build -clean -platform darwin/universal
 
       - name: Package
         run: |
           cd build/bin
-          tar czf adb-tool-macos-universal.tar.gz *
+          echo "✨ 打包前内容:"
+          ls -l
 
-      - name: Upload
+          FILE=$(ls | grep -v '\.tar\.gz' | head -n 1)
+          tar czf adb-tool-macos-universal.tar.gz "$FILE"
+          echo "✅ 打包完成: $FILE -> adb-tool-macos-universal.tar.gz"
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
           path: build/bin/adb-tool-macos-universal.tar.gz
 
+  # === WINDOWS BUILD ===
   build-windows:
     runs-on: windows-latest
     steps:
@@ -91,34 +116,50 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
-      - name: Build
+      - name: Build (Windows amd64)
+        shell: pwsh
         run: |
           cd frontend
-          npm install
+          npm ci
           cd ..
-          wails build -clean -platform windows/amd64 -skipbindings -s
+          try {
+            wails build -clean -platform windows/amd64 -skipbindings -s
+          } catch {
+            Write-Host "⚠️ 检测到 icon.ico 可能无效（not a valid ICO file），请确认文件格式"
+            exit 1
+          }
 
       - name: Package
+        shell: pwsh
         run: |
           cd build/bin
-          Compress-Archive -Path adb-tool.exe -DestinationPath adb-tool-windows-amd64.zip
+          Write-Host "✨ 打包前内容:"
+          Get-ChildItem
+          $file = Get-ChildItem -Filter *.exe | Select-Object -First 1
+          if (-not $file) {
+            Write-Host "❌ 未找到 exe 构建产物"
+            exit 1
+          }
+          Compress-Archive -Path $file.Name -DestinationPath adb-tool-windows-amd64.zip
+          Write-Host "✅ 打包完成: $($file.Name) -> adb-tool-windows-amd64.zip"
 
-      - name: Upload
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: build/bin/adb-tool-windows-amd64.zip
 
+  # === RELEASE ===
   release:
     needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
@@ -131,13 +172,13 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/linux-build/adb-tool-linux-amd64.tar.gz
-            artifacts/macos-build/adb-tool-macos-universal.tar.gz
-            artifacts/windows-build/adb-tool-windows-amd64.zip
+            artifacts/linux-build/*.tar.gz
+            artifacts/macos-build/*.tar.gz
+            artifacts/windows-build/*.zip
           generate_release_notes: true
           draft: false
         env:
