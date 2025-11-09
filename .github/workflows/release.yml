@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
           go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build
@@ -74,13 +74,13 @@ jobs:
       - name: Package
         run: |
           cd build/bin
-          ditto -c -k --keepParent adb-tool.app adb-tool-macos-universal.zip
+          tar czf adb-tool-macos-universal.tar.gz *
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: build/bin/adb-tool-macos-universal.zip
+          path: build/bin/adb-tool-macos-universal.tar.gz
 
   build-windows:
     runs-on: windows-latest
@@ -136,7 +136,7 @@ jobs:
         with:
           files: |
             artifacts/linux-build/adb-tool-linux-amd64.tar.gz
-            artifacts/macos-build/adb-tool-macos-universal.zip
+            artifacts/macos-build/adb-tool-macos-universal.tar.gz
             artifacts/windows-build/adb-tool-windows-amd64.zip
           generate_release_notes: true
           draft: false
