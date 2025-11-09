@@ -1,0 +1,50 @@
+project_name: adb-tool
+
+before:
+  hooks:
+    - go mod download
+    - cd frontend && npm install && cd ..
+
+builds:
+  - id: adb-tool
+    binary: adb-tool
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    hooks:
+      pre:
+        - wails build -clean -platform {{.Os}}/{{.Arch}}
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+release:
+  github:
+    owner: ilpanda
+    name: adb-tool-wails
+  draft: false
+  prerelease: auto
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
