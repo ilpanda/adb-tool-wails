@@ -107,8 +107,6 @@ go.work.sum
 # env file
 .env
 
-build
-
 frontend/wailsjs/
 
 .DS_Store
