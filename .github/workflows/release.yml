@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
           go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
 
       - name: Build
@@ -101,20 +101,12 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2
 
-      - name: Create default icon if missing
-        run: |
-          if (-not (Test-Path "build\windows\icon.ico")) {
-            New-Item -ItemType Directory -Force -Path build\windows
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/wailsapp/wails/master/v2/internal/frontend/desktop/windows/icon.ico" -OutFile "build\windows\icon.ico"
-          }
-        shell: pwsh
-
       - name: Build
         run: |
           cd frontend
           npm install
           cd ..
-          wails build -clean -platform windows/amd64
+          wails build -clean -platform windows/amd64 -skipbindings -s
 
       - name: Package
         run: |
