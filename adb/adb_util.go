@@ -16,6 +16,7 @@ import (
 )
 
 type ExecuteParams struct {
+	Action      string
 	PackageName string
 	Ctxt        context.Context
 	DeviceId    string
@@ -624,6 +625,39 @@ android_id: %s
 	)
 
 	return types.NewExecResultSuccess(allCmds, result)
+}
+
+// JumpToSettings 跳转到指定设置页面
+func JumpToSettings(param ExecuteParams) types.ExecResult {
+	var intent string
+
+	switch param.Action {
+	case "jump-locale":
+		intent = "android.settings.LOCALE_SETTINGS"
+	case "jump-developer":
+		intent = "android.settings.APPLICATION_DEVELOPMENT_SETTINGS"
+	case "jump-application":
+		intent = "android.settings.APPLICATION_SETTINGS"
+	case "jump-notification":
+		intent = "android.settings.NOTIFICATION_SETTINGS"
+	case "jump-bluetooth":
+		intent = "android.settings.BLUETOOTH_SETTINGS"
+	case "jump-input":
+		intent = "android.settings.INPUT_METHOD_SETTINGS"
+	case "jump-display":
+		intent = "android.settings.DISPLAY_SETTINGS"
+	default:
+		return types.NewExecResultErrorString(param.Action, "未知的跳转操作")
+	}
+
+	cmd := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("am start -a %s", intent))
+	res, err := util.Exec(cmd, false, nil)
+
+	if err != nil {
+		return types.NewExecResultFromError(cmd, res, err)
+	}
+
+	return types.NewExecResultSuccess(cmd, res)
 }
 
 func execCmd(cmd string) types.ExecResult {

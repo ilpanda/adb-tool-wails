@@ -73,6 +73,7 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 	}
 
 	param := adb.ExecuteParams{
+		Action:      action,
 		PackageName: ac.TargetPackageName,
 		Ctxt:        a.ctx,
 		DeviceId:    ac.DeviceId,
@@ -131,6 +132,9 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.ExportAppPackagePath(param)
 	case "install-app-path":
 		return adb.GetAppInstallPath(param)
+	case "jump-locale", "jump-developer", "jump-application",
+		"jump-notification", "jump-bluetooth", "jump-input", "jump-display":
+		return adb.JumpToSettings(param)
 	}
 
 	return types.NewExecResultFromString(action, "", fmt.Sprintf("不支持的操作: %s", action))

@@ -25,6 +25,13 @@ export type ActionType =
     | 'install-app-path'
     | 'export-app'
     | 'get-system-info'
+    | 'jump-locale'
+    | 'jump-developer'
+    | 'jump-application'
+    | 'jump-notification'
+    | 'jump-bluetooth'
+    | 'jump-input'
+    | 'jump-display'
     ;
 
 
@@ -76,6 +83,18 @@ export const quickActions: QuickActionSection[] = [
             { icon: 'fa-volume-low', label: '降低音量按键', color: 'text-orange-500', bgColor: 'bg-orange-50', action: 'key-volume-down' },
             { icon: 'fa-volume-xmark', label: '静音按键', color: 'text-gray-500', bgColor: 'bg-gray-50', action: 'key-mute' },
             { icon: 'fa-layer-group', label: '切换应用按键', color: 'text-teal-500', bgColor: 'bg-teal-50', action: 'key-app-switch' },
+        ]
+    },
+    {
+        title: "快速跳转",
+        items: [
+            { icon: 'fa-globe', label: '语言设置', color: 'text-blue-600', bgColor: 'bg-blue-50', action: 'jump-locale' },
+            { icon: 'fa-code-branch', label: '开发者选项', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'jump-developer' },
+            { icon: 'fa-th-large', label: '应用管理', color: 'text-green-600', bgColor: 'bg-green-50', action: 'jump-application' },
+            { icon: 'fa-bell', label: '通知设置', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'jump-notification' },
+            { icon: 'fa-bluetooth-b', label: '蓝牙设置', color: 'text-sky-600', bgColor: 'bg-sky-50', action: 'jump-bluetooth' },
+            { icon: 'fa-keyboard', label: '输入法设置', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'jump-input' },
+            { icon: 'fa-tv', label: '显示设置', color: 'text-teal-600', bgColor: 'bg-teal-50', action: 'jump-display' }
         ]
     },
     {
