@@ -9,13 +9,49 @@ permissions:
   contents: write
 
 jobs:
-  goreleaser:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          fetch-depth: 0
+          go-version: '1.23'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build
+        run: |
+          cd frontend && npm install && cd ..
+          wails build -clean -platform linux/amd64
+
+      - name: Package
+        run: |
+          cd build/bin
+          tar czf adb-tool-linux-amd64.tar.gz adb-tool
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: build/bin/adb-tool-linux-amd64.tar.gz
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -30,16 +66,79 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Install Linux dependencies
+      - name: Build
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          cd frontend && npm install && cd ..
+          wails build -clean -platform darwin/universal
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+      - name: Package
+        run: |
+          cd build/bin
+          ditto -c -k --keepParent adb-tool.app adb-tool-macos-universal.zip
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
         with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
+          name: macos-build
+          path: build/bin/adb-tool-macos-universal.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build
+        run: |
+          cd frontend
+          npm install
+          cd ..
+          wails build -clean -platform windows/amd64
+
+      - name: Package
+        run: |
+          cd build/bin
+          Compress-Archive -Path adb-tool.exe -DestinationPath adb-tool-windows-amd64.zip
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: build/bin/adb-tool-windows-amd64.zip
+
+  release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/linux-build/adb-tool-linux-amd64.tar.gz
+            artifacts/macos-build/adb-tool-macos-universal.zip
+            artifacts/windows-build/adb-tool-windows-amd64.zip
+          generate_release_notes: true
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
