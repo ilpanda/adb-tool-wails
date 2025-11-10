@@ -2,7 +2,8 @@
 
 <div align="center">
 
-![ADB Tool Logo](build/appicon.png)
+<img src="build/appicon.png" alt="ADB Tool Logo" style="width:300px; height:auto;">
+
 
 一个现代化的 Android Debug Bridge (ADB) 图形界面工具，让 Android 设备管理变得简单直观。
 
@@ -11,7 +12,7 @@
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8.svg)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://reactjs.org)
 
-[功能特性](#功能特性) • [快速开始](#快速开始) • [使用说明](#使用说明) • [开发](#开发) • [TODO](#todo)
+[功能特性](#功能特性) • [快速开始](#快速开始) • [开发计划](#开发计划) 
 
 </div>
 
