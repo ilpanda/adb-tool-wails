@@ -197,7 +197,7 @@ func RestartApp(param ExecuteParams) types.ExecResult {
 	killAppRes := KillApp(param)
 	resCmd := killAppRes.Cmd
 	if killAppRes.Error != "" {
-		return types.NewExecResultErrorString(resCmd, killAppRes.Error)
+		return killAppRes
 	}
 	startAppRes := StartActivity(param)
 	resCmd = resCmd + "\n" + startAppRes.Cmd
@@ -205,6 +205,56 @@ func RestartApp(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString(resCmd, startAppRes.Error)
 	}
 	return types.NewExecResultSuccess(resCmd, "")
+}
+
+func ClearAndRestartApp(param ExecuteParams) types.ExecResult {
+	clearAppRes := ClearApp(param)
+	resCmd := clearAppRes.Cmd
+	if clearAppRes.Error != "" {
+		return clearAppRes
+	}
+
+	inputMethodCmd := IsInputMethod(param)
+
+	if inputMethodCmd.Res != "" {
+		resCmd = resCmd + "\n" + inputMethodCmd.Cmd
+		changeInputMethodCmd := execCmd(buildAdbShellCmd(param.DeviceId, fmt.Sprintf("settings put secure default_input_method %s", inputMethodCmd.Res)))
+		resCmd = resCmd + "\n" + changeInputMethodCmd.Cmd
+		if changeInputMethodCmd.Error != "" {
+			return types.NewExecResultErrorString(resCmd, changeInputMethodCmd.Error)
+		}
+		return types.NewExecResultSuccess(resCmd, "")
+	}
+
+	startAppRes := StartActivity(param)
+	resCmd = resCmd + "\n" + startAppRes.Cmd
+	if startAppRes.Error != "" {
+		return types.NewExecResultErrorString(resCmd, startAppRes.Error)
+	}
+	return types.NewExecResultSuccess(resCmd, "")
+}
+
+func IsInputMethod(param ExecuteParams) types.ExecResult {
+	inputMethodRes := listInputMethodService(param)
+	if inputMethodRes.Error != "" {
+		return inputMethodRes
+	}
+	array := util.MultiLine(inputMethodRes.Res)
+	for _, s := range array {
+		if strings.Contains(s, param.PackageName) {
+			return types.NewExecResultSuccess(inputMethodRes.Cmd, strings.TrimSpace(s))
+		}
+	}
+	return types.NewExecResultErrorString(inputMethodRes.Cmd, "")
+}
+
+func listInputMethodService(param ExecuteParams) types.ExecResult {
+	cmd := buildAdbShellCmd(param.DeviceId, "ime list -s")
+	result := execCmd(cmd)
+	if result.Res != "" {
+		result.Res = strings.TrimSpace(result.Res)
+	}
+	return result
 }
 
 func StartActivity(param ExecuteParams) types.ExecResult {
@@ -529,6 +579,7 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		"ifconfig | grep Mask",
 		`service call iphonesubinfo 1 s16 com.android.shell | cut -c 52-66 | tr -d '.[:space:]'`,
 		"getprop ro.build.version.codename",
+		"getprop ro.product.brand",
 	}
 
 	// 构建所有命令字符串（用于日志）
@@ -548,6 +599,7 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	ipAddress, _ := util.Exec(cmdStrs[6], true, nil)
 	imei, _ := util.Exec(cmdStrs[7], false, nil)
 	codeName, _ := util.Exec(cmdStrs[8], false, nil)
+	brand, _ := util.Exec(cmdStrs[9], false, nil)
 
 	model = strings.TrimSpace(model)
 	version = strings.TrimSpace(version)
@@ -555,6 +607,7 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	androidID = strings.TrimSpace(androidID)
 	sdkVersion = strings.TrimSpace(sdkVersion)
 	imei = strings.TrimSpace(imei)
+	brand = strings.TrimSpace(brand)
 	codeName = strings.ToUpper(strings.TrimSpace(codeName))
 
 	if codeName == "REL" {
@@ -620,7 +673,8 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	}
 
 	// 格式化结果
-	result := fmt.Sprintf(`model: %s
+	result := fmt.Sprintf(`brand: %s
+model: %s
 imei: %s
 version: %s %s
 display: %s
@@ -628,6 +682,7 @@ Physical density: %sdpi  %s
 density scale: %.2f
 android_id: %s
 %s`,
+		brand,
 		model,
 		imei,
 		versionBuild,
@@ -641,6 +696,139 @@ android_id: %s
 	)
 
 	return types.NewExecResultSuccess(allCmds, result)
+}
+
+func DumpSysMemInfo(param ExecuteParams) types.ExecResult {
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
+	}
+
+	cmd := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("dumpsys meminfo %s", param.PackageName))
+	return execCmd(cmd)
+}
+
+func dumpSmaps(param ExecuteParams) types.ExecResult {
+	packageName := param.PackageName
+	cmd := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("pidof %s", packageName))
+	finalCmd := cmd
+	pid, err := util.Exec(cmd, false, nil)
+	if err != nil {
+		return types.NewExecResultError(cmd, err)
+	}
+
+	if pid == "" {
+		return types.NewExecResultErrorString(cmd, fmt.Sprintf("%s process not found", packageName))
+	}
+
+	smapsCmd := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("run-as %s cat /proc/%s/smaps ", packageName, strings.TrimSpace(pid)))
+	result := execCmd(smapsCmd)
+	result.Cmd = finalCmd + "\n" + smapsCmd
+	return result
+}
+
+func SaveSmaps(param ExecuteParams) types.ExecResult {
+
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	desktopDir := filepath.Join(homeDir, "Desktop")
+
+	// 确保桌面目录存在，如果不存在则使用主目录
+	if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
+		desktopDir = homeDir
+	}
+	timestamp := time.Now().Format("2006_01_02_15_04_05")
+	saveFileName := fmt.Sprintf("%s_smaps.txt", timestamp)
+	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
+		DefaultDirectory: desktopDir,
+		DefaultFilename:  saveFileName,
+		Title:            "保存 smaps",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "文本文件 (*.txt)", Pattern: "*.txt"},
+		},
+	})
+
+	result := dumpSmaps(param)
+	if result.Error != "" {
+		return result
+	}
+
+	if savePath == "" {
+		return types.NewExecResultErrorString(result.Cmd, "用户取消保存")
+	}
+
+	if strings.Contains(result.Res, "not debuggable") {
+		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 smaps"+"\n"+result.Res, result.Error)
+	}
+
+	saveError := os.WriteFile(savePath, []byte(result.Res), 0644)
+	if saveError != nil {
+		return types.NewExecResultError(result.Cmd, saveError)
+	}
+	return types.NewExecResultSuccess(result.Cmd, "success")
+}
+
+func SaveHprof(param ExecuteParams) types.ExecResult {
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	desktopDir := filepath.Join(homeDir, "Desktop")
+
+	// 确保桌面目录存在，如果不存在则使用主目录
+	if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
+		desktopDir = homeDir
+	}
+	timestamp := time.Now().Format("2006_01_02_15_04_05")
+	saveFileName := fmt.Sprintf("%s", timestamp)
+	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
+		DefaultDirectory: desktopDir,
+		DefaultFilename:  saveFileName,
+		Title:            "保存 hprof",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "文本文件 (*.hprof)", Pattern: "*.hprof"},
+		},
+	})
+
+	result := execCmd(buildAdbShellCmd(param.DeviceId, fmt.Sprintf("am dumpheap %s /data/local/tmp/%s.hprof ", param.PackageName, saveFileName)))
+	if result.Error != "" {
+		return result
+	}
+
+	if savePath == "" {
+		return types.NewExecResultErrorString(result.Cmd, "用户取消保存")
+	}
+
+	if strings.Contains(result.Res, "not debuggable") {
+		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 hprof"+"\n"+result.Res, result.Error)
+	}
+
+	saveError := os.WriteFile(savePath, []byte(result.Res), 0644)
+	if saveError != nil {
+		return types.NewExecResultError(result.Cmd, saveError)
+	}
+	return types.NewExecResultSuccess(result.Cmd, "success")
+}
+
+func PackagePid(param ExecuteParams) types.ExecResult {
+	cmd := buildAdbShellCmd(param.DeviceId, fmt.Sprintf("pidof %s", param.PackageName))
+	result := execCmd(cmd)
+	if result.Error == "" && result.Res == "" {
+		result.Error = "pid is null，请检测应用是否运行。"
+	}
+	return result
 }
 
 // JumpToSettings 跳转到指定设置页面
@@ -681,5 +869,5 @@ func execCmd(cmd string) types.ExecResult {
 	if err != nil {
 		return types.NewExecResultFromError(cmd, "", err)
 	}
-	return types.NewExecResultSuccess(cmd, res)
+	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
 }

@@ -1,8 +1,8 @@
 import {QuickAction, quickActions} from '../data/quickActions';
-import {ExecuteAction} from '../../wailsjs/go/main/App';
+import {CheckAdbPath, ExecuteAction} from '../../wailsjs/go/main/App';
 import {useEffect, useRef, useState} from 'react';
 import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
-import {Select} from "antd";
+import {message, Select} from "antd";
 import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
 
@@ -40,6 +40,13 @@ function RightContainer() {
     const {devices, selectedDevice} = useDeviceStore();
 
     async function handleClick(action: QuickAction) {
+
+        let adbPath = await CheckAdbPath();
+        if (adbPath.error) {
+            message.error("请在设置项配置 adb 路径。")
+            return
+        }
+
         if (!showTerminal) {
             setShowTerminal(true);
         }

@@ -1,4 +1,3 @@
-
 export type ActionType =
     | 'install-app'
     | 'screenshot'
@@ -24,6 +23,7 @@ export type ActionType =
     | 'grant-permissions'
     | 'install-app-path'
     | 'export-app'
+    | 'clear-restart-app'
     | 'get-system-info'
     | 'jump-locale'
     | 'jump-developer'
@@ -32,7 +32,12 @@ export type ActionType =
     | 'jump-bluetooth'
     | 'jump-input'
     | 'jump-display'
+    | 'dump-memory-info'
+    | 'dump-pid'
+    | 'dump-smaps'
+    | 'dump-hprof'
     ;
+
 
 
 export interface QuickAction {
@@ -62,12 +67,17 @@ export const quickActions: QuickActionSection[] = [
     {
         title: "应用",
         items: [
-            { icon: 'fa-trash-alt', label: '清除数据', color: 'text-red-500', bgColor: 'bg-red-50', action: 'clear-data' },
+            { icon: 'fa-hashtag', label: '查看进程 PID', color: 'text-cyan-600', bgColor: 'bg-cyan-50', action: 'dump-pid' },
+            { icon: 'fa-folder-open', label: '查看应用安装路径', color: 'text-blue-600', bgColor: 'bg-blue-50', action: 'install-app-path' },
+            { icon: 'fa-memory', label: '查看内存 meminfo', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'dump-memory-info' },
+            { icon: 'fa-download', label: '保存应用 APK 到电脑', color: 'text-indigo-700', bgColor: 'bg-indigo-50', action: 'export-app' },
             { icon: 'fa-key', label: '授予所有权限', color: 'text-emerald-500', bgColor: 'bg-emerald-50', action: 'grant-permissions' },
             { icon: 'fa-shield-alt', label: '重置权限', color: 'text-orange-500', bgColor: 'bg-orange-50', action: 'reset-permissions' },
-            { icon: 'fa-folder-open', label: '查看应用安装路径', color: 'text-blue-600', bgColor: 'bg-blue-50', action: 'install-app-path' },
-            { icon: 'fa-download', label: '保存应用 APK 到电脑', color: 'text-indigo-700', bgColor: 'bg-indigo-50', action: 'export-app' },
+            { icon: 'fa-map', label: '导出 smaps', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'dump-smaps' },
+            { icon: 'fa-chart-pie', label: '导出 hprof', color: 'text-violet-600', bgColor: 'bg-violet-50', action: 'dump-hprof' },
             { icon: 'fa-skull-crossbones', label: '杀死应用', color: 'text-gray-700', bgColor: 'bg-gray-100', action: 'force-stop' },
+            { icon: 'fa-trash-alt', label: '清除数据', color: 'text-red-500', bgColor: 'bg-red-50', action: 'clear-data' },
+            { icon: 'fa-broom', label: '清除数据并重启应用', color: 'text-pink-600', bgColor: 'bg-pink-50', action: 'clear-restart-app' },
             { icon: 'fa-rotate-right', label: '重启应用', color: 'text-teal-500', bgColor: 'bg-teal-50', action: 'restart-app' },
             { icon: 'fa-circle-minus', label: '卸载应用', color: 'text-rose-600', bgColor: 'bg-rose-50', action: 'uninstall-app' },
         ]
@@ -100,7 +110,7 @@ export const quickActions: QuickActionSection[] = [
     {
         title: "系统",
         items: [
-            { icon: 'fa-info', label: '系统信息', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'get-system-info' },
+            { icon: 'fa-info', label: '手机信息', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'get-system-info' },
             { icon: 'fa-cog', label: '系统属性', color: 'text-cyan-600', bgColor: 'bg-cyan-50', action: 'get-system-property' },
             { icon: 'fa-rotate', label: '重启手机', color: 'text-red-500', bgColor: 'bg-red-50', action: 'reboot-device' },
             { icon: 'fa-power-off', label: '关机', color: 'text-gray-600', bgColor: 'bg-gray-100', action: 'shutdown-device' }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // Exec executes a shell command
@@ -21,8 +22,16 @@ func Exec(command string, ignoreError bool, exitWhen func(string) bool) (string,
 	stdoutStr := stdout.String()
 	stderrStr := stderr.String()
 
-	if stdoutStr != "" {
+	if stdoutStr != "" && stderrStr == "" {
 		return stdoutStr, nil
+	}
+
+	// stdout 有内容但 stderr 也有内容 → 合并打印
+	if stdoutStr != "" && stderrStr != "" {
+		if strings.HasSuffix(stdoutStr, "\n") {
+			return stdoutStr + stderrStr, nil
+		}
+		return stdoutStr + "\n" + stderrStr, nil
 	}
 
 	if stderrStr != "" {

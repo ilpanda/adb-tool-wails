@@ -2,10 +2,6 @@ package main
 
 import (
 	"embed"
-	"os"
-	"path/filepath"
-	runtime "runtime"
-	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -15,26 +11,7 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-func setupEnv() {
-	if runtime.GOOS == "darwin" {
-		homeDir, _ := os.UserHomeDir()
-		additionalPaths := []string{
-			"/usr/local/bin",    // Homebrew (Intel)
-			"/opt/homebrew/bin", // Homebrew (Apple Silicon)
-			filepath.Join(homeDir, "Library/Android/sdk/platform-tools"), // Android SDK
-			filepath.Join(homeDir, ".local/bin"),                         // 用户本地二进制
-			"/usr/bin",
-			"/bin",
-			"/usr/sbin",
-			"/sbin",
-		}
-		newPath := strings.Join(additionalPaths, ":")
-		os.Setenv("PATH", newPath)
-	}
-}
-
 func main() {
-	setupEnv()
 	// Create an instance of the app structure
 	app := NewApp()
 

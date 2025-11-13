@@ -192,16 +192,16 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                         {filteredLogs.map((log) => (
                             <div key={log.id} className="group">
                                 {log.type === 'command' ? (
-                                    <div className="flex items-start gap-2">
+                                    <div className="flex items-start gap-2 ">
                                         <span className="text-blue-600 select-none text-base leading-6 font-bold">❯</span>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="flex-1 min-w-0  items-center">
+                                            <div className="flex items-center gap-2 mb-1.5 mt-1 ">
                                                 <span className="text-blue-600 text-xs font-medium">{log.timestamp}</span>
                                                 <span className="text-purple-600 text-xs font-bold bg-purple-100 px-2 py-0.5 rounded">
                                                     {log.action}
                                                 </span>
                                             </div>
-                                            <div className="flex items-start gap-2 group/cmd">
+                                            {log.content && <div className="flex items-start gap-2 group/cmd">
                                                 <span className="text-green-700 flex-1 whitespace-pre-wrap break-all leading-relaxed font-medium">
                                                     {log.content}
                                                 </span>
@@ -212,7 +212,7 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                                                 >
                                                     <i className="fa-solid fa-copy text-base"></i>
                                                 </button>
-                                            </div>
+                                            </div>}
                                         </div>
                                     </div>
                                 ) : (

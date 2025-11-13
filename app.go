@@ -5,6 +5,10 @@ import (
 	"adb-tool-wails/types"
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"time"
@@ -37,11 +41,30 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.setupEnv()
 	a.deviceTracker = adb.NewDeviceTracker(func(devices []adb.DeviceInfo) {
 		a.scheduleDeviceUpdate(devices)
 	})
 	// 启动跟踪
 	go a.deviceTracker.Start(ctx)
+}
+
+func (a *App) setupEnv() {
+	if goruntime.GOOS == "darwin" {
+		homeDir, _ := os.UserHomeDir()
+		additionalPaths := []string{
+			"/usr/local/bin",    // Homebrew (Intel)`
+			"/opt/homebrew/bin", // Homebrew (Apple Silicon)
+			filepath.Join(homeDir, "Library/Android/sdk/platform-tools"), // Android SDK
+			filepath.Join(homeDir, ".local/bin"),                         // 用户本地二进制
+			"/usr/bin",
+			"/bin",
+			"/usr/sbin",
+			"/sbin",
+		}
+		newPath := strings.Join(additionalPaths, ":")
+		os.Setenv("PATH", newPath)
+	}
 }
 
 func (a *App) scheduleDeviceUpdate(devices []adb.DeviceInfo) {
@@ -69,7 +92,7 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 
 	deviceName := adb.GetDeviceNameArray()
 	if len(deviceName) == 0 {
-		return types.NewExecResultErrorString("", "no devices，请连接手机")
+		return types.NewExecResultErrorString("", "no devices，请使用数据线连接手机，并打开开发者模式")
 	}
 
 	param := adb.ExecuteParams{
@@ -132,12 +155,30 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.ExportAppPackagePath(param)
 	case "install-app-path":
 		return adb.GetAppInstallPath(param)
+	case "dump-pid":
+		return adb.PackagePid(param)
+	case "dump-memory-info":
+		return adb.DumpSysMemInfo(param)
+	case "dump-smaps":
+		return adb.SaveSmaps(param)
+	case "dump-hprof":
+		return adb.SaveHprof(param)
+	case "clear-restart-app":
+		return adb.ClearAndRestartApp(param)
 	case "jump-locale", "jump-developer", "jump-application",
 		"jump-notification", "jump-bluetooth", "jump-input", "jump-display":
 		return adb.JumpToSettings(param)
 	}
 
 	return types.NewExecResultFromString(action, "", fmt.Sprintf("不支持的操作: %s", action))
+}
+
+func (a *App) CheckAdbPath() types.ExecResult {
+	path, err := exec.LookPath("adb")
+	if err == nil {
+		return types.NewExecResultSuccess("adb", path)
+	}
+	return types.NewExecResultError("adb", err)
 }
 
 func (a *App) getAllFragment(param adb.ExecuteParams) types.ExecResult {
