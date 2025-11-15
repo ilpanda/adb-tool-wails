@@ -36,6 +36,7 @@ export type ActionType =
     | 'dump-pid'
     | 'dump-smaps'
     | 'dump-hprof'
+    | 'get-package-info'
     ;
 
 
@@ -69,6 +70,7 @@ export const quickActions: QuickActionSection[] = [
         items: [
             { icon: 'fa-hashtag', label: '查看进程 PID', color: 'text-cyan-600', bgColor: 'bg-cyan-50', action: 'dump-pid' },
             { icon: 'fa-folder-open', label: '查看应用安装路径', color: 'text-blue-600', bgColor: 'bg-blue-50', action: 'install-app-path' },
+            { icon: 'fa-file-lines', label: '获取应用信息', color: 'text-sky-600', bgColor: 'bg-sky-50', action: 'get-package-info' },
             { icon: 'fa-memory', label: '查看内存 meminfo', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'dump-memory-info' },
             { icon: 'fa-download', label: '保存应用 APK 到电脑', color: 'text-indigo-700', bgColor: 'bg-indigo-50', action: 'export-app' },
             { icon: 'fa-key', label: '授予所有权限', color: 'text-emerald-500', bgColor: 'bg-emerald-50', action: 'grant-permissions' },

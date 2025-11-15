@@ -2,7 +2,9 @@ package main
 
 import (
 	"adb-tool-wails/adb"
+	"adb-tool-wails/storage"
 	"adb-tool-wails/types"
+	"adb-tool-wails/util"
 	"context"
 	"fmt"
 	"os"
@@ -18,9 +20,10 @@ import (
 
 // App struct
 type App struct {
-	ctx           context.Context
-	deviceTracker *adb.DeviceTracker
-
+	ctx               context.Context
+	store             *storage.BadgerStore
+	deviceTracker     *adb.DeviceTracker
+	adbPath           string
 	deviceUpdateTimer *time.Timer
 	deviceUpdateMutex sync.Mutex
 	pendingDevices    []adb.DeviceInfo
@@ -41,8 +44,26 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// 初始化存储
+	store, err := storage.NewBadgerStore("config")
+	if err != nil {
+		panic(err)
+	}
+	a.store = store
 	a.setupEnv()
-	a.deviceTracker = adb.NewDeviceTracker(func(devices []adb.DeviceInfo) {
+	path, err := exec.LookPath("adb")
+	if err == nil {
+		saveAdbPath := store.GetString(storage.KeyAdbPath, "")
+		if path == saveAdbPath && path != "" {
+			a.adbPath = "adb"
+		} else if path != "" {
+			a.adbPath = "adb"
+		} else if saveAdbPath != "" {
+			a.adbPath = saveAdbPath
+		}
+	}
+
+	a.deviceTracker = adb.NewDeviceTracker(a.adbPath, func(devices []adb.DeviceInfo) {
 		a.scheduleDeviceUpdate(devices)
 	})
 	// 启动跟踪
@@ -90,7 +111,7 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 	action := ac.Action
 	fmt.Printf("execute action : %s\n", action)
 
-	deviceName := adb.GetDeviceNameArray()
+	deviceName := adb.GetDeviceNameArray(a.adbPath)
 	if len(deviceName) == 0 {
 		return types.NewExecResultErrorString("", "no devices，请使用数据线连接手机，并打开开发者模式")
 	}
@@ -100,6 +121,7 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		PackageName: ac.TargetPackageName,
 		Ctxt:        a.ctx,
 		DeviceId:    ac.DeviceId,
+		AdbPath:     a.adbPath,
 	}
 
 	switch action {
@@ -163,6 +185,8 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.SaveSmaps(param)
 	case "dump-hprof":
 		return adb.SaveHprof(param)
+	case "get-package-info":
+		return adb.GetAppDesc(param)
 	case "clear-restart-app":
 		return adb.ClearAndRestartApp(param)
 	case "jump-locale", "jump-developer", "jump-application",
@@ -173,12 +197,30 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 	return types.NewExecResultFromString(action, "", fmt.Sprintf("不支持的操作: %s", action))
 }
 
-func (a *App) CheckAdbPath() types.ExecResult {
-	path, err := exec.LookPath("adb")
+func (a *App) GetAdbPath() types.ExecResult {
+	adbPath := "adb"
+	if a.adbPath != "" {
+		adbPath = a.adbPath
+	}
+	path, err := exec.LookPath(adbPath)
 	if err == nil {
 		return types.NewExecResultSuccess("adb", path)
 	}
 	return types.NewExecResultError("adb", err)
+}
+
+func (a *App) CheckAdbPath(path string) types.ExecResult {
+	adbCmd := fmt.Sprintf("%s version", path)
+	res, err := util.Exec(adbCmd, true, nil)
+	if err == nil {
+		return types.NewExecResultSuccess(adbCmd, res)
+	}
+	return types.NewExecResultError(adbCmd, err)
+}
+
+func (a *App) UpdateAdbPath(path string) {
+	a.adbPath = path
+	a.deviceTracker.AdbPath = path
 }
 
 func (a *App) getAllFragment(param adb.ExecuteParams) types.ExecResult {
@@ -196,10 +238,10 @@ func (a *App) getAllFragment(param adb.ExecuteParams) types.ExecResult {
 }
 
 func (a *App) GetDeviceNameArray() []adb.DeviceInfo {
-	devices := adb.GetDeviceNameArray()
+	devices := adb.GetDeviceNameArray(a.adbPath)
 	deviceNameArray := []adb.DeviceInfo{} // ✅ 空切片，不是 nil
 	for _, deviceId := range devices {
-		device := adb.GetDeviceNameByDeviceId(deviceId)
+		device := adb.GetDeviceNameByDeviceId(a.adbPath, deviceId)
 		deviceNameArray = append(deviceNameArray, adb.DeviceInfo{
 			ID:   deviceId,
 			Name: device,

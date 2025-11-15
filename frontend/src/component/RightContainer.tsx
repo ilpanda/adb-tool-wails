@@ -1,5 +1,5 @@
 import {QuickAction, quickActions} from '../data/quickActions';
-import {CheckAdbPath, ExecuteAction} from '../../wailsjs/go/main/App';
+import {ExecuteAction, GetAdbPath} from '../../wailsjs/go/main/App';
 import {useEffect, useRef, useState} from 'react';
 import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
 import {message, Select} from "antd";
@@ -41,7 +41,7 @@ function RightContainer() {
 
     async function handleClick(action: QuickAction) {
 
-        let adbPath = await CheckAdbPath();
+        let adbPath = await GetAdbPath();
         if (adbPath.error) {
             message.error("请在设置项配置 adb 路径。")
             return
@@ -254,14 +254,19 @@ function RightContainer() {
                 {quickActions.map((section, sectionIndex) => (
                     <div key={sectionIndex} className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-gray-800">
-                                {section.title}
-                            </h2>
+
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-lg font-semibold text-gray-800">
+                                    {section.title}
+                                </h2>
+                            </div>
 
                             {/* 如果是"应用"分区，显示包名选择器 */}
                             {section.title === '应用' && (
                                 <div className="flex items-center gap-2 package-select-wrapper">
-                                    <span className="text-sm text-gray-600">包名:</span>
+                                    <span className={`text-sm" ${selectedPackage ? "text-gray-600" : "text-red-400"}`}>
+                                        {selectedPackage ? "包名:" : "请连接手机后先输入或者选择应用包名"}
+                                        </span>
                                     <Select
                                         ref={selectRef}
                                         value={selectedPackage}

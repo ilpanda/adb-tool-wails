@@ -4,8 +4,10 @@ import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
 import {GetDeviceNameArray} from "../../wailsjs/go/main/App";
 
 
-function LeftContainer() {
-    const [selectedKey, setSelectedKey] = useState('1');
+function LeftContainer({selectedView, onViewChange}: {
+    selectedView: string;
+    onViewChange: (view: string) => void
+}) {
     const {devices, setDevices, selectedDevice, toggleDevice, setSelectedDevices} = useDeviceStore();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const dropdownRef = useRef<HTMLDivElement>(null)
@@ -16,7 +18,7 @@ function LeftContainer() {
             // 自动选中第一个设备
             if (devices.length > 0 && selectedDevice === null) {
                 setSelectedDevices(devices[0])
-            }else if (devices.length === 0) {
+            } else if (devices.length === 0) {
                 setSelectedDevices(null);
             }
         });
@@ -29,7 +31,7 @@ function LeftContainer() {
             // 自动选中第一个设备
             if (devices.length > 0 && selectedDevice === null) {
                 setSelectedDevices(devices[0])
-            }else if (devices.length === 0) {
+            } else if (devices.length === 0) {
                 setSelectedDevices(null);
             }
         });
@@ -65,8 +67,10 @@ function LeftContainer() {
     }
 
     const menuItems = [
-        {key: '1', icon: 'fa-bolt', label: '快捷功能', iconColor: 'text-amber-500'},
-        // {key: '2', icon: 'fa-folder', label: '文件管理', iconColor: 'text-blue-500'},
+        {key: '1', icon: 'fa-rocket', label: '快捷功能', iconColor: 'text-amber-500'},
+        {key: '2', icon: 'fa-circle-question', label: '常见问题', iconColor: 'text-blue-500'},
+        {key: '3', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
+
         // {key: '3', icon: 'fa-terminal', label: 'Logcat', iconColor: 'text-green-500'},
         // {key: '4', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
     ];
@@ -145,17 +149,17 @@ function LeftContainer() {
                 {menuItems.map(item => (
                     <button
                         key={item.key}
-                        onClick={() => setSelectedKey(item.key)}
+                        onClick={() => onViewChange(item.key)}
                         className={`flex items-center justify-center
                             w-full px-4 py-3 mb-2 rounded-lg
                             text-left transition-all duration-150 cursor-pointer 
-                            ${selectedKey === item.key
+                            ${selectedView === item.key
                             ? 'bg-gray-100'
                             : 'hover:bg-gray-100'
                         }`}>
                         <i className={`fa-solid ${item.icon} w-5 text-base ${item.iconColor}`}/>
                         <span
-                            className={`ml-3 text-base font-medium ${selectedKey === item.key ? 'text-gray-900' : 'text-gray-700'}`}>
+                            className={`ml-3 text-base font-medium ${selectedView === item.key ? 'text-gray-900' : 'text-gray-700'}`}>
                             {item.label}
                         </span>
                     </button>

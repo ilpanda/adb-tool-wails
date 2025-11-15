@@ -21,12 +21,14 @@ type DeviceUpdateCallback func(devices []DeviceInfo)
 type DeviceTracker struct {
 	knownDevices map[string]string
 	callback     DeviceUpdateCallback
+	AdbPath      string
 }
 
-func NewDeviceTracker(callback DeviceUpdateCallback) *DeviceTracker {
+func NewDeviceTracker(adbPath string, callback DeviceUpdateCallback) *DeviceTracker {
 	return &DeviceTracker{
 		knownDevices: make(map[string]string),
 		callback:     callback,
+		AdbPath:      adbPath,
 	}
 }
 
@@ -58,7 +60,7 @@ func (dt *DeviceTracker) Start(ctx context.Context) {
 }
 
 func (dt *DeviceTracker) runTrackDevices(ctx context.Context) {
-	cmd := exec.CommandContext(ctx, "adb", "track-devices")
+	cmd := exec.CommandContext(ctx, dt.AdbPath, "track-devices")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -136,7 +138,7 @@ func (dt *DeviceTracker) updateDevices(devs []string) {
 				Name: name,
 			})
 		} else {
-			name := GetDeviceNameByDeviceId(deviceId)
+			name := GetDeviceNameByDeviceId(dt.AdbPath, deviceId)
 			if name != "" {
 				dt.knownDevices[deviceId] = strings.TrimSpace(name)
 				deviceInfos = append(deviceInfos, DeviceInfo{
@@ -153,7 +155,7 @@ func (dt *DeviceTracker) updateDevices(devs []string) {
 }
 
 func (dt *DeviceTracker) printMsg(format string, v ...any) {
-	logEnable := false
+	logEnable := true
 	if logEnable {
 		log.Printf(format, v...)
 	}
