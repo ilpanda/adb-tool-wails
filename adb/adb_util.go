@@ -799,7 +799,8 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 		},
 	})
 
-	result := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am dumpheap %s /data/local/tmp/%s.hprof ", param.PackageName, saveFileName)))
+	hprofSdcardPath := fmt.Sprintf("/data/local/tmp/%s.hprof", saveFileName)
+	result := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am dumpheap %s %s ", param.PackageName, hprofSdcardPath)))
 	if result.Error != "" {
 		return result
 	}
@@ -812,11 +813,17 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 hprof"+"\n"+result.Res, result.Error)
 	}
 
-	saveError := os.WriteFile(savePath, []byte(result.Res), 0644)
-	if saveError != nil {
-		return types.NewExecResultError(result.Cmd, saveError)
+	pullCmd := fmt.Sprintf("pull %s  %s ", hprofSdcardPath, savePath)
+	pullResult := execCmd(buildAdbCmd(param.AdbPath, param.DeviceId, pullCmd))
+	if pullResult.Error != "" {
+		return pullResult
 	}
-	return types.NewExecResultSuccess(result.Cmd, "success")
+	finalCmd := result.Cmd + "\n" + pullResult.Cmd
+
+	rmResult := execCmd(buildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s  ", hprofSdcardPath)))
+	finalCmd = finalCmd + "\n" + rmResult.Cmd
+
+	return types.NewExecResultSuccess(finalCmd, "success")
 }
 
 func PackagePid(param ExecuteParams) types.ExecResult {

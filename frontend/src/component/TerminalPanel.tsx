@@ -123,7 +123,6 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                         <span className="bg-blue-100 px-2 py-0.5 rounded font-medium">
                             {logs.filter(l => l.type === 'command').length} cmds
                         </span>
-                        <span className="bg-gray-200 px-2 py-0.5 rounded">{logs.length} lines</span>
                     </div>
                 </div>
 
