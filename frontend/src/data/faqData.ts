@@ -43,6 +43,44 @@ adb reconnect
 - 尝试更换 USB 接口
 - 驱动是否正确安装（Windows）
 
+### 权限错误
+
+#### 清除数据权限不足
+
+当遇到以下报错时：
+
+\`\`\`text
+Exception occurred while executing 'clear':
+java.lang.SecurityException: PID 8391 does not have permission android.permission.CLEAR_APP_USER_DATA to clear data of package xxxx
+	at com.android.server.am.ActivityManagerService.clearApplicationUserData(ActivityManagerService.java:3837)
+\`\`\`
+
+或者：
+
+\`\`\`text
+Exception occurred while executing 'grant':
+java.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.
+	at android.app.ContextImpl.enforce(ContextImpl.java:2096)
+	......
+\`\`\`
+
+需要打开手机**开发者选项**中的**禁止权限监控**按钮（默认是关闭的）。
+
+#### 系统应用清除限制
+
+如果遇到以下报错：
+
+\`\`\`text
+Exception occurred while executing 'clear':
+java.lang.SecurityException: adb clearing user data is forbidden.
+	at com.android.server.pm.OplusClearDataProtectManager.interceptClearUserDataIfNeeded(OplusClearDataProtectManager.java:88)
+	at com.android.server.pm.OplusBasePackageManagerService$OplusPackageManagerInternalImpl.interceptClearUserDataIfNeeded(OplusBasePackageManagerService.java:531)
+	at com.android.server.am.ActivityManagerService.clearApplicationUserData(ActivityManagerService.java:4708)
+	......
+\`\`\`
+
+表示部分手机预装系统 App 不支持 adb clear。
+
 ## 权限问题
 
 ### Linux 权限不足
