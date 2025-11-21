@@ -436,7 +436,7 @@ func getRequestedPermissions(lines []string) []string {
 }
 
 func GetAllPackages(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "pm list packages -3")
+	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "pm list packages")
 	execResult := execCmd(cmd)
 	var packages []string
 	if execResult.Error != "" {
