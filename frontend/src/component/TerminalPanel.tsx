@@ -202,7 +202,7 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                                             </div>
                                             {log.content && <div className="flex items-start gap-2 group/cmd">
                                                 <span className="text-green-700 flex-1 whitespace-pre-wrap break-all leading-relaxed font-medium">
-                                                    {log.content}
+                                                   参考命令： {log.content}
                                                 </span>
                                                 <button
                                                     onClick={() => copyLog(log.content)}
@@ -233,7 +233,7 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                                                 </button>
                                             </div>
                                             <pre className="text-gray-700 whitespace-pre-wrap break-words text-xs leading-relaxed">
-                                                {log.content}
+                                               命令执行结果： {log.content}
                                             </pre>
                                         </div>
                                     </div>

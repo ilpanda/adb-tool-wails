@@ -189,6 +189,8 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.GetAppDesc(param)
 	case "clear-restart-app":
 		return adb.ClearAndRestartApp(param)
+	case "view-package":
+		return adb.GetPackageName(param)
 	case "jump-locale", "jump-developer", "jump-application",
 		"jump-notification", "jump-bluetooth", "jump-input", "jump-display":
 		return adb.JumpToSettings(param)

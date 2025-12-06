@@ -37,6 +37,7 @@ export type ActionType =
     | 'dump-smaps'
     | 'dump-hprof'
     | 'get-package-info'
+    | 'view-package'
     ;
 
 
@@ -60,6 +61,7 @@ export const quickActions: QuickActionSection[] = [
         items: [
             { icon: 'fa-box-open', label: '安装应用', color: 'text-blue-500', bgColor: 'bg-blue-50', action: 'install-app' },
             { icon: 'fa-camera', label: '截图保存到电脑', color: 'text-green-500', bgColor: 'bg-green-50', action: 'screenshot' },
+            { icon: 'fa-tag', label: '查看当前应用包名', color: 'text-amber-500', bgColor: 'bg-amber-50', action: 'view-package' },
             { icon: 'fa-eye', label: '查看当前 Activity', color: 'text-purple-500', bgColor: 'bg-purple-50', action: 'view-current-activity' },
             { icon: 'fa-list', label: '查看所有 Activity', color: 'text-indigo-500', bgColor: 'bg-indigo-50', action: 'view-all-activities' },
             { icon: 'fa-puzzle-piece', label: '查看当前 Fragment', color: 'text-pink-500', bgColor: 'bg-pink-50', action: 'view-current-fragment' },

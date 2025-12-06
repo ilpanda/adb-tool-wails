@@ -51,6 +51,18 @@ func GetCurrentPackageAndActivityName(param ExecuteParams) types.ExecResult {
 	return types.NewExecResultSuccess(cmd, strings.TrimSuffix(result, "}\n"))
 }
 
+func GetPackageName(param ExecuteParams) types.ExecResult {
+	res := GetCurrentPackageAndActivityName(param)
+	if res.Error != "" {
+		return res
+	}
+	packageName, _, found := strings.Cut(res.Res, "/")
+	if !found {
+		return types.NewExecResultErrorString(res.Cmd, "not found")
+	}
+	return types.NewExecResultSuccess(res.Cmd, packageName)
+}
+
 func GetAllActivity(param ExecuteParams) types.ExecResult {
 	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep -e 'Hist #' -e '* Hist'")
 	return execCmd(cmd)
