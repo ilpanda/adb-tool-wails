@@ -54,6 +54,26 @@ func Exec(command string, ignoreError bool, exitWhen func(string) bool) (string,
 	return stderrStr, nil
 }
 
+func ExecBackground(command string) error {
+	cmd := exec.Command("/bin/sh", "-c", command)
+
+	// 不捕获输出，让它在后台运行
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	// Start 只启动进程，不等待结束
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start command failed: %w", err)
+	}
+
+	// 可选：在 goroutine 中等待进程，防止僵尸进程
+	go func() {
+		_ = cmd.Wait()
+	}()
+
+	return nil
+}
+
 func Log(msg string) {
 	fmt.Println(msg)
 }

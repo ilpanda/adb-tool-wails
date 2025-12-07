@@ -3,8 +3,8 @@ package adb
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -139,7 +139,7 @@ func (dt *DeviceTracker) updateDevices(devs []string) {
 			})
 		} else {
 			name := GetDeviceNameByDeviceId(dt.AdbPath, deviceId)
-			if name != "" {
+			if name != "" && !strings.Contains(name, "adb device still authorizing") {
 				dt.knownDevices[deviceId] = strings.TrimSpace(name)
 				deviceInfos = append(deviceInfos, DeviceInfo{
 					ID:   deviceId,
@@ -155,8 +155,8 @@ func (dt *DeviceTracker) updateDevices(devs []string) {
 }
 
 func (dt *DeviceTracker) printMsg(format string, v ...any) {
-	logEnable := true
+	logEnable := false
 	if logEnable {
-		log.Printf(format, v...)
+		println(fmt.Sprintln(format, v))
 	}
 }

@@ -22,14 +22,14 @@ type ExecuteParams struct {
 	AdbPath     string
 }
 
-func buildAdbCmd(adbPath string, deviceId string, shellCmd string) string {
+func BuildAdbCmd(adbPath string, deviceId string, shellCmd string) string {
 	if deviceId != "" {
 		return fmt.Sprintf("%s -s %s %s", adbPath, deviceId, shellCmd)
 	}
 	return fmt.Sprintf("%s %s", adbPath, shellCmd)
 }
 
-func buildAdbShellCmd(adbPath string, deviceId string, shellCmd string) string {
+func BuildAdbShellCmd(adbPath string, deviceId string, shellCmd string) string {
 	if deviceId != "" {
 		return fmt.Sprintf("%s -s %s shell %s", adbPath, deviceId, shellCmd)
 	}
@@ -37,11 +37,11 @@ func buildAdbShellCmd(adbPath string, deviceId string, shellCmd string) string {
 }
 
 func GetCurrentPackageAndActivityName(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep mResumedActivity | awk '{print $4}'")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep mResumedActivity | awk '{print $4}'")
 	result, err := util.Exec(cmd, true, nil)
 
 	if err != nil || strings.TrimSpace(result) == "" {
-		cmd = buildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep ResumedActivity | grep -v top | awk '{print $4}'")
+		cmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep ResumedActivity | grep -v top | awk '{print $4}'")
 		result, err = util.Exec(cmd, true, nil)
 		if err != nil {
 			return types.NewExecResultFromError(cmd, "", err)
@@ -51,7 +51,7 @@ func GetCurrentPackageAndActivityName(param ExecuteParams) types.ExecResult {
 	return types.NewExecResultSuccess(cmd, strings.TrimSuffix(result, "}\n"))
 }
 
-func GetPackageName(param ExecuteParams) types.ExecResult {
+func GetCurrentPackageName(param ExecuteParams) types.ExecResult {
 	res := GetCurrentPackageAndActivityName(param)
 	if res.Error != "" {
 		return res
@@ -64,22 +64,22 @@ func GetPackageName(param ExecuteParams) types.ExecResult {
 }
 
 func GetAllActivity(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep -e 'Hist #' -e '* Hist'")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep -e 'Hist #' -e '* Hist'")
 	return execCmd(cmd)
 }
 
 func GetAllFragment(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys activity %s | grep -E '^\\s*#\\d' | grep -v -E 'ReportFragment|plan'", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys activity %s | grep -E '^\\s*#\\d' | grep -v -E 'ReportFragment|plan'", param.PackageName))
 	return execCmd(cmd)
 }
 
 func KillApp(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am force-stop %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am force-stop %s", param.PackageName))
 	return execCmd(cmd)
 }
 
 func ClearApp(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm clear %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm clear %s", param.PackageName))
 	return execCmd(cmd)
 }
 
@@ -125,7 +125,7 @@ var dangerousPermissions = map[string]bool{
 }
 
 func GrantAllPermission(param ExecuteParams) types.ExecResult {
-	dumpCmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys package %s", param.PackageName))
+	dumpCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys package %s", param.PackageName))
 	dumpPackage := execCmd(dumpCmd)
 	if dumpPackage.Error != "" {
 		return types.NewExecResultErrorString(dumpCmd, dumpPackage.Error)
@@ -149,11 +149,11 @@ func GrantAllPermission(param ExecuteParams) types.ExecResult {
 
 	for _, perm := range grantablePermissions {
 		grantCmdsForExec = append(grantCmdsForExec, fmt.Sprintf("pm grant %s %s 2>&1", param.PackageName, perm))
-		displayCmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm grant %s %s", param.PackageName, perm))
+		displayCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm grant %s %s", param.PackageName, perm))
 		grantCmdsForDisplay = append(grantCmdsForDisplay, displayCmd)
 	}
 
-	batchCmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("'%s'", strings.Join(grantCmdsForExec, " ; ")))
+	batchCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("'%s'", strings.Join(grantCmdsForExec, " ; ")))
 	result := execCmd(batchCmd)
 
 	successCount := len(grantablePermissions)
@@ -181,7 +181,7 @@ func GrantAllPermission(param ExecuteParams) types.ExecResult {
 }
 
 func RevokePermission(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys package %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys package %s", param.PackageName))
 	resCmd := cmd
 	dumpPackage := execCmd(cmd)
 	if dumpPackage.Error != "" {
@@ -194,7 +194,7 @@ func RevokePermission(param ExecuteParams) types.ExecResult {
 			parts := strings.Split(line, ":")
 			if len(parts) > 0 {
 				permission := strings.TrimSpace(parts[0])
-				revokeCmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm revoke %s %s", param.PackageName, permission))
+				revokeCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm revoke %s %s", param.PackageName, permission))
 				resCmd = resCmd + "\n" + revokeCmd
 				execCmd(revokeCmd)
 			}
@@ -228,7 +228,7 @@ func ClearAndRestartApp(param ExecuteParams) types.ExecResult {
 
 	if inputMethodCmd.Res != "" {
 		resCmd = resCmd + "\n" + inputMethodCmd.Cmd
-		changeInputMethodCmd := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("settings put secure default_input_method %s", inputMethodCmd.Res)))
+		changeInputMethodCmd := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("settings put secure default_input_method %s", inputMethodCmd.Res)))
 		resCmd = resCmd + "\n" + changeInputMethodCmd.Cmd
 		if changeInputMethodCmd.Error != "" {
 			return types.NewExecResultErrorString(resCmd, changeInputMethodCmd.Error)
@@ -259,7 +259,7 @@ func IsInputMethod(param ExecuteParams) types.ExecResult {
 }
 
 func listInputMethodService(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "ime list -s")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "ime list -s")
 	result := execCmd(cmd)
 	if result.Res != "" {
 		result.Res = strings.TrimSpace(result.Res)
@@ -268,22 +268,22 @@ func listInputMethodService(param ExecuteParams) types.ExecResult {
 }
 
 func StartActivity(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("monkey -p %s -c android.intent.category.LAUNCHER 1", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("monkey -p %s -c android.intent.category.LAUNCHER 1", param.PackageName))
 	return execCmd(cmd)
 }
 
 func Shutdown(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "reboot -p")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "reboot -p")
 	return execCmd(cmd)
 }
 
 func GetAppInstallPath(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm path %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm path %s", param.PackageName))
 	return execCmd(cmd)
 }
 
 func ExportAppPackagePath(param ExecuteParams) types.ExecResult {
-	pathCmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm path %s", param.PackageName))
+	pathCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm path %s", param.PackageName))
 	pathResult := execCmd(pathCmd)
 	if pathResult.Error != "" {
 		return pathResult
@@ -303,7 +303,7 @@ func ExportAppPackagePath(param ExecuteParams) types.ExecResult {
 
 	finalRes := pathCmd
 	targetApkName := filepath.Join(strings.TrimSpace(dir), param.PackageName+".apk")
-	cmd := buildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", path, targetApkName))
+	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", path, targetApkName))
 
 	finalRes = finalRes + "\n" + cmd
 	return execCmd(finalRes)
@@ -319,7 +319,7 @@ func GetDeviceNameArray(adbPath string) []string {
 }
 
 func GetDeviceNameByDeviceId(adbPath string, deviceId string) string {
-	cmd := buildAdbShellCmd(adbPath, deviceId, "getprop ro.product.model")
+	cmd := BuildAdbShellCmd(adbPath, deviceId, "getprop ro.product.model")
 	execResult := execCmd(cmd)
 	if execResult.Error != "" {
 		return execResult.Error
@@ -349,7 +349,7 @@ func Devices(adbPath string) types.ExecResult {
 }
 
 func Reboot(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbCmd(param.AdbPath, param.DeviceId, "reboot")
+	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, "reboot")
 	return execCmd(cmd)
 }
 
@@ -424,7 +424,7 @@ func KeyScreenSleep(param ExecuteParams) types.ExecResult {
 }
 
 func getKey(adbPath string, deviceId string, key string) string {
-	return buildAdbShellCmd(adbPath, deviceId, fmt.Sprintf("input keyevent %s", key))
+	return BuildAdbShellCmd(adbPath, deviceId, fmt.Sprintf("input keyevent %s", key))
 }
 
 func getRequestedPermissions(lines []string) []string {
@@ -448,7 +448,7 @@ func getRequestedPermissions(lines []string) []string {
 }
 
 func GetAllPackages(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "pm list packages")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "pm list packages")
 	execResult := execCmd(cmd)
 	var packages []string
 	if execResult.Error != "" {
@@ -466,7 +466,7 @@ func GetAllPackages(param ExecuteParams) types.ExecResult {
 }
 
 func GetAllSystemProperties(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop")
 	return execCmd(cmd)
 }
 
@@ -493,14 +493,14 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString("installApp", "用户取消安装")
 	}
 
-	cmd := buildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("install -d %s", filePath))
+	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("install -d %s", filePath))
 	res := execCmd(cmd)
 
 	return res
 }
 
 func UninstallApp(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("uninstall %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("uninstall %s", param.PackageName))
 	return execCmd(cmd)
 }
 
@@ -549,21 +549,21 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 	devicePath := "/sdcard/screenshot_temp.png"
 
 	// 步骤1: 截图到设备
-	cmdScreencap := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("screencap -p %s", devicePath))
+	cmdScreencap := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("screencap -p %s", devicePath))
 	res, err := util.Exec(cmdScreencap, false, nil)
 	if err != nil {
 		return types.NewExecResultErrorString(cmdScreencap, fmt.Sprintf("截图失败: %v, 输出: %s", err, res))
 	}
 
 	// 步骤2: 拉取到本地
-	cmdPull := buildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s \"%s\"", devicePath, savePath))
+	cmdPull := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s \"%s\"", devicePath, savePath))
 	res, err = util.Exec(cmdPull, false, nil)
 	if err != nil {
 		return types.NewExecResultErrorString(cmdPull, fmt.Sprintf("拉取文件失败: %v, 输出: %s", err, res))
 	}
 
 	// 步骤3: 清理设备临时文件
-	cmdRm := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s", devicePath))
+	cmdRm := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s", devicePath))
 	_, _ = util.Exec(cmdRm, false, nil) // 忽略删除错误
 
 	finalCmd := cmdScreencap + "\n" + cmdPull + "\n" + cmdRm
@@ -594,7 +594,7 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	// 构建所有命令字符串（用于日志）
 	var cmdStrs []string
 	for _, cmd := range commands {
-		cmdStrs = append(cmdStrs, buildAdbShellCmd(param.AdbPath, param.DeviceId, cmd))
+		cmdStrs = append(cmdStrs, BuildAdbShellCmd(param.AdbPath, param.DeviceId, cmd))
 	}
 	allCmds := strings.Join(cmdStrs, "\n")
 
@@ -713,13 +713,13 @@ func DumpSysMemInfo(param ExecuteParams) types.ExecResult {
 		return packageIdResult
 	}
 
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys meminfo %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys meminfo %s", param.PackageName))
 	return execCmd(cmd)
 }
 
 func dumpSmaps(param ExecuteParams) types.ExecResult {
 	packageName := param.PackageName
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", packageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", packageName))
 	finalCmd := cmd
 	pid, err := util.Exec(cmd, false, nil)
 	if err != nil {
@@ -730,7 +730,7 @@ func dumpSmaps(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString(cmd, fmt.Sprintf("%s process not found", packageName))
 	}
 
-	smapsCmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("run-as %s cat /proc/%s/smaps ", packageName, strings.TrimSpace(pid)))
+	smapsCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("run-as %s cat /proc/%s/smaps ", packageName, strings.TrimSpace(pid)))
 	result := execCmd(smapsCmd)
 	result.Cmd = finalCmd + "\n" + smapsCmd
 	return result
@@ -812,7 +812,7 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 	})
 
 	hprofSdcardPath := fmt.Sprintf("/data/local/tmp/%s.hprof", saveFileName)
-	result := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am dumpheap %s %s ", param.PackageName, hprofSdcardPath)))
+	result := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am dumpheap %s %s ", param.PackageName, hprofSdcardPath)))
 	if result.Error != "" {
 		return result
 	}
@@ -826,20 +826,20 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 	}
 
 	pullCmd := fmt.Sprintf("pull %s  %s ", hprofSdcardPath, savePath)
-	pullResult := execCmd(buildAdbCmd(param.AdbPath, param.DeviceId, pullCmd))
+	pullResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, pullCmd))
 	if pullResult.Error != "" {
 		return pullResult
 	}
 	finalCmd := result.Cmd + "\n" + pullResult.Cmd
 
-	rmResult := execCmd(buildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s  ", hprofSdcardPath)))
+	rmResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s  ", hprofSdcardPath)))
 	finalCmd = finalCmd + "\n" + rmResult.Cmd
 
 	return types.NewExecResultSuccess(finalCmd, "success")
 }
 
 func PackagePid(param ExecuteParams) types.ExecResult {
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", param.PackageName))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", param.PackageName))
 	result := execCmd(cmd)
 	if result.Error == "" && result.Res == "" {
 		result.Error = "pid is null，请检测应用是否运行。"
@@ -870,7 +870,7 @@ func JumpToSettings(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString(param.Action, "未知的跳转操作")
 	}
 
-	cmd := buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am start -a %s", intent))
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am start -a %s", intent))
 	res, err := util.Exec(cmd, false, nil)
 
 	if err != nil {

@@ -93,13 +93,13 @@ func parseAppDesc(content, packageName, installPath, size string) *AppDescInfo {
 }
 
 func GetAppDesc(param ExecuteParams) types.ExecResult {
-	packageRes := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys package %s", param.PackageName)))
+	packageRes := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys package %s", param.PackageName)))
 	finalCmd := packageRes.Cmd
 	if packageRes.Error != "" {
 		return packageRes
 	}
 
-	installPathRes := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm path %s", param.PackageName)))
+	installPathRes := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pm path %s", param.PackageName)))
 	finalCmd = finalCmd + "\n" + installPathRes.Cmd
 	if installPathRes.Error != "" {
 		return installPathRes
@@ -110,7 +110,7 @@ func GetAppDesc(param ExecuteParams) types.ExecResult {
 	// 3. 获取应用大小
 	size := "0"
 	if installPath != "" {
-		duRes := execCmd(buildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("du -sh %s", installPath)))
+		duRes := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("du -sh %s", installPath)))
 		finalCmd = finalCmd + "\n" + duRes.Cmd
 		if duRes.Error == "" {
 			fields := strings.Fields(duRes.Res)

@@ -68,6 +68,7 @@ function LeftContainer({selectedView, onViewChange}: {
 
     const menuItems = [
         {key: '1', icon: 'fa-rocket', label: '快捷功能', iconColor: 'text-amber-500'},
+        {key: '4', icon: 'fa-gear', label: '应用列表', iconColor: 'text-purple-500'},
         {key: '2', icon: 'fa-circle-question', label: '常见问题', iconColor: 'text-blue-500'},
         {key: '3', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
 
@@ -76,7 +77,7 @@ function LeftContainer({selectedView, onViewChange}: {
     ];
 
     return (
-        <div className="flex w-60 flex-col h-full bg-white border-r border-gray-200">
+        <div className="flex w-60 flex-col h-full bg-white border-r border-gray-200 flex-shrink-0">
             {/* 头部 */}
             <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center gap-3">

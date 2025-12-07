@@ -3,6 +3,7 @@ import RightContainer from "./RightContainer";
 import {useState} from "react";
 import FAQContainer from "./FAQContainer";
 import SettingsContainer from "./SettingsContainer";
+import ApplicationList from "./ApplicationList";
 
 function RootContainer() {
     const [selectedView, setSelectedView] = useState('1');
@@ -11,6 +12,7 @@ function RootContainer() {
         {selectedView === '1' && <RightContainer />}
         {selectedView === '2' && <FAQContainer />}
         {selectedView === '3' && <SettingsContainer />}
+        {selectedView === '4' && <ApplicationList />}
     </div>)
 }
 

@@ -103,6 +103,13 @@ class Connection(private val client: LocalSocket) : Thread() {
         val info = JSONObject()
         info.put("packageName", packageInfo.packageName)
         info.put("versionName", packageInfo.versionName)
+        // 添加 versionCode（需要处理 API 版本兼容性）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.put("versionCode", packageInfo.longVersionCode)
+        } else {
+            @Suppress("DEPRECATION")
+            info.put("versionCode", packageInfo.versionCode.toLong())
+        }
         info.put("firstInstallTime", packageInfo.firstInstallTime)
         info.put("lastUpdateTime", packageInfo.lastUpdateTime)
         info.put("signatures", getSignatures(packageInfo))

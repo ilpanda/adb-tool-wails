@@ -38,6 +38,7 @@ export type ActionType =
     | 'dump-hprof'
     | 'get-package-info'
     | 'view-package'
+    | 'get-package-detail-info'
     ;
 
 
@@ -103,12 +104,12 @@ export const quickActions: QuickActionSection[] = [
         title: "快速跳转",
         items: [
             { icon: 'fa-globe', label: '语言设置', color: 'text-blue-600', bgColor: 'bg-blue-50', action: 'jump-locale' },
-            { icon: 'fa-code-branch', label: '开发者选项', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'jump-developer' },
             { icon: 'fa-th-large', label: '应用管理', color: 'text-green-600', bgColor: 'bg-green-50', action: 'jump-application' },
-            { icon: 'fa-bell', label: '通知设置', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'jump-notification' },
+            { icon: 'fa-bell', label: '通知与状态栏', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'jump-notification' },
             { icon: 'fa-bluetooth-b', label: '蓝牙设置', color: 'text-sky-600', bgColor: 'bg-sky-50', action: 'jump-bluetooth' },
-            { icon: 'fa-keyboard', label: '输入法设置', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'jump-input' },
-            { icon: 'fa-tv', label: '显示设置', color: 'text-teal-600', bgColor: 'bg-teal-50', action: 'jump-display' }
+            { icon: 'fa-keyboard', label: '管理输入法', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'jump-input' },
+            { icon: 'fa-tv', label: '显示与亮度', color: 'text-teal-600', bgColor: 'bg-teal-50', action: 'jump-display' },
+            { icon: 'fa-code-branch', label: '开发者选项', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'jump-developer' },
         ]
     },
     {

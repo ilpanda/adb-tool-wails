@@ -34,8 +34,6 @@ func NewBadgerStore(appName string) (*BadgerStore, error) {
 	return &BadgerStore{db: db}, nil
 }
 
-var ErrKeyNotFound = badger.ErrKeyNotFound
-
 // Get 获取值并反序列化到 dest
 func (s *BadgerStore) Get(key string, dest interface{}) error {
 	return s.db.View(func(txn *badger.Txn) error {

@@ -11,6 +11,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed resources/aya.dex
+var ayaDexData []byte
+
 func main() {
 	// Create an instance of the app structure
 	app := NewApp()

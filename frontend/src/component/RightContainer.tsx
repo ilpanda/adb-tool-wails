@@ -264,8 +264,8 @@ function RightContainer() {
                             {/* 如果是"应用"分区，显示包名选择器 */}
                             {section.title === '应用' && (
                                 <div className="flex items-center gap-2 package-select-wrapper">
-                                    <span className={`text-sm" ${selectedPackage ? "text-gray-600" : "text-red-400"}`}>
-                                        {selectedPackage ? "包名:" : "请连接手机后先输入或者选择应用包名"}
+                                    <span className="text-gray-600">
+                                       连接手机后输入或者选择应用包名：
                                         </span>
                                     <Select
                                         ref={selectRef}

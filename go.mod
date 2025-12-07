@@ -4,7 +4,9 @@ go 1.23.0
 
 require (
 	github.com/dgraph-io/badger/v4 v4.8.0
+	github.com/google/uuid v1.6.0
 	github.com/wailsapp/wails/v2 v2.10.2
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
@@ -17,7 +19,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
@@ -46,7 +47,6 @@ require (
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
 )
 
 // replace github.com/wailsapp/wails/v2 v2.10.2 => /Users/apple/Documents/go

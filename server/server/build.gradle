@@ -13,14 +13,10 @@ android {
 
     compileSdk = 34
 
-    def pkgFilePath = "$rootDir/../package.json"
-    def pkgFile = new File(pkgFilePath)
-    def pkgJson = new groovy.json.JsonSlurper().parseText(pkgFile.text)
-
     defaultConfig {
         minSdk 23
         versionCode 1
-        versionName pkgJson.version
+        versionName '1.0'
     }
 
     buildTypes {

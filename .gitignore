@@ -113,5 +113,8 @@ frontend/wailsjs/
 
 .idea/
 
+server/server/build/
+.gradle/
+.kotlin/
 
 
