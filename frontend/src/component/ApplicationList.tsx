@@ -71,18 +71,17 @@ function ApplicationList() {
     }, [setProgress]);
 
     // 加载应用列表
-    const doLoadApps = useCallback(async (forceRefresh = false) => {
+// 直接定义普通函数
+    const doLoadApps = async (forceRefresh = false) => {
         if (!selectedDevice) {
             return;
         }
 
         const deviceIdParam = getDeviceIdParam();
 
-        // 检查缓存（非强制刷新时）
         if (!forceRefresh) {
             const cached = getAppsFromCache(deviceIdParam);
             if (cached && cached.length > 0) {
-                // 如果当前显示的不是这个设备的数据，则从缓存恢复
                 if (loadedDeviceId !== deviceIdParam) {
                     setApps(deviceIdParam, cached);
                 }
@@ -92,19 +91,17 @@ function ApplicationList() {
             }
         }
 
-        // 生成新的加载 ID
         loadIdRef.current++;
         const currentLoadId = loadIdRef.current;
 
         setLoading(true);
         setProgress(null);
         setCurrentPage(1);
-        isLoadingRef.current = true;  // 标记开始加载
+        isLoadingRef.current = true;
 
         try {
             const result = await GetApplicationListWithProgress(deviceIdParam);
 
-            // 检查是否是当前任务且组件仍挂载
             if (!mountedRef.current || loadIdRef.current !== currentLoadId) {
                 return;
             }
@@ -117,24 +114,22 @@ function ApplicationList() {
                 message.info('未找到应用');
             }
         } catch (error: any) {
-            console.log(error);
-            // 检查是否是当前任务且组件仍挂载
             if (!mountedRef.current || loadIdRef.current !== currentLoadId) {
                 return;
             }
 
             const errorStr = error?.toString() || '';
-            // 忽略取消错误
             if (errorStr.includes('cancel') || errorStr.includes('context')) {
                 return;
             }
 
             message.error(`加载失败: ${errorStr}`);
             setApps(deviceIdParam, []);
-        }finally {
-            isLoadingRef.current = false;  // 标记加载结束
+        } finally {
+            isLoadingRef.current = false;
+            setLoading(false);
         }
-    }, [selectedDevice, getDeviceIdParam, getAppsFromCache, loadedDeviceId, setApps, setLoading, setProgress]);
+    };
 
     // 设备变化时自动加载（优先使用缓存）
     useEffect(() => {
@@ -155,13 +150,13 @@ function ApplicationList() {
     }, [selectedDevice?.id]);
 
     // 手动刷新（强制重新加载）
-    const handleRefresh = useCallback(() => {
+    const handleRefresh = () => {
         if (!selectedDevice) {
             message.warning('请先连接设备');
             return;
         }
         doLoadApps(true);
-    }, [selectedDevice, doLoadApps]);
+    };
 
     // 过滤应用列表
     const filteredApps = useMemo(() => {
