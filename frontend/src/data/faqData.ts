@@ -92,7 +92,4 @@ sudo usermod -aG plugdev $USER
 sudo apt-get install android-sdk-platform-tools-common
 \`\`\`
 
-### macOS 安全设置
-
-首次使用需要在"系统偏好设置" → "安全性与隐私"中允许 ADB 运行。
 `;
