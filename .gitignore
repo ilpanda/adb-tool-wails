@@ -114,6 +114,7 @@ frontend/wailsjs/
 .idea/
 
 server/server/build/
+server/local.properties
 .gradle/
 .kotlin/
 
