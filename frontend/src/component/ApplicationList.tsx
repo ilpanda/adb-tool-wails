@@ -4,7 +4,7 @@ import { Input, Select, message, Space, Button, Progress, Empty, Spin, Paginatio
 import { SearchOutlined, ReloadOutlined, AppstoreOutlined, ClockCircleOutlined, FolderOutlined } from '@ant-design/icons';
 import { useDeviceStore } from '../store/deviceStore';
 import { useAppListStore, PackageInfo, ProgressInfo } from '../store/appListStore';
-import { GetApplicationListWithProgress, CancelApplicationListLoading } from '../../wailsjs/go/main/App';
+import {GetApplicationListWithProgress, CancelApplicationListLoading, LogMsg} from '../../wailsjs/go/main/App';
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 
 const { Paragraph } = Typography;
@@ -36,7 +36,6 @@ function ApplicationList() {
 
     const mountedRef = useRef(true);
     const loadIdRef = useRef(0);
-    const previousDeviceIdRef = useRef<string | null>(null);
     const isLoadingRef = useRef(false);  // 新增：跟踪是否正在加载
 
     // 获取当前设备的 deviceId 参数
@@ -134,17 +133,18 @@ function ApplicationList() {
     // 设备变化时自动加载（优先使用缓存）
     useEffect(() => {
         if (selectedDevice) {
-            const wasDisconnected = previousDeviceIdRef.current === null;
-            doLoadApps(wasDisconnected);
-            previousDeviceIdRef.current = selectedDevice.id;
+            const deviceIdParam = getDeviceIdParam();
+            const cached = getAppsFromCache(deviceIdParam);
+            // 没有缓存才强制刷新
+            const forceRefresh = !cached || cached.length === 0;
+            doLoadApps(forceRefresh);
         } else {
-            // 无设备时清空当前显示
-            previousDeviceIdRef.current = null;
+            // 设备断开时，清除缓存
+            useAppListStore.getState().clearCache();  // 清除所有缓存
             useAppListStore.setState({
                 apps: [],
                 isLoading: false,
                 progress: null,
-                loadedDeviceId: '',
             });
         }
     }, [selectedDevice?.id]);

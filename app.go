@@ -522,3 +522,7 @@ func (a *App) CancelApplicationListLoading() {
 		}
 	}
 }
+
+func (a *App) LogMsg(msg string) {
+	println(msg)
+}
