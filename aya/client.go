@@ -180,8 +180,26 @@ func (c *Client) pushDex(localDexPath string) error {
 	return nil
 }
 
+// killServer 杀掉已存在的服务进程
+func (c *Client) killServer() {
+	log.Printf("Killing existing Aya server on device %s", c.param.DeviceId)
+
+	// 方法1：通过 pkill 杀进程
+	cmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "pkill -f io.liriliri.aya.Server")
+	util.Exec(cmd, true, nil) // 忽略错误，可能本来就没有进程
+
+	// 等待进程退出
+	time.Sleep(200 * time.Millisecond)
+}
+
 // startServer 启动服务
 func (c *Client) startServer() error {
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+
+	c.killServer()
+
 	if err := c.checkCancelled(); err != nil {
 		return err
 	}
