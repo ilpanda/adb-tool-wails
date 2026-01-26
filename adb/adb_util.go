@@ -866,18 +866,85 @@ func JumpToSettings(param ExecuteParams) types.ExecResult {
 		intent = "android.settings.INPUT_METHOD_SETTINGS"
 	case "jump-display":
 		intent = "android.settings.DISPLAY_SETTINGS"
+	case "jump-wifi-settings":
+		intent = "android.settings.WIFI_SETTINGS"
 	default:
 		return types.NewExecResultErrorString(param.Action, "未知的跳转操作")
 	}
 
 	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am start -a %s", intent))
 	res, err := util.Exec(cmd, false, nil)
-
 	if err != nil {
 		return types.NewExecResultFromError(cmd, res, err)
 	}
 
 	return types.NewExecResultSuccess(cmd, res)
+}
+
+// 跳转到 App 详情页
+func JumpToAppDetailSettings(param ExecuteParams) types.ExecResult {
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:%s", param.PackageName))
+	return execCmd(cmd)
+}
+
+func ToggleGPUProfile(param ExecuteParams) types.ExecResult {
+	// 获取当前状态
+	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop debug.hwui.profile")
+	result := execCmd(getCmd)
+	if result.Error != "" {
+		return result
+	}
+
+	// 根据当前状态切换
+	var setCmd string
+	if strings.TrimSpace(result.Res) == "visual_bars" {
+		// 当前是开启状态，关闭它
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.profile false")
+	} else {
+		// 当前是关闭状态，开启它
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.profile visual_bars")
+	}
+
+	// 刷新界面
+	refreshCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "service call activity 1599295570")
+
+	return execCmds(setCmd, refreshCmd)
+}
+
+func ToggleGPUOverdraw(param ExecuteParams) types.ExecResult {
+	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop debug.hwui.overdraw")
+	result := execCmd(getCmd)
+	if result.Error != "" {
+		return result
+	}
+
+	var setCmd string
+	if strings.TrimSpace(result.Res) == "show" {
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.overdraw false")
+	} else {
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.overdraw show")
+	}
+
+	refreshCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "service call activity 1599295570")
+	return execCmds(setCmd, refreshCmd)
+}
+
+func ToggleLayoutBounds(param ExecuteParams) types.ExecResult {
+	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop debug.layout")
+	result := execCmd(getCmd)
+	if result.Error != "" {
+		return result
+	}
+
+	var setCmd string
+	if strings.TrimSpace(result.Res) == "true" {
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.layout false")
+	} else {
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.layout true")
+	}
+
+	refreshCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "service call activity 1599295570")
+	return execCmds(setCmd, refreshCmd)
 }
 
 func execCmd(cmd string) types.ExecResult {
@@ -886,4 +953,17 @@ func execCmd(cmd string) types.ExecResult {
 		return types.NewExecResultFromError(cmd, "", err)
 	}
 	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
+}
+
+func execCmds(cmds ...string) types.ExecResult {
+	var allCmds []string
+	for _, cmd := range cmds {
+		result := execCmd(cmd)
+		allCmds = append(allCmds, cmd)
+		if result.Error != "" {
+			return types.NewExecResultFromError(strings.Join(allCmds, "\n"), result.Res, fmt.Errorf(result.Error))
+		}
+	}
+	finalCmd := strings.Join(allCmds, "\n")
+	return types.NewExecResultSuccess(finalCmd, "success")
 }

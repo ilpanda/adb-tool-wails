@@ -32,6 +32,8 @@ export type ActionType =
     | 'jump-bluetooth'
     | 'jump-input'
     | 'jump-display'
+    | 'jump-application-detail'
+    | 'jump-wifi-settings'
     | 'dump-memory-info'
     | 'dump-pid'
     | 'dump-smaps'
@@ -39,6 +41,9 @@ export type ActionType =
     | 'get-package-info'
     | 'view-package'
     | 'get-package-detail-info'
+    | 'toggle-gpu-profile'
+    | 'toggle-gpu-overdraw'
+    | 'toggle-layout-bounds'
     ;
 
 
@@ -78,6 +83,7 @@ export const quickActions: QuickActionSection[] = [
             { icon: 'fa-download', label: '保存应用 APK 到电脑', color: 'text-indigo-700', bgColor: 'bg-indigo-50', action: 'export-app' },
             { icon: 'fa-key', label: '授予所有权限', color: 'text-emerald-500', bgColor: 'bg-emerald-50', action: 'grant-permissions' },
             { icon: 'fa-shield-alt', label: '重置权限', color: 'text-orange-500', bgColor: 'bg-orange-50', action: 'reset-permissions' },
+            { icon: 'fa-circle-info', label: '跳转应用详情页', color: 'text-blue-500', bgColor: 'bg-blue-50', action: 'jump-application-detail' },
             { icon: 'fa-map', label: '导出 smaps', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'dump-smaps' },
             { icon: 'fa-chart-pie', label: '导出 hprof', color: 'text-violet-600', bgColor: 'bg-violet-50', action: 'dump-hprof' },
             { icon: 'fa-skull-crossbones', label: '杀死应用', color: 'text-gray-700', bgColor: 'bg-gray-100', action: 'force-stop' },
@@ -101,15 +107,19 @@ export const quickActions: QuickActionSection[] = [
         ]
     },
     {
-        title: "快速跳转",
+        title: "快捷设置",
         items: [
+            { icon: 'fa-code-branch', label: '开发者选项', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'jump-developer' },
+            { icon: 'fa-chart-bar', label: 'GPU 呈现模式', color: 'text-violet-600', bgColor: 'bg-violet-50', action: 'toggle-gpu-profile' },
+            { icon: 'fa-layer-group', label: 'GPU 过度绘制', color: 'text-orange-600', bgColor: 'bg-orange-50', action: 'toggle-gpu-overdraw' },
+            { icon: 'fa-border-all', label: '显示布局边界', color: 'text-pink-600', bgColor: 'bg-pink-50', action: 'toggle-layout-bounds' },
+            { icon: 'fa-wifi', label: 'WIFI', color: 'text-green-500', bgColor: 'bg-green-50', action: 'jump-wifi-settings' },
             { icon: 'fa-globe', label: '语言设置', color: 'text-blue-600', bgColor: 'bg-blue-50', action: 'jump-locale' },
             { icon: 'fa-th-large', label: '应用管理', color: 'text-green-600', bgColor: 'bg-green-50', action: 'jump-application' },
             { icon: 'fa-bell', label: '通知与状态栏', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'jump-notification' },
             { icon: 'fa-bluetooth-b', label: '蓝牙设置', color: 'text-sky-600', bgColor: 'bg-sky-50', action: 'jump-bluetooth' },
             { icon: 'fa-keyboard', label: '管理输入法', color: 'text-indigo-600', bgColor: 'bg-indigo-50', action: 'jump-input' },
             { icon: 'fa-tv', label: '显示与亮度', color: 'text-teal-600', bgColor: 'bg-teal-50', action: 'jump-display' },
-            { icon: 'fa-code-branch', label: '开发者选项', color: 'text-purple-600', bgColor: 'bg-purple-50', action: 'jump-developer' },
         ]
     },
     {

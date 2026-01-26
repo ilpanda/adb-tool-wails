@@ -206,7 +206,15 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.ClearAndRestartApp(param)
 	case "view-package":
 		return adb.GetCurrentPackageName(param)
-	case "jump-locale", "jump-developer", "jump-application",
+	case "toggle-gpu-profile":
+		return adb.ToggleGPUProfile(param)
+	case "toggle-gpu-overdraw":
+		return adb.ToggleGPUOverdraw(param)
+	case "toggle-layout-bounds":
+		return adb.ToggleLayoutBounds(param)
+	case "jump-application-detail":
+		return adb.JumpToAppDetailSettings(param)
+	case "jump-locale", "jump-developer", "jump-application", "jump-wifi-settings",
 		"jump-notification", "jump-bluetooth", "jump-input", "jump-display":
 		return adb.JumpToSettings(param)
 	}
