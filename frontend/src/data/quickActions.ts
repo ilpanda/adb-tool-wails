@@ -44,6 +44,7 @@ export type ActionType =
     | 'toggle-gpu-profile'
     | 'toggle-gpu-overdraw'
     | 'toggle-layout-bounds'
+    | 'dump-thread'
     ;
 
 
@@ -86,6 +87,7 @@ export const quickActions: QuickActionSection[] = [
             { icon: 'fa-circle-info', label: '跳转应用详情页', color: 'text-blue-500', bgColor: 'bg-blue-50', action: 'jump-application-detail' },
             { icon: 'fa-map', label: '导出 smaps', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'dump-smaps' },
             { icon: 'fa-chart-pie', label: '导出 hprof', color: 'text-violet-600', bgColor: 'bg-violet-50', action: 'dump-hprof' },
+            { icon: 'fa-layer-group', label: '导出线程信息', color: 'text-lime-600', bgColor: 'bg-lime-50', action: 'dump-thread' },
             { icon: 'fa-skull-crossbones', label: '杀死应用', color: 'text-gray-700', bgColor: 'bg-gray-100', action: 'force-stop' },
             { icon: 'fa-trash-alt', label: '清除数据', color: 'text-red-500', bgColor: 'bg-red-50', action: 'clear-data' },
             { icon: 'fa-broom', label: '清除数据并重启应用', color: 'text-pink-600', bgColor: 'bg-pink-50', action: 'clear-restart-app' },

@@ -101,3 +101,9 @@ wails build
 # 运行
 ./build/bin/adb-tool
 ```
+
+#### 方式 3: 本地调试
+
+```bash
+wails dev
+```

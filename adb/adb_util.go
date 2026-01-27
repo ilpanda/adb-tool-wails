@@ -718,31 +718,54 @@ func DumpSysMemInfo(param ExecuteParams) types.ExecResult {
 }
 
 func dumpSmaps(param ExecuteParams) types.ExecResult {
-	packageName := param.PackageName
-	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", packageName))
-	finalCmd := cmd
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", param.PackageName))
 	pid, err := util.Exec(cmd, false, nil)
 	if err != nil {
 		return types.NewExecResultError(cmd, err)
 	}
 
 	if pid == "" {
-		return types.NewExecResultErrorString(cmd, fmt.Sprintf("%s process not found", packageName))
+		return types.NewExecResultErrorString(cmd, fmt.Sprintf("%s process not found", param.PackageName))
 	}
 
-	smapsCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("run-as %s cat /proc/%s/smaps ", packageName, strings.TrimSpace(pid)))
+	smapsCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("run-as %s cat /proc/%s/smaps ", param.PackageName, strings.TrimSpace(pid)))
+	if isRoot(param) {
+		smapsCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("cat /proc/%s/smaps ", strings.TrimSpace(pid)))
+	}
+
 	result := execCmd(smapsCmd)
-	result.Cmd = finalCmd + "\n" + smapsCmd
+	result.Cmd = cmd + "\n" + smapsCmd
 	return result
 }
 
-func SaveSmaps(param ExecuteParams) types.ExecResult {
-
-	packageIdResult := PackagePid(param)
-	if packageIdResult.Error != "" {
-		return packageIdResult
+func isRoot(param ExecuteParams) bool {
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "whoami")
+	result := execCmd(cmd)
+	if result.Error == "" && strings.TrimSpace(result.Res) == "root" {
+		return true
 	}
+	return false
+}
 
+// SaveFileOptions 保存文件的选项
+type SaveFileOptions struct {
+	Param         ExecuteParams
+	FilePrefix    string // 文件名前缀，如 "smaps", "debuggerd"
+	DialogTitle   string // 对话框标题
+	FileExtension string // 文件扩展名，如 ".txt"
+	FilterDisplay string // 过滤器显示名，如 "文本文件 (*.txt)"
+	FilterPattern string // 过滤器模式，如 "*.txt"
+}
+
+// SaveFileResult 保存文件的中间结果
+type SaveFileResult struct {
+	SavePath string
+	Canceled bool
+	Error    types.ExecResult
+}
+
+// PrepareFileSave 准备文件保存，返回用户选择的保存路径
+func PrepareFileSave(opts SaveFileOptions) SaveFileResult {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		homeDir = "."
@@ -753,35 +776,109 @@ func SaveSmaps(param ExecuteParams) types.ExecResult {
 	if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
 		desktopDir = homeDir
 	}
+
 	timestamp := time.Now().Format("2006_01_02_15_04_05")
-	saveFileName := fmt.Sprintf("%s_smaps.txt", timestamp)
-	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
+	saveFileName := fmt.Sprintf("%s_%s%s", timestamp, opts.FilePrefix, opts.FileExtension)
+
+	savePath, _ := runtime.SaveFileDialog(opts.Param.Ctxt, runtime.SaveDialogOptions{
 		DefaultDirectory: desktopDir,
 		DefaultFilename:  saveFileName,
-		Title:            "保存 smaps",
+		Title:            opts.DialogTitle,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "文本文件 (*.txt)", Pattern: "*.txt"},
+			{DisplayName: opts.FilterDisplay, Pattern: opts.FilterPattern},
 		},
 	})
+
+	if savePath == "" {
+		return SaveFileResult{Canceled: true}
+	}
+
+	return SaveFileResult{SavePath: savePath}
+}
+
+// WriteResultToFile 将执行结果写入文件
+func WriteResultToFile(savePath string, content string, cmd string) types.ExecResult {
+	err := os.WriteFile(savePath, []byte(content), 0644)
+	if err != nil {
+		return types.NewExecResultError(cmd, err)
+	}
+	return types.NewExecResultSuccess(cmd, "success")
+}
+
+// SaveSmaps 保存 smaps 信息
+func SaveSmaps(param ExecuteParams) types.ExecResult {
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
+	}
+
+	saveResult := PrepareFileSave(SaveFileOptions{
+		Param:         param,
+		FilePrefix:    "smaps",
+		DialogTitle:   "保存 smaps",
+		FileExtension: ".txt",
+		FilterDisplay: "文本文件 (*.txt)",
+		FilterPattern: "*.txt",
+	})
+
+	if saveResult.Canceled {
+		return types.NewExecResultErrorString("", "用户取消保存")
+	}
 
 	result := dumpSmaps(param)
 	if result.Error != "" {
 		return result
 	}
 
-	if savePath == "" {
-		return types.NewExecResultErrorString(result.Cmd, "用户取消保存")
-	}
-
 	if strings.Contains(result.Res, "not debuggable") {
-		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 smaps"+"\n"+result.Res, result.Error)
+		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 smaps\n"+result.Res, result.Error)
 	}
 
-	saveError := os.WriteFile(savePath, []byte(result.Res), 0644)
-	if saveError != nil {
-		return types.NewExecResultError(result.Cmd, saveError)
+	return WriteResultToFile(saveResult.SavePath, result.Res, result.Cmd)
+}
+
+func SaveThreadInfo(param ExecuteParams) types.ExecResult {
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
 	}
-	return types.NewExecResultSuccess(result.Cmd, "success")
+
+	if isRoot(param) {
+		return types.NewExecResultErrorString(packageIdResult.Cmd, "应用不是 root，无法导出线程信息")
+	}
+
+	saveResult := PrepareFileSave(SaveFileOptions{
+		Param:         param,
+		FilePrefix:    "thread_info",
+		DialogTitle:   "保存 thread",
+		FileExtension: ".txt",
+		FilterDisplay: "文本文件 (*.txt)",
+		FilterPattern: "*.txt",
+	})
+
+	if saveResult.Canceled {
+		return types.NewExecResultErrorString("", "用户取消保存")
+	}
+
+	result := doSaveThreadInfo(param)
+	if result.Error != "" {
+		return result
+	}
+
+	return WriteResultToFile(saveResult.SavePath, result.Res, result.Cmd)
+}
+
+func doSaveThreadInfo(param ExecuteParams) types.ExecResult {
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
+	}
+
+	if isRoot(param) {
+		cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("debuggerd -b %s", packageIdResult.Res))
+		return execCmd(cmd)
+	}
+	return types.NewExecResultErrorString(packageIdResult.Cmd, "应用不是 debuggable，无法导出 hprof")
 }
 
 func SaveHprof(param ExecuteParams) types.ExecResult {
