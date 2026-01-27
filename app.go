@@ -186,6 +186,8 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.UninstallApp(param)
 	case "get-system-info":
 		return adb.GetDeviceInfo(param)
+	case "format-sys-info":
+		return adb.FormatSysMemInfo(param)
 	case "get-system-property":
 		return adb.GetAllSystemProperties(param)
 	case "export-app":
@@ -277,8 +279,12 @@ func (a *App) GetDeviceNameArray() []adb.DeviceInfo {
 	return deviceNameArray
 }
 
-func (a *App) SaveFile(content string) types.ExecResult {
-	return adb.SaveFile(a.ctx, content, "save_log", "保存日志")
+func (a *App) SaveFile(content string, fileNamePrefix string) types.ExecResult {
+	return adb.SaveFile(a.ctx, content, fileNamePrefix, "保存文件")
+}
+
+func (a *App) SaveFileAsCsv(content string, fileNamePrefix string) types.ExecResult {
+	return adb.SaveFileAsCSV(a.ctx, content, fileNamePrefix, "保存文件")
 }
 
 // GetPackageInfoFromAya 使用 Aya 服务获取应用详细信息

@@ -46,14 +46,7 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                 return `[${log.timestamp}] $ 命令执行结果：\n\n${log.content}\n`;
             }
         }).join('\n');
-        await SaveFile(logText)
-
-        // const blob = new Blob([logText], {type: 'text/plain'});
-        // const url = URL.createObjectURL(blob);
-        // const a = document.createElement('a');
-        // a.href = url;
-        // a.download = `adb-logs-${new Date().toISOString().slice(0, 10)}.txt`;
-        // a.click();
+        await SaveFile(logText, "save_log")
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {

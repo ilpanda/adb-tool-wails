@@ -70,6 +70,7 @@ function LeftContainer({selectedView, onViewChange}: {
         {key: '1', icon: 'fa-rocket', label: '快捷功能', iconColor: 'text-amber-500'},
         {key: '4', icon: 'fa-gear', label: '应用列表', iconColor: 'text-purple-500'},
         {key: '2', icon: 'fa-circle-question', label: '常见问题', iconColor: 'text-blue-500'},
+        {key: '5', icon: 'fa-memory', label: '内存监控', iconColor: 'text-green-500'},
         {key: '3', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
 
         // {key: '3', icon: 'fa-terminal', label: 'Logcat', iconColor: 'text-green-500'},
