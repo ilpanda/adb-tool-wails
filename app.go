@@ -277,6 +277,10 @@ func (a *App) GetDeviceNameArray() []adb.DeviceInfo {
 	return deviceNameArray
 }
 
+func (a *App) SaveFile(content string) types.ExecResult {
+	return adb.SaveFile(a.ctx, content, "save_log", "保存日志")
+}
+
 // GetPackageInfoFromAya 使用 Aya 服务获取应用详细信息
 func (a *App) GetPackageInfoFromAya(param adb.ExecuteParams, packageNames []string) types.ExecResult {
 

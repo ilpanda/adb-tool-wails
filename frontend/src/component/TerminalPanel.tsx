@@ -1,6 +1,7 @@
 // TerminalPanel.tsx
 import { useState, useRef, useEffect } from 'react';
 import {message} from "antd";
+import {ExecuteAction, SaveFile} from "../../wailsjs/go/main/App";
 
 interface TerminalLog {
     id: number;
@@ -36,21 +37,23 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
         message.success("复制成功")
     };
 
-    const exportLogs = () => {
+    const exportLogs = async () => {
+
         const logText = logs.map(log => {
             if (log.type === 'command') {
-                return `[${log.timestamp}] $ ${log.content}`;
+                return `[${log.timestamp}] $ ${log.content}\n`;
             } else {
-                return `${log.content}\n`;
+                return `[${log.timestamp}] $ 命令执行结果：\n\n${log.content}\n`;
             }
         }).join('\n');
+        await SaveFile(logText)
 
-        const blob = new Blob([logText], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `adb-logs-${new Date().toISOString().slice(0, 10)}.txt`;
-        a.click();
+        // const blob = new Blob([logText], {type: 'text/plain'});
+        // const url = URL.createObjectURL(blob);
+        // const a = document.createElement('a');
+        // a.href = url;
+        // a.download = `adb-logs-${new Date().toISOString().slice(0, 10)}.txt`;
+        // a.click();
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -221,8 +224,8 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-gray-500 text-xs font-medium">{log.timestamp}</span>
                                                     <span className="text-gray-400 text-xs">·</span>
-                                                    <span className="text-green-600 text-xs font-semibold">{log.duration}s</span>
-                                                    {log.success && <span className="text-green-600 text-xs">✓</span>}
+                                                    <span className="text-green-600 text-xs font-semibold">命令执行耗时：{log.duration}s</span>
+                                                    {log.success}
                                                 </div>
                                                 <button
                                                     onClick={() => copyLog(log.content)}
