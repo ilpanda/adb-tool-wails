@@ -53,8 +53,10 @@ const MEMORY_REGIONS: MemoryRegion[] = [
 ];
 
 const formatMemory = (value: number): string => {
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)} GB`;
-    if (value >= 1000) return `${(value / 1000).toFixed(1)} MB`;
+    const MB = 1024;
+    const GB = 1024 * 1024;
+    if (value >= GB) return `${(value / GB).toFixed(1)} GB`;
+    if (value >= MB) return `${(value / MB).toFixed(1)} MB`;
     return `${value.toFixed(0)} KB`;
 };
 
