@@ -310,7 +310,7 @@ const MemoryMonitor: React.FC = () => {
         });
 
         if (result.error) {
-            message.error(typeof result.error);
+           message.error(result.error);
             return;
         }
 
