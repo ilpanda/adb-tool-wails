@@ -138,8 +138,17 @@ func (dt *DeviceTracker) updateDevices(devs []string) {
 				Name: name,
 			})
 		} else {
+
 			name := GetDeviceNameByDeviceId(dt.AdbPath, deviceId)
-			if name != "" && !strings.Contains(name, "adb device still authorizing") {
+
+			// 首次失败，1.5s 后重试一次
+			if name == "" || strings.Contains(name, "authorizing") || strings.Contains(name, "unauthorized") {
+				time.Sleep(1500 * time.Millisecond)
+				name = GetDeviceNameByDeviceId(dt.AdbPath, deviceId)
+			}
+
+			// 判断最终结果
+			if name != "" && !strings.Contains(name, "authorizing") && !strings.Contains(name, "unauthorized") {
 				dt.knownDevices[deviceId] = strings.TrimSpace(name)
 				deviceInfos = append(deviceInfos, DeviceInfo{
 					ID:   deviceId,

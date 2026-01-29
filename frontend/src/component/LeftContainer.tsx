@@ -24,19 +24,6 @@ function LeftContainer({selectedView, onViewChange}: {
         });
     }, []);
 
-
-    useEffect(() => {
-        return EventsOn("adb_update", (devices: DeviceInfo[]) => {
-            setDevices(devices)
-            // 自动选中第一个设备
-            if (devices.length > 0 && selectedDevice === null) {
-                setSelectedDevices(devices[0])
-            } else if (devices.length === 0) {
-                setSelectedDevices(null);
-            }
-        });
-    }, []);
-
     useEffect(() => {
         let fetchDeviceArray = async () => {
             const result = await GetDeviceNameArray();
