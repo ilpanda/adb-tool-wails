@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -593,34 +594,38 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		"getprop ro.product.cpu.abi",
 	}
 
-	// 构建所有命令字符串（用于日志）
+	// 构建所有命令字符串
 	var cmdStrs []string
 	for _, cmd := range commands {
 		cmdStrs = append(cmdStrs, BuildAdbShellCmd(param.AdbPath, param.DeviceId, cmd))
 	}
 	allCmds := strings.Join(cmdStrs, "\n")
 
-	// 执行所有 ADB 命令
-	model, _ := util.Exec(cmdStrs[0], false, nil)
-	version, _ := util.Exec(cmdStrs[1], false, nil)
-	density, _ := util.Exec(cmdStrs[2], false, nil)
-	display, _ := util.Exec(cmdStrs[3], false, nil)
-	otaVersion, _ := util.Exec(cmdStrs[4], false, nil)
-	sdkVersion, _ := util.Exec(cmdStrs[5], false, nil)
-	imei, _ := util.Exec(cmdStrs[6], false, nil)
-	codeName, _ := util.Exec(cmdStrs[7], false, nil)
-	brand, _ := util.Exec(cmdStrs[8], false, nil)
-	abi, _ := util.Exec(cmdStrs[9], false, nil)
+	// 并发执行所有 ADB 命令
+	results := make([]string, len(cmdStrs))
+	var wg sync.WaitGroup
+	wg.Add(len(cmdStrs))
 
-	model = strings.TrimSpace(model)
-	version = strings.TrimSpace(version)
-	density = strings.TrimSpace(density)
-	otaVersion = strings.TrimSpace(otaVersion)
-	sdkVersion = strings.TrimSpace(sdkVersion)
-	imei = strings.TrimSpace(imei)
-	brand = strings.TrimSpace(brand)
-	codeName = strings.ToUpper(strings.TrimSpace(codeName))
-	abi = strings.ToUpper(strings.TrimSpace(abi))
+	for i, cmd := range cmdStrs {
+		go func(idx int, c string) {
+			defer wg.Done()
+			out, _ := util.Exec(c, false, nil)
+			results[idx] = out
+		}(i, cmd)
+	}
+	wg.Wait()
+
+	// 提取结果
+	model := strings.TrimSpace(results[0])
+	version := strings.TrimSpace(results[1])
+	density := strings.TrimSpace(results[2])
+	display := results[3]
+	otaVersion := strings.TrimSpace(results[4])
+	sdkVersion := strings.TrimSpace(results[5])
+	//imei := strings.TrimSpace(results[6])
+	codeName := strings.ToUpper(strings.TrimSpace(results[7]))
+	brand := strings.TrimSpace(results[8])
+	abi := strings.ToUpper(strings.TrimSpace(results[9]))
 
 	if codeName == "REL" {
 		codeName = ""
