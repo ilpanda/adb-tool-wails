@@ -585,12 +585,12 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		"getprop ro.build.version.release",
 		"wm density",
 		"dumpsys window displays",
-		"settings get secure android_id",
+		"getprop ro.build.version.ota",
 		"getprop ro.build.version.sdk",
-		"ifconfig | grep Mask",
 		`service call iphonesubinfo 1 s16 com.android.shell | cut -c 52-66 | tr -d '.[:space:]'`,
 		"getprop ro.build.version.codename",
 		"getprop ro.product.brand",
+		"getprop ro.product.cpu.abi",
 	}
 
 	// 构建所有命令字符串（用于日志）
@@ -605,21 +605,22 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	version, _ := util.Exec(cmdStrs[1], false, nil)
 	density, _ := util.Exec(cmdStrs[2], false, nil)
 	display, _ := util.Exec(cmdStrs[3], false, nil)
-	androidID, _ := util.Exec(cmdStrs[4], false, nil)
+	otaVersion, _ := util.Exec(cmdStrs[4], false, nil)
 	sdkVersion, _ := util.Exec(cmdStrs[5], false, nil)
-	ipAddress, _ := util.Exec(cmdStrs[6], true, nil)
-	imei, _ := util.Exec(cmdStrs[7], false, nil)
-	codeName, _ := util.Exec(cmdStrs[8], false, nil)
-	brand, _ := util.Exec(cmdStrs[9], false, nil)
+	imei, _ := util.Exec(cmdStrs[6], false, nil)
+	codeName, _ := util.Exec(cmdStrs[7], false, nil)
+	brand, _ := util.Exec(cmdStrs[8], false, nil)
+	abi, _ := util.Exec(cmdStrs[9], false, nil)
 
 	model = strings.TrimSpace(model)
 	version = strings.TrimSpace(version)
 	density = strings.TrimSpace(density)
-	androidID = strings.TrimSpace(androidID)
+	otaVersion = strings.TrimSpace(otaVersion)
 	sdkVersion = strings.TrimSpace(sdkVersion)
 	imei = strings.TrimSpace(imei)
 	brand = strings.TrimSpace(brand)
 	codeName = strings.ToUpper(strings.TrimSpace(codeName))
+	abi = strings.ToUpper(strings.TrimSpace(abi))
 
 	if codeName == "REL" {
 		codeName = ""
@@ -638,17 +639,16 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		}
 	}
 
-	// 解析 IP 地址
-	ipAddressRes := ""
-	permissionDeny := strings.Contains(ipAddress, "Permission denied")
-	if !permissionDeny {
-		ipAddressRes = fmt.Sprintf("ipAddress: %s", strings.TrimSpace(strings.ReplaceAll(ipAddress, "\n", "")))
+	re := regexp.MustCompile(`init=(\d+x\d+)`)
+	match := re.FindStringSubmatch(displayRes)
+
+	if len(match) > 1 {
+		displayRes = match[1]
 	}
 
 	// 解析密度
 	var densityRes string
 	var densityScale float64
-	var overrideRes string
 
 	if !strings.Contains(density, "Override density") {
 		idx := strings.Index(density, ":")
@@ -672,7 +672,7 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 				if d, err := strconv.ParseFloat(overrideDensity, 64); err == nil {
 					densityScale = d / 160
 				}
-				overrideRes = fmt.Sprintf("Override density: %sdpi", overrideDensity)
+				densityRes = overrideDensity // 直接赋值
 			}
 		}
 	}
@@ -684,26 +684,25 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	}
 
 	// 格式化结果
-	result := fmt.Sprintf(`brand: %s
-model: %s
-imei: %s
-version: %s %s
-display: %s
-Physical density: %sdpi  %s
-density scale: %.2f
-android_id: %s
-%s`,
+	result := fmt.Sprintf(`
+品牌: %s
+产品型号: %s
+安卓版本: %s %s
+屏幕尺寸: %s
+屏幕像素密度: %sdpi
+密度: %.2f
+CPU 架构: %s
+OTA 版本号: %s
+`,
 		brand,
 		model,
-		imei,
 		versionBuild,
 		codeName,
 		displayRes,
 		densityRes,
-		overrideRes,
 		densityScale,
-		androidID,
-		ipAddressRes,
+		abi,
+		otaVersion,
 	)
 
 	return types.NewExecResultSuccess(allCmds, result)

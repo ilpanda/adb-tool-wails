@@ -5,6 +5,7 @@ import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
 import {message, Select} from "antd";
 import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
+import DeviceInfoCard from './DeviceInfoCard';
 
 interface CommandLog {
     id: number;
@@ -37,7 +38,37 @@ function RightContainer() {
     const [selectedPackage, setSelectedPackage] = useState<string>('');
     const [packageList, setPackageList] = useState<string[]>([]);
 
+    // 新增：设备信息状态
+    const [deviceInfoString, setDeviceInfoString] = useState<string | null>(null);
+
     const {devices, selectedDevice} = useDeviceStore();
+
+    // 新增：获取设备信息的函数
+    const fetchDeviceInfo = async () => {
+        if (!selectedDevice) {
+            setDeviceInfoString(null);
+            console.log('selectedDevice null ');
+            return;
+        }
+        try {
+            const result = await ExecuteAction({
+                action: "get-system-info", // 你需要在后端实现这个 action
+                targetPackageName: "",
+                deviceId: devices.length > 1 ? selectedDevice.id.toString() : "",
+            });
+
+            if (!result.error && result.res) {
+                setDeviceInfoString(result.res);
+            } else {
+                setDeviceInfoString(null);
+            }
+        } catch (error) {
+            console.error('Failed to fetch device info:', error);
+            setDeviceInfoString(null);
+        } finally {
+
+        }
+    };
 
     async function handleClick(action: QuickAction) {
 
@@ -216,6 +247,7 @@ function RightContainer() {
                 setSelectedPackage("")
                 setPackageList([]);
             }
+            fetchDeviceInfo();
         };
         fetchData();
     }, [selectedDevice])
@@ -251,6 +283,12 @@ function RightContainer() {
 
             {/* 主内容区域 */}
             <div className="flex-1 flex flex-col p-6 bg-gray-50 gap-6 overflow-y-auto overflow-x-hidden">
+
+                {/* 新增：设备信息卡片 */}
+                <DeviceInfoCard
+                    infoString={deviceInfoString}
+                />
+
                 {quickActions.map((section, sectionIndex) => (
                     <div key={sectionIndex} className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
@@ -261,12 +299,11 @@ function RightContainer() {
                                 </h2>
                             </div>
 
-                            {/* 如果是"应用"分区，显示包名选择器 */}
                             {section.title === '应用' && (
                                 <div className="flex items-center gap-2 package-select-wrapper">
                                     <span className="text-gray-600">
                                        连接手机后输入或者选择应用包名：
-                                        </span>
+                                    </span>
                                     <Select
                                         ref={selectRef}
                                         value={selectedPackage}
@@ -317,7 +354,7 @@ function RightContainer() {
                 onClear={clearTerminalLogs}
             />
 
-            {/* 悬浮打开按钮（当 Terminal 关闭时） */}
+            {/* 悬浮打开按钮 */}
             {!showTerminal && (
                 <button
                     onClick={() => setShowTerminal(true)}

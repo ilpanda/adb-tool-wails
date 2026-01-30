@@ -14,6 +14,7 @@ function LeftContainer({selectedView, onViewChange}: {
 
     useEffect(() => {
         return EventsOn("adb_update", (devices: DeviceInfo[]) => {
+            console.log("devices", devices);
             setDevices(devices)
             // 自动选中第一个设备
             if (devices.length > 0 && selectedDevice === null) {
