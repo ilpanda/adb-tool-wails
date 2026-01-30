@@ -456,7 +456,7 @@ const MemoryMonitor: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm text-gray-500 mb-1">包名</label>
+                            <label className="block text-sm text-gray-500 mb-1">进程名</label>
                             <Input
                                 value={inputPackageName}
                                 onChange={(e) => setInputPackageName(e.target.value)}
