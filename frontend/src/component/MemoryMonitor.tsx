@@ -52,6 +52,8 @@ const MEMORY_REGIONS: MemoryRegion[] = [
     {key: 'totalPss', name: 'Total PSS', color: '#eab308'},
 ];
 
+const STORAGE_KEY_PROCESS_NAME = 'memory_monitor_process_name';
+
 const formatMemory = (value: number): string => {
     const MB = 1024;
     const GB = 1024 * 1024;
@@ -238,7 +240,13 @@ const MemoryMonitor: React.FC = () => {
     const [data, setData] = useState<MemoryDataPoint[]>([]);
     const [isRunning, setIsRunning] = useState<boolean>(false);
     const [intervalTime, setIntervalTime] = useState<number>(1000);
-    const [inputPackageName, setInputPackageName] = useState<string>('');
+    const [processName, setProcessName] = useState<string>(() => {
+        try {
+            return localStorage.getItem(STORAGE_KEY_PROCESS_NAME) || '';
+        } catch {
+            return '';
+        }
+    });
     const [visibleRegions, setVisibleRegions] = useState<Record<string, boolean>>(
         MEMORY_REGIONS.reduce((acc, region) => ({...acc, [region.key]: true}), {})
     );
@@ -248,6 +256,15 @@ const MemoryMonitor: React.FC = () => {
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const {selectedDevice} = useDeviceStore();
 
+    // 当 processName 变化时保存到 localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem(STORAGE_KEY_PROCESS_NAME, processName);
+        } catch (e) {
+            console.warn('Failed to save package name to localStorage:', e);
+        }
+    }, [processName]);
+
     const fetchMemoryData = useCallback(async () => {
         try {
             if (selectedDevice?.id == null) {
@@ -255,7 +272,7 @@ const MemoryMonitor: React.FC = () => {
             }
             const result = await ExecuteAction({
                 action: 'format-sys-info',
-                targetPackageName: inputPackageName,
+                targetPackageName: processName,
                 deviceId: selectedDevice.id,
             });
 
@@ -281,7 +298,7 @@ const MemoryMonitor: React.FC = () => {
             console.error('获取内存数据失败:', error);
             message.error('获取内存数据失败');
         }
-    }, [inputPackageName, maxDataPoints, selectedDevice?.id]);
+    }, [processName, maxDataPoints, selectedDevice?.id]);
 
     useEffect(() => {
         if (isRunning) {
@@ -301,18 +318,18 @@ const MemoryMonitor: React.FC = () => {
             message.error('请连接设备');
             return;
         }
-        if (!inputPackageName) {
+        if (!processName) {
             message.error("请输入应用包名");
             return;
         }
         const result = await ExecuteAction({
             action: 'dump-pid',
-            targetPackageName: inputPackageName,
+            targetPackageName: processName,
             deviceId: selectedDevice.id,
         });
 
         if (result.error) {
-           message.error(result.error);
+            message.error(result.error);
             return;
         }
 
@@ -340,8 +357,8 @@ const MemoryMonitor: React.FC = () => {
             return;
         }
 
-        const csvContent = generateCSV(data, inputPackageName);
-        const fileName = `memory_${inputPackageName}`;
+        const csvContent = generateCSV(data, processName);
+        const fileName = `memory_${processName}`;
 
         try {
             await SaveFileAsCsv(csvContent, fileName);
@@ -458,8 +475,8 @@ const MemoryMonitor: React.FC = () => {
                         <div>
                             <label className="block text-sm text-gray-500 mb-1">进程名</label>
                             <Input
-                                value={inputPackageName}
-                                onChange={(e) => setInputPackageName(e.target.value)}
+                                value={processName}
+                                onChange={(e) => setProcessName(e.target.value)}
                                 placeholder="com.example.app"
                                 disabled={isRunning}
                                 autoCapitalize="off"
@@ -598,7 +615,7 @@ const MemoryMonitor: React.FC = () => {
                                     <div className="text-5xl mb-3 opacity-50">💾</div>
                                     <p>点击"开始"按钮开始采集内存数据</p>
                                     <p className="text-sm mt-2 font-mono bg-gray-100 px-3 py-1 rounded inline-block text-gray-600">
-                                        adb shell dumpsys meminfo {inputPackageName || '<package>'}
+                                        adb shell dumpsys meminfo {processName || '<package>'}
                                     </p>
                                 </div>
                             </div>
