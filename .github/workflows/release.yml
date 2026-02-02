@@ -41,7 +41,8 @@ jobs:
       - name: Build (Linux amd64)
         run: |
           cd frontend && npm ci && cd ..
-          wails build -clean -platform linux/amd64
+          VERSION=${GITHUB_REF#refs/tags/}
+          wails build -clean -platform linux/amd64 -ldflags "-X main.Version=$VERSION"
 
       - name: Package
         run: |
@@ -88,7 +89,8 @@ jobs:
       - name: Build (Mac universal)
         run: |
           cd frontend && npm ci && cd ..
-          wails build -clean -platform darwin/universal
+          VERSION=${GITHUB_REF#refs/tags/}
+          wails build -clean -platform darwin/universal -ldflags "-X main.Version=$VERSION"
 
       - name: Package
         run: |
@@ -132,8 +134,9 @@ jobs:
           cd frontend
           npm ci
           cd ..
+          $version = "${{ github.ref_name }}"
           try {
-            wails build -clean -platform windows/amd64 -skipbindings -s
+            wails build -clean -platform windows/amd64 -skipbindings -s -ldflags "-X main.Version=$version"
           } catch {
             Write-Host "⚠️ 检测到 icon.ico 可能无效（not a valid ICO file），请确认文件格式"
             exit 1

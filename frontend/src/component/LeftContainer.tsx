@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {EventsOn} from "../../wailsjs/runtime";
 import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
-import {GetDeviceNameArray} from "../../wailsjs/go/main/App";
+import {GetDeviceNameArray, GetVersion} from "../../wailsjs/go/main/App";
 
 
 function LeftContainer({selectedView, onViewChange}: {
@@ -10,6 +10,7 @@ function LeftContainer({selectedView, onViewChange}: {
 }) {
     const {devices, setDevices, selectedDevice, toggleDevice, setSelectedDevices} = useDeviceStore();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+    const [version, setVersion] = useState('')
     const dropdownRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -34,6 +35,10 @@ function LeftContainer({selectedView, onViewChange}: {
             }
         };
         fetchDeviceArray()
+    }, []);
+
+    useEffect(() => {
+        GetVersion().then(setVersion)
     }, []);
 
     // 点击外部关闭下拉框
@@ -142,7 +147,7 @@ function LeftContainer({selectedView, onViewChange}: {
                         onClick={() => onViewChange(item.key)}
                         className={`flex items-center justify-center
                             w-full px-4 py-3 mb-2 rounded-lg
-                            text-left transition-all duration-150 cursor-pointer 
+                            text-left transition-all duration-150 cursor-pointer
                             ${selectedView === item.key
                             ? 'bg-gray-100'
                             : 'hover:bg-gray-100'
@@ -155,6 +160,13 @@ function LeftContainer({selectedView, onViewChange}: {
                     </button>
                 ))}
             </nav>
+
+            {/* 版本号 */}
+            {version && (
+                <div className="px-4 py-3 border-t border-gray-200 text-center">
+                    <span className="text-xs text-gray-400 font-mono">v:{version}</span>
+                </div>
+            )}
         </div>
     );
 }

@@ -546,3 +546,8 @@ func (a *App) CancelApplicationListLoading() {
 func (a *App) LogMsg(msg string) {
 	println(msg)
 }
+
+// GetVersion 返回应用版本号
+func (a *App) GetVersion() string {
+	return Version
+}
