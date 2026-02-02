@@ -164,7 +164,7 @@ function LeftContainer({selectedView, onViewChange}: {
             {/* 版本号 */}
             {version && (
                 <div className="px-4 py-3 border-t border-gray-200 text-center">
-                    <span className="text-xs text-gray-400 font-mono">v:{version}</span>
+                    <span className="text-xs text-gray-400 font-mono">{version}</span>
                 </div>
             )}
         </div>
