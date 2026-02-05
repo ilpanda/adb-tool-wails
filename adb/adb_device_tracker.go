@@ -142,13 +142,13 @@ func (dt *DeviceTracker) updateDevices(devs []string) {
 			name := GetDeviceNameByDeviceId(dt.AdbPath, deviceId)
 
 			// 首次失败，1.5s 后重试一次
-			if name == "" || strings.Contains(name, "authorizing") || strings.Contains(name, "unauthorized") {
+			if name == "" || strings.Contains(name, "authorizing") || strings.Contains(name, "unauthorized") || strings.Contains(name, "offline") {
 				time.Sleep(1500 * time.Millisecond)
 				name = GetDeviceNameByDeviceId(dt.AdbPath, deviceId)
 			}
 
 			// 判断最终结果
-			if name != "" && !strings.Contains(name, "authorizing") && !strings.Contains(name, "unauthorized") {
+			if name != "" && !strings.Contains(name, "authorizing") && !strings.Contains(name, "unauthorized") && !strings.Contains(name, "offline") {
 				dt.knownDevices[deviceId] = strings.TrimSpace(name)
 				deviceInfos = append(deviceInfos, DeviceInfo{
 					ID:   deviceId,
