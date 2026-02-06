@@ -496,7 +496,7 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString("installApp", "用户取消安装")
 	}
 
-	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("install -d %s", filePath))
+	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("install -d -t %s", filePath))
 	res := execCmd(cmd)
 
 	return res
