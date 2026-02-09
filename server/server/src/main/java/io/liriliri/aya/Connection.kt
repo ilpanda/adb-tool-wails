@@ -15,6 +15,7 @@ import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 class Connection(private val client: LocalSocket) : Thread() {
     private companion object {
@@ -113,6 +114,7 @@ class Connection(private val client: LocalSocket) : Thread() {
         info.put("firstInstallTime", packageInfo.firstInstallTime)
         info.put("lastUpdateTime", packageInfo.lastUpdateTime)
         info.put("signatures", getSignatures(packageInfo))
+        info.put("signatureSha256s", getSignatureSha256s(packageInfo))
 
         val applicationInfo = packageInfo.applicationInfo
         var apkSize = 0L
@@ -185,18 +187,18 @@ class Connection(private val client: LocalSocket) : Thread() {
             info.put("targetSdkVersion", applicationInfo.targetSdkVersion)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            try {
-                val stats = ServiceManager.storageStatsManager.queryStatsForPackage(
-                    packageName
-                )
-                info.put("appSize", stats.appBytes)
-                info.put("dataSize", stats.dataBytes)
-                info.put("cacheSize", stats.cacheBytes)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to get storage stats for $packageName", e)
-            }
-        }
+        //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        //    try {
+        //        val stats = ServiceManager.storageStatsManager.queryStatsForPackage(
+        //            packageName
+        //        )
+        //        info.put("appSize", stats.appBytes)
+        //        info.put("dataSize", stats.dataBytes)
+        //        info.put("cacheSize", stats.cacheBytes)
+        //    } catch (e: Exception) {
+        //        Log.e(TAG, "Failed to get storage stats for $packageName", e)
+        //    }
+        //}
 
         return info
     }
@@ -225,6 +227,24 @@ class Connection(private val client: LocalSocket) : Thread() {
         val array = JSONArray()
         signatures.forEach {
             array.put(Base64.encodeToString(it.toByteArray(), Base64.NO_WRAP))
+        }
+        return array
+    }
+
+    private fun getSignatureSha256s(packageInfo: PackageInfo): JSONArray {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.signingInfo.apkContentsSigners
+        } else {
+            packageInfo.signatures
+        }
+
+        val array = JSONArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        signatures.forEach {
+            val digest = md.digest(it.toByteArray())
+            val hexString = digest.joinToString("") { byte -> "%02X".format(byte) }
+            array.put(hexString)
+            md.reset()
         }
         return array
     }

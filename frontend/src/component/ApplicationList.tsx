@@ -1,7 +1,7 @@
 // components/ApplicationList.tsx
 import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
 import { Input, Select, message, Space, Button, Progress, Empty, Spin, Pagination, Typography } from 'antd';
-import { SearchOutlined, ReloadOutlined, AppstoreOutlined, ClockCircleOutlined, FolderOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, AppstoreOutlined, ClockCircleOutlined, FolderOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useDeviceStore } from '../store/deviceStore';
 import { useAppListStore, PackageInfo, ProgressInfo } from '../store/appListStore';
 import {GetApplicationListWithProgress, CancelApplicationListLoading, LogMsg} from '../../wailsjs/go/main/App';
@@ -366,6 +366,24 @@ const AppCard = memo(function AppCard({ app }: { app: PackageInfo }) {
                     {app.apkPath || '-'}
                 </Paragraph>
             </div>
+
+            {app.signatureSha256s && app.signatureSha256s.length > 0 && (
+                <div className="mb-3 pb-3 border-b border-gray-100">
+                    <div className="flex items-center gap-1.5 text-xs mb-1">
+                        <SafetyCertificateOutlined className="text-gray-400" />
+                        <span className="text-gray-500">签名 SHA256</span>
+                    </div>
+                    {app.signatureSha256s.map((sha256, index) => (
+                        <Paragraph
+                            key={index}
+                            className="!text-xs !font-mono !text-gray-600 !mb-1 bg-gray-50 px-2 py-1.5 rounded break-all"
+                            copyable={{ tooltips: ['复制', '已复制'] }}
+                        >
+                            {sha256}
+                        </Paragraph>
+                    ))}
+                </div>
+            )}
 
             <div className="space-y-1.5 mb-3 pb-3 border-b border-gray-100">
                 <div className="flex items-center justify-between text-xs">

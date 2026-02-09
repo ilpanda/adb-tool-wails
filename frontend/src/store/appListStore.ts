@@ -19,6 +19,7 @@ export interface PackageInfo {
     minSdkVersion: number;
     targetSdkVersion: number;
     signatures: string[];
+    signatureSha256s?: string[];
 }
 
 export interface ProgressInfo {

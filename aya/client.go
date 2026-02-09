@@ -20,6 +20,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// AyaDexVersion 当前 aya.dex 的版本号，需要与 server/build.gradle 中的 versionName 保持一致
+const AyaDexVersion = "1.1"
+
 type Client struct {
 	param       adb.ExecuteParams
 	conn        net.Conn
@@ -66,46 +69,71 @@ func (c *Client) Connect(localDexPath string) error {
 		return err
 	}
 
-	// 尝试连接，如果失败则启动服务
+	// 尝试连接已运行的服务
+	if err := c.tryConnect(); err == nil {
+		// 连接成功，先启动 readLoop 才能发送消息
+		c.mu.Lock()
+		c.readStarted = true
+		c.mu.Unlock()
+		go c.readLoop()
+
+		// 检查版本
+		remoteVersion, err := c.getRemoteVersion()
+		if err != nil {
+			log.Printf("Failed to get remote version: %v, will restart server", err)
+			c.Close()
+		} else if remoteVersion == AyaDexVersion {
+			// 版本一致，直接使用现有连接
+			log.Printf("Server version %s matches, reusing existing server", remoteVersion)
+			return nil
+		} else {
+			// 版本不一致，需要更新
+			log.Printf("Server version mismatch: remote=%s, local=%s, will update", remoteVersion, AyaDexVersion)
+			c.Close()
+		}
+	}
+
+	// 需要重新部署服务
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+
+	c.killServer()
+
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+
+	// Push DEX
+	if err := c.pushDex(localDexPath); err != nil {
+		return fmt.Errorf("push dex failed: %w", err)
+	}
+
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+
+	// 启动服务
+	if err := c.startServer(); err != nil {
+		return fmt.Errorf("start server failed: %w", err)
+	}
+
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+
+	// 等待服务就绪
+	if err := c.waitForServer(10 * time.Second); err != nil {
+		return fmt.Errorf("wait for server failed: %w", err)
+	}
+
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+
+	// 连接
 	if err := c.tryConnect(); err != nil {
-		// 优先检查 context 取消
-		if err := c.checkCancelled(); err != nil {
-			return err
-		}
-
-		log.Printf("Initial connection failed, trying to start server: %v", err)
-
-		// Push DEX
-		if err := c.pushDex(localDexPath); err != nil {
-			return fmt.Errorf("push dex failed: %w", err)
-		}
-
-		if err := c.checkCancelled(); err != nil {
-			return err
-		}
-
-		// 启动服务
-		if err := c.startServer(); err != nil {
-			return fmt.Errorf("start server failed: %w", err)
-		}
-
-		if err := c.checkCancelled(); err != nil {
-			return err
-		}
-
-		// 等待服务就绪
-		if err := c.waitForServer(10 * time.Second); err != nil {
-			return fmt.Errorf("wait for server failed: %w", err)
-		}
-
-		if err := c.checkCancelled(); err != nil {
-			return err
-		}
-
-		// 再次尝试连接
-		if err := c.tryConnect(); err != nil {
-			return fmt.Errorf("connect after start failed: %w", err)
-		}
+		return fmt.Errorf("connect failed: %w", err)
 	}
 
 	// 启动读取协程
@@ -115,6 +143,21 @@ func (c *Client) Connect(localDexPath string) error {
 	go c.readLoop()
 
 	return nil
+}
+
+// getRemoteVersion 获取远端服务版本号
+func (c *Client) getRemoteVersion() (string, error) {
+	result, err := c.SendMessage("getVersion", nil)
+	if err != nil {
+		return "", err
+	}
+
+	version, ok := result["version"].(string)
+	if !ok {
+		return "", fmt.Errorf("invalid version response")
+	}
+
+	return version, nil
 }
 
 // tryConnect 尝试连接到已运行的服务
@@ -488,6 +531,10 @@ func (c *Client) Close() error {
 		delete(c.resolves, id)
 	}
 	c.conn = nil
+	// 重置状态以支持重连
+	c.closed = false
+	c.readStarted = false
+	c.readDone = make(chan struct{})
 	c.mu.Unlock()
 
 	if c.localPort != "" {
@@ -562,6 +609,14 @@ func (c *Client) GetPackageInfo(packageName string) (*PackageInfo, error) {
 		for _, sig := range sigs {
 			if sigStr, ok := sig.(string); ok {
 				info.Signatures = append(info.Signatures, sigStr)
+			}
+		}
+	}
+	if sigSha256s, ok := result["signatureSha256s"].([]interface{}); ok {
+		info.SignatureSha256s = make([]string, 0, len(sigSha256s))
+		for _, sha256 := range sigSha256s {
+			if sha256Str, ok := sha256.(string); ok {
+				info.SignatureSha256s = append(info.SignatureSha256s, sha256Str)
 			}
 		}
 	}

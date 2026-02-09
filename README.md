@@ -103,7 +103,16 @@ wails build
 ```
 
 #### 方式 3: 本地调试
-
+本地运行 wails：
 ```bash
 wails dev
 ```
+如果本地修改 aya server ，需要再次编译：
+```
+# 在项目根目录下执行
+$ cd server
+$ ./gradlew :server:assembleRelease
+```
+编译后会自动替换 resources 目录下的 aya.dex，记得修改：
+- server/server/build.gradle 文件中的 versionName、versionCode
+- aya/client.go 中的 AyaDexVersion

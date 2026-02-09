@@ -23,6 +23,7 @@ type PackageInfo struct {
 	MinSdkVersion    int      `json:"minSdkVersion"`
 	TargetSdkVersion int      `json:"targetSdkVersion"`
 	Signatures       []string `json:"signatures"`
+	SignatureSha256s []string `json:"signatureSha256s"`
 }
 
 func (p *PackageInfo) GetFirstInstallTimeFormatted() string {
