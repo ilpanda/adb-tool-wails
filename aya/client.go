@@ -21,7 +21,7 @@ import (
 )
 
 // AyaDexVersion 当前 aya.dex 的版本号，需要与 server/build.gradle 中的 versionName 保持一致
-const AyaDexVersion = "1.1"
+const AyaDexVersion = "1.2"
 
 type Client struct {
 	param       adb.ExecuteParams

@@ -35,6 +35,10 @@ class Connection(private val client: LocalSocket) : Thread() {
         while (!isInterrupted && client.isConnected) {
             try {
                 val request = Wire.Request.parseDelimitedFrom(client.inputStream)
+                if (request == null) {
+                    // 流结束，客户端断开连接
+                    break
+                }
                 val params = request.params.ifEmpty { "{}" }
                 handleRequest(request.id, request.method, params)
             } catch (e: Exception) {
