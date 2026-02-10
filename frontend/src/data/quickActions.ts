@@ -45,6 +45,7 @@ export type ActionType =
     | 'toggle-gpu-overdraw'
     | 'toggle-layout-bounds'
     | 'dump-thread'
+    | 'dump-show-map'
     ;
 
 
@@ -86,6 +87,7 @@ export const quickActions: QuickActionSection[] = [
             { icon: 'fa-shield-alt', label: '重置权限', color: 'text-orange-500', bgColor: 'bg-orange-50', action: 'reset-permissions' },
             { icon: 'fa-circle-info', label: '跳转应用详情页', color: 'text-blue-500', bgColor: 'bg-blue-50', action: 'jump-application-detail' },
             { icon: 'fa-map', label: '导出 smaps', color: 'text-amber-600', bgColor: 'bg-amber-50', action: 'dump-smaps' },
+            { icon: 'fa-table-list', label: '导出 showmap', color: 'text-yellow-600', bgColor: 'bg-yellow-50', action: 'dump-show-map' },
             { icon: 'fa-chart-pie', label: '导出 hprof', color: 'text-violet-600', bgColor: 'bg-violet-50', action: 'dump-hprof' },
             { icon: 'fa-layer-group', label: '导出线程信息', color: 'text-lime-600', bgColor: 'bg-lime-50', action: 'dump-thread' },
             { icon: 'fa-skull-crossbones', label: '杀死应用', color: 'text-gray-700', bgColor: 'bg-gray-100', action: 'force-stop' },

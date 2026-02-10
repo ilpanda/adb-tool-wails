@@ -200,6 +200,8 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.DumpSysMemInfo(param)
 	case "dump-smaps":
 		return adb.SaveSmaps(param)
+	case "dump-show-map":
+		return adb.SaveShowMap(param)
 	case "dump-thread":
 		return adb.SaveThreadInfo(param)
 	case "dump-hprof":

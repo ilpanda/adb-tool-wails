@@ -850,6 +850,22 @@ func dumpSmaps(param ExecuteParams) types.ExecResult {
 	return finalResult
 }
 
+func dumpShowMap(param ExecuteParams) types.ExecResult {
+	result := PackagePid(param)
+	if result.Error != "" {
+		return result
+	}
+
+	showMapCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("run-as %s showmap %s ", param.PackageName, result.Res))
+	if isRoot(param) {
+		showMapCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("showmap %s", result.Res))
+	}
+
+	finalResult := execCmd(showMapCmd)
+	finalResult.Cmd = result.Cmd + "\n" + showMapCmd
+	return finalResult
+}
+
 func isRoot(param ExecuteParams) bool {
 	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "whoami")
 	result := execCmd(cmd)
@@ -944,6 +960,37 @@ func SaveSmaps(param ExecuteParams) types.ExecResult {
 
 	if strings.Contains(result.Res, "not debuggable") {
 		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 smaps\n"+result.Res, result.Error)
+	}
+
+	return writeResultToFile(saveResult.SavePath, result.Res, result.Cmd)
+}
+
+func SaveShowMap(param ExecuteParams) types.ExecResult {
+	packageIdResult := PackagePid(param)
+	if packageIdResult.Error != "" {
+		return packageIdResult
+	}
+
+	saveResult := PrepareFileSave(SaveFileOptions{
+		Ctxt:          param.Ctxt,
+		FilePrefix:    "show_map",
+		DialogTitle:   "保存 show_map",
+		FileExtension: ".txt",
+		FilterDisplay: "文本文件 (*.txt)",
+		FilterPattern: "*.txt",
+	})
+
+	if saveResult.Canceled {
+		return types.NewExecResultErrorString("", "用户取消保存")
+	}
+
+	result := dumpShowMap(param)
+	if result.Error != "" {
+		return result
+	}
+
+	if strings.Contains(result.Res, "not debuggable") {
+		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 showmap\n"+result.Res, result.Error)
 	}
 
 	return writeResultToFile(saveResult.SavePath, result.Res, result.Cmd)
