@@ -955,7 +955,7 @@ func SaveThreadInfo(param ExecuteParams) types.ExecResult {
 		return packageIdResult
 	}
 
-	if isRoot(param) {
+	if !isRoot(param) {
 		return types.NewExecResultErrorString(packageIdResult.Cmd, "应用不是 root，无法导出线程信息")
 	}
 
