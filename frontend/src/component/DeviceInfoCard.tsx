@@ -9,6 +9,7 @@ interface DeviceInfoItem {
 
 // 默认显示的字段
 const defaultLabels = [
+    '名称',
     '品牌',
     '产品型号',
     '安卓版本',
@@ -16,6 +17,12 @@ const defaultLabels = [
     '屏幕像素密度',
     '密度',
     'CPU 架构',
+    'CPU 型号',
+    '内存',
+    '存储',
+    '字体缩放',
+    'WIFI 名称',
+    'IP 地址',
     'OTA 版本号'
 ];
 

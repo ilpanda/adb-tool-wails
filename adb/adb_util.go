@@ -3,6 +3,7 @@ package adb
 import (
 	"adb-tool-wails/types"
 	"adb-tool-wails/util"
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -588,10 +589,17 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		"dumpsys window displays",
 		"getprop ro.build.version.ota",
 		"getprop ro.build.version.sdk",
-		`service call iphonesubinfo 1 s16 com.android.shell | cut -c 52-66 | tr -d '.[:space:]'`,
 		"getprop ro.build.version.codename",
 		"getprop ro.product.brand",
 		"getprop ro.product.cpu.abi",
+		"getprop ro.product.board",
+		"cat /proc/stat",
+		"settings get system font_scale",
+		"settings get global device_name",
+		"cat /proc/meminfo",
+		"dumpsys diskstats",
+		"dumpsys wifi",
+		"ip addr show wlan0",
 	}
 
 	// 构建所有命令字符串
@@ -622,10 +630,17 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 	display := results[3]
 	otaVersion := strings.TrimSpace(results[4])
 	sdkVersion := strings.TrimSpace(results[5])
-	//imei := strings.TrimSpace(results[6])
-	codeName := strings.ToUpper(strings.TrimSpace(results[7]))
-	brand := strings.TrimSpace(results[8])
-	abi := strings.ToUpper(strings.TrimSpace(results[9]))
+	codeName := strings.ToUpper(strings.TrimSpace(results[6]))
+	brand := strings.TrimSpace(results[7])
+	abi := strings.ToUpper(strings.TrimSpace(results[8]))
+	cpuModel := strings.ToUpper(strings.TrimSpace(results[9]))
+	cpuInfo := strings.TrimSpace(results[10])
+	fontScale := strings.TrimSpace(results[11])
+	deviceName := strings.TrimSpace(results[12])
+	memInfo := strings.TrimSpace(results[13])
+	diskInfo := strings.TrimSpace(results[14])
+	wifiInfo := strings.TrimSpace(results[15])
+	ipInfo := strings.TrimSpace(results[16])
 
 	if codeName == "REL" {
 		codeName = ""
@@ -688,8 +703,15 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		versionBuild = fmt.Sprintf("Android %s", version)
 	}
 
+	cpuCount := getFormatCpuCount(cpuInfo)
+	totalMem := getFormatTotalMemInfo(memInfo)
+	disk := getFormatDiskSize(diskInfo)
+	wifiName := getFormatWIFIInfo(wifiInfo)
+	ipAddress := getFormatIPAdress(ipInfo)
+
 	// 格式化结果
 	result := fmt.Sprintf(`
+名称: %s
 品牌: %s
 产品型号: %s
 安卓版本: %s %s
@@ -697,8 +719,15 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 屏幕像素密度: %sdpi
 密度: %.2f
 CPU 架构: %s
+CPU 型号: %s、%d 核
+内存: %s
+存储: %s
+字体缩放：%sx
+WIFI 名称：%s
+IP 地址：%s
 OTA 版本号: %s
 `,
+		deviceName,
 		brand,
 		model,
 		versionBuild,
@@ -707,10 +736,128 @@ OTA 版本号: %s
 		densityRes,
 		densityScale,
 		abi,
+		cpuModel,
+		cpuCount,
+		totalMem,
+		disk,
+		fontScale,
+		wifiName,
+		ipAddress,
 		otaVersion,
 	)
 
 	return types.NewExecResultSuccess(allCmds, result)
+}
+
+func getFormatCpuCount(msg string) int {
+	var cpuCount = 0
+	if len(msg) > 0 {
+		scanner := bufio.NewScanner(strings.NewReader(msg))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "cpu") {
+				fields := strings.Fields(line)
+				if len(fields) > 0 && fields[0] == "cpu" {
+					continue
+				} else if len(fields) > 0 {
+					cpuCount++
+				}
+			}
+		}
+	}
+	return cpuCount
+}
+
+func ExtractIPAddress(output string) string {
+	re := regexp.MustCompile(`inet (\d+\.\d+\.\d+\.\d+)`)
+	match := re.FindStringSubmatch(output)
+	if len(match) < 2 {
+		return ""
+	}
+	return match[1]
+}
+
+func getFormatTotalMemInfo(msg string) string {
+	var res = "0"
+	scanner := bufio.NewScanner(strings.NewReader(msg))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "MemTotal") {
+			split := strings.Split(line, ":")
+			if len(split) > 1 {
+				kbStr := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(split[1]), "kB"))
+				kb, err := strconv.ParseFloat(kbStr, 64)
+				if err == nil {
+					gb := kb / 1024 / 1024
+					res = fmt.Sprintf("%.2f G", gb)
+				}
+			}
+		}
+	}
+	return res
+}
+
+func getFormatDiskSize(msg string) string {
+	var total = 0
+	var free = 0
+	var parseInt = 0
+	scanner := bufio.NewScanner(strings.NewReader(msg))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Data-Free") {
+			re := regexp.MustCompile(`Data-Free:\s*(\d+)K`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				free, _ = strconv.Atoi(matches[1])
+			}
+		} else if strings.HasPrefix(line, "System Size") {
+			split := strings.Split(line, ":")
+			if len(split) == 2 {
+				parseInt, _ = strconv.Atoi(strings.TrimSpace(split[1]))
+				total = parseInt / (1000 * 1000 * 1000)
+			}
+		}
+	}
+	used := float64(parseInt/1000-free) / (1024 * 1024)
+	return fmt.Sprintf("%.2f/%dG", used, total)
+}
+
+func getFormatWIFIInfo(msg string) string {
+	scanner := bufio.NewScanner(strings.NewReader(msg))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "mWifiInfo") {
+			return strings.TrimSpace(ExtractWiFiName(line))
+		}
+	}
+	return ""
+}
+
+func getFormatIPAdress(msg string) string {
+	scanner := bufio.NewScanner(strings.NewReader(msg))
+	for scanner.Scan() {
+		line := scanner.Text()
+		name := strings.TrimSpace(ExtractIPAddress(line))
+		if name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+func ExtractWiFiName(dumpsysOutput string) string {
+	re := regexp.MustCompile(`mWifiInfo\s+SSID: "?(.+?)"?,`)
+	match := re.FindStringSubmatch(dumpsysOutput)
+	if len(match) < 2 {
+		return ""
+	}
+
+	ssid := match[1]
+	if ssid == "<unknown ssid>" {
+		return ""
+	}
+
+	return ssid
 }
 
 // MemInfo 内存信息结构体（带时间戳）
