@@ -116,3 +116,10 @@ $ ./gradlew :server:assembleRelease
 编译后会自动替换 resources 目录下的 aya.dex，记得修改：
 - server/server/build.gradle 文件中的 versionName、versionCode
 - aya/client.go 中的 AyaDexVersion
+
+---
+### 参考
+本仓库代码实现参考了以下多个仓库：
+1. https://github.com/liriliri/aya
+2. https://github.com/wkbin/AdbFileManager
+3. https://github.com/EaniaHuui/android_tool
