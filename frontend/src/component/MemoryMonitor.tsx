@@ -253,7 +253,11 @@ const MemoryMonitor: React.FC = () => {
     const [maxDataPoints, setMaxDataPoints] = useState<number>(60);
     const [selectedDataPoint, setSelectedDataPoint] = useState<MemoryDataPoint | null>(null);
     const [showDetailPanel, setShowDetailPanel] = useState<boolean>(false);
+    const [viewWindow] = useState<number>(300); // 固定显示窗口大小
+    const [scrollPosition, setScrollPosition] = useState<number>(0);
+    const [autoScroll, setAutoScroll] = useState<boolean>(true);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const {selectedDevice} = useDeviceStore();
 
     // 当 processName 变化时保存到 localStorage
@@ -348,6 +352,8 @@ const MemoryMonitor: React.FC = () => {
         setData([]);
         setSelectedDataPoint(null);
         setShowDetailPanel(false);
+        setScrollPosition(0);
+        setAutoScroll(true);
     };
 
     // 导出全部数据为 CSV
@@ -387,6 +393,45 @@ const MemoryMonitor: React.FC = () => {
             await SaveFile(dataPoint.rawMemInfo, "memory_info");
         }
     };
+
+    // 原生滚动条处理
+    const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLDivElement;
+        const maxScrollLeft = target.scrollWidth - target.clientWidth;
+        const currentScroll = target.scrollLeft;
+
+        // 计算对应的数据索引
+        const maxIndex = Math.max(0, data.length - viewWindow);
+        const newPosition = maxScrollLeft > 0
+            ? Math.round((currentScroll / maxScrollLeft) * maxIndex)
+            : 0;
+
+        setScrollPosition(newPosition);
+
+        // 检查是否滚动到最右边（允许2px误差）
+        if (currentScroll >= maxScrollLeft - 2) {
+            setAutoScroll(true);
+        } else {
+            setAutoScroll(false);
+        }
+    }, [data.length, viewWindow]);
+
+    // 自动滚动到最新
+    useEffect(() => {
+        if (autoScroll && scrollRef.current && data.length > viewWindow) {
+            scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+        }
+    }, [autoScroll, data.length, viewWindow]);
+
+    // 计算显示的数据切片
+    const displayData = data.length <= viewWindow
+        ? data
+        : data.slice(scrollPosition, scrollPosition + viewWindow);
+
+    // 滚动条内容宽度（模拟数据量）
+    const scrollContentWidth = data.length > viewWindow
+        ? `${(data.length / viewWindow) * 100}%`
+        : '100%';
 
     const latestData: Partial<MemoryDataPoint> = data[data.length - 1] || {};
 
@@ -460,7 +505,7 @@ const MemoryMonitor: React.FC = () => {
                             disabled={isRunning || data.length === 0}
                             title={isRunning ? '请先暂停采集' : '导出全部数据为 CSV'}
                         >
-                            导出全部
+                            导出 CSV
                         </Button>
                     </div>
                 </div>
@@ -500,17 +545,18 @@ const MemoryMonitor: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm text-gray-500 mb-1">最大数据点</label>
+                            <label className="block text-sm text-gray-500 mb-1">采集数据个数（数据点数 × 采集间隔 = 监控时长）</label>
                             <Select
                                 value={maxDataPoints}
                                 disabled={isRunning}
                                 onChange={(value) => setMaxDataPoints(value)}
                                 className="w-full"
                                 options={[
-                                    {value: 30, label: '30'},
-                                    {value: 60, label: '60'},
-                                    {value: 120, label: '120'},
-                                    {value: 300, label: '300'},
+                                    {value: 30, label: '30 点'},
+                                    {value: 60, label: '60 点'},
+                                    {value: 120, label: '120 点'},
+                                    {value: 300, label: '300 点'},
+                                    {value: 900, label: '900 点'},
                                 ]}
                             />
                         </div>
@@ -561,6 +607,11 @@ const MemoryMonitor: React.FC = () => {
                             <span className="ml-2 text-gray-400">
                                 {data.length}/{maxDataPoints}
                             </span>
+                            {!autoScroll && data.length > viewWindow && (
+                                <span className="ml-2 text-orange-500 text-xs">
+                                    (查看历史)
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -573,10 +624,10 @@ const MemoryMonitor: React.FC = () => {
                         onCopy={handleCopyDataPoint}
                     />
 
-                    <div className="h-96">
+                    <div className="h-80">
                         {data.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={data}>
+                                <LineChart data={displayData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb"/>
                                     <XAxis
                                         dataKey="time"
@@ -621,6 +672,32 @@ const MemoryMonitor: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* 时间轴滚动条 */}
+                    {data.length > viewWindow && (
+                        <div className="mt-4">
+                            <div className="flex items-center gap-3 px-2 mb-1">
+                                <span className="text-xs text-gray-400">
+                                    {data[0]?.time}
+                                </span>
+                                <span className="flex-1"/>
+                                <span className="text-xs text-gray-400">
+                                    {data[data.length - 1]?.time}
+                                </span>
+                            </div>
+                            <div
+                                ref={scrollRef}
+                                className="overflow-x-auto h-3 bg-gray-100 rounded"
+                                onScroll={handleScroll}
+                                style={{
+                                    scrollbarWidth: 'thin',
+                                    scrollbarColor: '#6366f1 #e5e7eb'
+                                }}
+                            >
+                                <div style={{width: scrollContentWidth, height: '1px'}}/>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* 底部说明 */}
