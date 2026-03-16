@@ -724,9 +724,7 @@ CPU 型号: %s、%d 核
 存储: %s
 字体缩放：%sx
 WIFI 名称：%s
-IP 地址：%s
-OTA 版本号: %s
-`,
+IP 地址：%s`,
 		deviceName,
 		brand,
 		model,
@@ -743,8 +741,12 @@ OTA 版本号: %s
 		fontScale,
 		wifiName,
 		ipAddress,
-		otaVersion,
 	)
+
+	if otaVersion != "" {
+		result += fmt.Sprintf("\nOTA 版本号: %s", otaVersion)
+	}
+	result += "\n"
 
 	return types.NewExecResultSuccess(allCmds, result)
 }

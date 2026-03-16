@@ -23,7 +23,6 @@ const defaultLabels = [
     '字体缩放',
     'WIFI 名称',
     'IP 地址',
-    'OTA 版本号'
 ];
 
 interface DeviceInfoCardProps {
