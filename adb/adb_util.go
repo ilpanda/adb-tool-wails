@@ -798,28 +798,40 @@ func getFormatTotalMemInfo(msg string) string {
 }
 
 func getFormatDiskSize(msg string) string {
-	var total = 0
-	var free = 0
-	var parseInt = 0
+	var systemSize = 0 // System Size 行的值 (Bytes)
+	var dataFree = 0   // Data-Free 中的 free 值 (KB)
+	var dataTotal = 0  // Data-Free 中的 total 值 (KB)
 	scanner := bufio.NewScanner(strings.NewReader(msg))
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "Data-Free") {
-			re := regexp.MustCompile(`Data-Free:\s*(\d+)K`)
+			// 匹配: Data-Free: 28221744K / 110366412K total = 25% free
+			re := regexp.MustCompile(`Data-Free:\s*(\d+)K\s*/\s*(\d+)K`)
 			matches := re.FindStringSubmatch(line)
-			if len(matches) > 1 {
-				free, _ = strconv.Atoi(matches[1])
+			if len(matches) > 2 {
+				dataFree, _ = strconv.Atoi(matches[1])
+				dataTotal, _ = strconv.Atoi(matches[2])
 			}
 		} else if strings.HasPrefix(line, "System Size") {
+			// 匹配: System Size: 128000000000
 			split := strings.Split(line, ":")
 			if len(split) == 2 {
-				parseInt, _ = strconv.Atoi(strings.TrimSpace(split[1]))
-				total = parseInt / (1000 * 1000 * 1000)
+				systemSize, _ = strconv.Atoi(strings.TrimSpace(split[1]))
 			}
 		}
 	}
-	used := float64(parseInt/1000-free) / (1024 * 1024)
-	return fmt.Sprintf("%.2f/%dG", used, total)
+
+	// 优先使用 System Size，否则使用 Data-Free 中的 total
+	if systemSize > 0 {
+		totalGB := systemSize / (1000 * 1000 * 1000)
+		usedGB := float64(systemSize/1000-dataFree) / (1024 * 1024)
+		return fmt.Sprintf("%.2f/%dG", usedGB, totalGB)
+	} else if dataTotal > 0 {
+		usedGB := float64(dataTotal-dataFree) / (1024 * 1024)
+		totalGB := float64(dataTotal) / (1024 * 1024)
+		return fmt.Sprintf("%.2f/%.0fG", usedGB, totalGB)
+	}
+	return "N/A"
 }
 
 func getFormatWIFIInfo(msg string) string {
