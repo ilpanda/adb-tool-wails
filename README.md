@@ -16,6 +16,9 @@
 
 </div>
 
+![系统设置](imgs/preview.png)
+
+
 ---
 
 ## 📋 功能特性
@@ -84,6 +87,25 @@
 - **Windows**: `adb-tool-windows-amd64.exe`
 - **macOS**: `adb-tool-darwin-universal.app`
 - **Linux**: `adb-tool-linux-amd64`
+
+##### macOS 首次运行
+解压 `adb-tool-macos-universal.tar.gz` 后，将 `adb-tool-darwin-universal.app` 移动到应用程序中。
+
+由于应用未经过 Apple 公证，macOS 首次打开时会显示安全提示，按以下步骤操作：
+
+**第 1 步**：首次打开应用时，系统会弹出无法验证的提示，点击「完成」关闭对话框
+
+![安全提示](imgs/1_img.png)
+
+**第 2 步**：点击左上角苹果图标，选择「系统设置...」
+
+![系统设置](imgs/2_img.png)
+
+**第 3 步**：进入「隐私与安全性」，在安全性区域找到被阻止的应用，点击「仍要打开」，输入密码确认安装。
+
+![仍要打开](imgs/3_img.png)
+
+
 
 #### 方式 2: 从源码构建
 ```bash
