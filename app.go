@@ -121,6 +121,23 @@ func (a *App) scheduleDeviceUpdate(devices []adb.DeviceInfo) {
 	})
 }
 
+var keyActionMap = map[string]string{
+	"key-menu":        "KEYCODE_MENU",
+	"key-home":        "KEYCODE_HOME",
+	"key-back":        "KEYCODE_BACK",
+	"key-power":       "KEYCODE_POWER",
+	"key-app-switch":  "KEYCODE_APP_SWITCH",
+	"key-mute":        "KEYCODE_VOLUME_MUTE",
+	"key-volume-up":   "KEYCODE_VOLUME_UP",
+	"key-volume-down": "KEYCODE_VOLUME_DOWN",
+	"key-dpad-up":     "KEYCODE_DPAD_UP",
+	"key-dpad-down":   "KEYCODE_DPAD_DOWN",
+	"key-dpad-left":   "KEYCODE_DPAD_LEFT",
+	"key-dpad-right":  "KEYCODE_DPAD_RIGHT",
+	"key-wake-up":     "KEYCODE_WAKE_UP",
+	"key-sleep":       "KEYCODE_SLEEP",
+}
+
 // ExecuteAction 执行快捷操作
 func (a *App) ExecuteAction(ac Action) types.ExecResult {
 	action := ac.Action
@@ -137,6 +154,11 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		Ctxt:        a.ctx,
 		DeviceId:    ac.DeviceId,
 		AdbPath:     a.adbPath,
+	}
+
+	// 按键事件统一处理
+	if keyCode, ok := keyActionMap[action]; ok {
+		return adb.SendKeyEvent(param, keyCode)
 	}
 
 	switch action {
@@ -162,22 +184,6 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 		return adb.Reboot(param)
 	case "shutdown-device":
 		return adb.Shutdown(param)
-	case "key-menu":
-		return adb.KeyMenu(param)
-	case "key-home":
-		return adb.KeyHome(param)
-	case "key-back":
-		return adb.KeyBack(param)
-	case "key-power":
-		return adb.KeyPower(param)
-	case "key-app-switch":
-		return adb.KeyAppSwitch(param)
-	case "key-mute":
-		return adb.KeyVolumeMute(param)
-	case "key-volume-up":
-		return adb.KeyVolumeUP(param)
-	case "key-volume-down":
-		return adb.KeyVolumeDown(param)
 	case "get-all-packages":
 		return adb.GetAllPackages(param)
 	case "install-app":
@@ -213,11 +219,11 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 	case "view-package":
 		return adb.GetCurrentPackageName(param)
 	case "toggle-gpu-profile":
-		return adb.ToggleGPUProfile(param)
+		return adb.ToggleDevOption(param, "debug.hwui.profile", "visual_bars")
 	case "toggle-gpu-overdraw":
-		return adb.ToggleGPUOverdraw(param)
+		return adb.ToggleDevOption(param, "debug.hwui.overdraw", "show")
 	case "toggle-layout-bounds":
-		return adb.ToggleLayoutBounds(param)
+		return adb.ToggleDevOption(param, "debug.layout", "true")
 	case "jump-application-detail":
 		return adb.JumpToAppDetailSettings(param)
 	case "jump-locale", "jump-developer", "jump-application", "jump-wifi-settings",

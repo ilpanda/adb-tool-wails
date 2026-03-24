@@ -26,6 +26,14 @@ type ExecuteParams struct {
 	AdbPath     string
 }
 
+var (
+	reInitDisplay = regexp.MustCompile(`init=(\d+x\d+)`)
+	reInetAddr    = regexp.MustCompile(`inet (\d+\.\d+\.\d+\.\d+)`)
+	reWifiSSID    = regexp.MustCompile(`mWifiInfo\s+SSID: "?(.+?)"?,`)
+	reFirstNumber = regexp.MustCompile(`:\s*([\d,]+)`)
+	reDataFree    = regexp.MustCompile(`Data-Free:\s*(\d+)K\s*/\s*(\d+)K`)
+)
+
 func BuildAdbCmd(adbPath string, deviceId string, shellCmd string) string {
 	if deviceId != "" {
 		return fmt.Sprintf("%s -s %s %s", adbPath, deviceId, shellCmd)
@@ -305,12 +313,10 @@ func ExportAppPackagePath(param ExecuteParams) types.ExecResult {
 	}
 	path := strings.TrimPrefix(strings.TrimSpace(pathResult.Res), "package:")
 
-	finalRes := pathCmd
 	targetApkName := filepath.Join(strings.TrimSpace(dir), param.PackageName+".apk")
 	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", path, targetApkName))
 
-	finalRes = finalRes + "\n" + cmd
-	return execCmd(finalRes)
+	return execCmd(cmd)
 }
 
 func GetDeviceNameArray(adbPath string) []string {
@@ -357,78 +363,9 @@ func Reboot(param ExecuteParams) types.ExecResult {
 	return execCmd(cmd)
 }
 
-func KeyHome(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_HOME")
+func SendKeyEvent(param ExecuteParams, keyCode string) types.ExecResult {
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("input keyevent %s", keyCode))
 	return execCmd(cmd)
-}
-
-func KeyBack(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_BACK")
-	return execCmd(cmd)
-}
-
-func KeyPower(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_POWER")
-	return execCmd(cmd)
-}
-
-func KeyAppSwitch(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_APP_SWITCH")
-	return execCmd(cmd)
-}
-
-func KeyMenu(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_MENU")
-	return execCmd(cmd)
-}
-
-func KeyVolumeUP(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_VOLUME_UP")
-	return execCmd(cmd)
-}
-
-func KeyVolumeDown(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_VOLUME_DOWN")
-	return execCmd(cmd)
-}
-
-func KeyVolumeMute(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_VOLUME_MUTE")
-	return execCmd(cmd)
-}
-
-func KeyDpadUp(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_DPAD_UP")
-	return execCmd(cmd)
-}
-
-func KeyDpadDown(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_DPAD_DWON")
-	return execCmd(cmd)
-}
-
-func KeyDpadLeft(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_DPAD_LEFT")
-	return execCmd(cmd)
-}
-
-func KeyDpadRight(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_DPAD_RIGHT")
-	return execCmd(cmd)
-}
-
-func KeyScreenWakeUp(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_WAKE_UP")
-	return execCmd(cmd)
-}
-
-func KeyScreenSleep(param ExecuteParams) types.ExecResult {
-	cmd := getKey(param.AdbPath, param.DeviceId, "KEYCODE_SLEEP")
-	return execCmd(cmd)
-}
-
-func getKey(adbPath string, deviceId string, key string) string {
-	return BuildAdbShellCmd(adbPath, deviceId, fmt.Sprintf("input keyevent %s", key))
 }
 
 func getRequestedPermissions(lines []string) []string {
@@ -659,8 +596,7 @@ func GetDeviceInfo(param ExecuteParams) types.ExecResult {
 		}
 	}
 
-	re := regexp.MustCompile(`init=(\d+x\d+)`)
-	match := re.FindStringSubmatch(displayRes)
+	match := reInitDisplay.FindStringSubmatch(displayRes)
 
 	if len(match) > 1 {
 		displayRes = match[1]
@@ -771,8 +707,7 @@ func getFormatCpuCount(msg string) int {
 }
 
 func ExtractIPAddress(output string) string {
-	re := regexp.MustCompile(`inet (\d+\.\d+\.\d+\.\d+)`)
-	match := re.FindStringSubmatch(output)
+	match := reInetAddr.FindStringSubmatch(output)
 	if len(match) < 2 {
 		return ""
 	}
@@ -808,8 +743,7 @@ func getFormatDiskSize(msg string) string {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "Data-Free") {
 			// 匹配: Data-Free: 28221744K / 110366412K total = 25% free
-			re := regexp.MustCompile(`Data-Free:\s*(\d+)K\s*/\s*(\d+)K`)
-			matches := re.FindStringSubmatch(line)
+			matches := reDataFree.FindStringSubmatch(line)
 			if len(matches) > 2 {
 				dataFree, _ = strconv.Atoi(matches[1])
 				dataTotal, _ = strconv.Atoi(matches[2])
@@ -860,8 +794,7 @@ func getFormatIPAdress(msg string) string {
 }
 
 func ExtractWiFiName(dumpsysOutput string) string {
-	re := regexp.MustCompile(`mWifiInfo\s+SSID: "?(.+?)"?,`)
-	match := re.FindStringSubmatch(dumpsysOutput)
+	match := reWifiSSID.FindStringSubmatch(dumpsysOutput)
 	if len(match) < 2 {
 		return ""
 	}
@@ -970,9 +903,7 @@ func parseMemInfo(output string) MemInfo {
 
 // extractFirstNumber 从字符串中提取第一个数字
 func extractFirstNumber(line string) int64 {
-	// 使用正则匹配第一个数字（可能带逗号的数字格式）
-	re := regexp.MustCompile(`:\s*([\d,]+)`)
-	matches := re.FindStringSubmatch(line)
+	matches := reFirstNumber.FindStringSubmatch(line)
 	if len(matches) >= 2 {
 		// 移除逗号
 		numStr := strings.ReplaceAll(matches[1], ",", "")
@@ -1256,49 +1187,38 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 		return packageIdResult
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = "."
-	}
-	desktopDir := filepath.Join(homeDir, "Desktop")
-
-	// 确保桌面目录存在，如果不存在则使用主目录
-	if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
-		desktopDir = homeDir
-	}
-	timestamp := time.Now().Format("2006_01_02_15_04_05")
-	saveFileName := fmt.Sprintf("%s", timestamp)
-	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
-		DefaultDirectory: desktopDir,
-		DefaultFilename:  saveFileName,
-		Title:            "保存 hprof",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "文本文件 (*.hprof)", Pattern: "*.hprof"},
-		},
+	saveResult := PrepareFileSave(SaveFileOptions{
+		Ctxt:          param.Ctxt,
+		FilePrefix:    "hprof",
+		DialogTitle:   "保存 hprof",
+		FileExtension: ".hprof",
+		FilterDisplay: "文本文件 (*.hprof)",
+		FilterPattern: "*.hprof",
 	})
 
-	hprofSdcardPath := fmt.Sprintf("/data/local/tmp/%s.hprof", saveFileName)
-	result := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am dumpheap %s %s ", param.PackageName, hprofSdcardPath)))
-	if result.Error != "" {
-		return result
+	if saveResult.Canceled {
+		return types.NewExecResultErrorString("", "用户取消保存")
 	}
 
-	if savePath == "" {
-		return types.NewExecResultErrorString(result.Cmd, "用户取消保存")
+	timestamp := time.Now().Format("2006_01_02_15_04_05")
+	hprofSdcardPath := fmt.Sprintf("/data/local/tmp/%s.hprof", timestamp)
+	result := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("am dumpheap %s %s", param.PackageName, hprofSdcardPath)))
+	if result.Error != "" {
+		return result
 	}
 
 	if strings.Contains(result.Res, "not debuggable") {
 		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 hprof"+"\n"+result.Res, result.Error)
 	}
 
-	pullCmd := fmt.Sprintf("pull %s  %s ", hprofSdcardPath, savePath)
+	pullCmd := fmt.Sprintf("pull %s %s", hprofSdcardPath, saveResult.SavePath)
 	pullResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, pullCmd))
 	if pullResult.Error != "" {
 		return pullResult
 	}
 	finalCmd := result.Cmd + "\n" + pullResult.Cmd
 
-	rmResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s  ", hprofSdcardPath)))
+	rmResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s", hprofSdcardPath)))
 	finalCmd = finalCmd + "\n" + rmResult.Cmd
 
 	return types.NewExecResultSuccess(finalCmd, "success")
@@ -1354,60 +1274,18 @@ func JumpToAppDetailSettings(param ExecuteParams) types.ExecResult {
 	return execCmd(cmd)
 }
 
-func ToggleGPUProfile(param ExecuteParams) types.ExecResult {
-	// 获取当前状态
-	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop debug.hwui.profile")
-	result := execCmd(getCmd)
-	if result.Error != "" {
-		return result
-	}
-
-	// 根据当前状态切换
-	var setCmd string
-	if strings.TrimSpace(result.Res) == "visual_bars" {
-		// 当前是开启状态，关闭它
-		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.profile false")
-	} else {
-		// 当前是关闭状态，开启它
-		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.profile visual_bars")
-	}
-
-	// 刷新界面
-	refreshCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "service call activity 1599295570")
-
-	return execCmds(setCmd, refreshCmd)
-}
-
-func ToggleGPUOverdraw(param ExecuteParams) types.ExecResult {
-	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop debug.hwui.overdraw")
+func ToggleDevOption(param ExecuteParams, prop string, onValue string) types.ExecResult {
+	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop "+prop)
 	result := execCmd(getCmd)
 	if result.Error != "" {
 		return result
 	}
 
 	var setCmd string
-	if strings.TrimSpace(result.Res) == "show" {
-		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.overdraw false")
+	if strings.TrimSpace(result.Res) == onValue {
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop "+prop+" false")
 	} else {
-		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.hwui.overdraw show")
-	}
-
-	refreshCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "service call activity 1599295570")
-	return execCmds(setCmd, refreshCmd)
-}
-
-func ToggleLayoutBounds(param ExecuteParams) types.ExecResult {
-	getCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "getprop debug.layout")
-	result := execCmd(getCmd)
-	if result.Error != "" {
-		return result
-	}
-
-	var setCmd string
-	if strings.TrimSpace(result.Res) == "true" {
-		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.layout false")
-	} else {
-		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop debug.layout true")
+		setCmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "setprop "+prop+" "+onValue)
 	}
 
 	refreshCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "service call activity 1599295570")
