@@ -1,5 +1,6 @@
 package storage
 
 const (
-	KeyAdbPath = "adb_path"
+	KeyAdbPath       = "adb_path"
+	KeyBookmarkPaths = "bookmark_paths"
 )

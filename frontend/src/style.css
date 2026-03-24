@@ -23,3 +23,44 @@ body {
     height: 100vh;
     text-align: center;
 }
+
+/* FileManager 文件树样式 */
+.file-tree .ant-tree-treenode {
+    width: 100%;
+    padding: 0 !important;
+}
+
+.file-tree .ant-tree-node-content-wrapper {
+    flex: 1;
+    min-width: 0;
+    display: flex !important;
+    align-items: center;
+    border-radius: 6px;
+    padding: 2px 6px !important;
+    transition: background 0.15s;
+}
+
+.file-tree .ant-tree-node-content-wrapper:hover {
+    background-color: #f0f5ff !important;
+}
+
+.file-tree .ant-tree-title {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+}
+
+.file-tree .ant-tree-iconEle {
+    width: 20px !important;
+    margin-right: 6px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.file-tree .ant-tree-switcher {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}

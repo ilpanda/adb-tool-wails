@@ -555,7 +555,110 @@ func (a *App) LogMsg(msg string) {
 	println(msg)
 }
 
+// buildParam 构建 ADB 执行参数
+func (a *App) buildParam(deviceId string) adb.ExecuteParams {
+	return adb.ExecuteParams{
+		Ctxt:     a.ctx,
+		AdbPath:  a.adbPath,
+		DeviceId: deviceId,
+	}
+}
+
+// ListDirectory 列出设备目录内容
+func (a *App) ListDirectory(deviceId string, path string) types.ExecResult {
+	param := a.buildParam(deviceId)
+	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("ls -la %s", path))
+	res, err := util.Exec(cmd, true, nil)
+	if err != nil {
+		return types.NewExecResultFromError(cmd, "", err)
+	}
+	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
+}
+
+// ReadFileContent 读取设备文件内容
+func (a *App) ReadFileContent(deviceId string, path string) types.ExecResult {
+	param := a.buildParam(deviceId)
+	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("cat %s", path))
+	res, err := util.Exec(cmd, true, nil)
+	if err != nil {
+		return types.NewExecResultFromError(cmd, "", err)
+	}
+	return types.NewExecResultSuccess(cmd, res)
+}
+
+// DeleteRemoteFile 删除设备文件
+func (a *App) DeleteRemoteFile(deviceId string, path string) types.ExecResult {
+	param := a.buildParam(deviceId)
+	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm -rf %s", path))
+	res, err := util.Exec(cmd, true, nil)
+	if err != nil {
+		return types.NewExecResultFromError(cmd, "", err)
+	}
+	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
+}
+
+// UploadFile 上传本地文件到设备（adb push）
+func (a *App) UploadFile(deviceId string, remotePath string) types.ExecResult {
+	localPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择要上传的文件",
+	})
+	if err != nil {
+		return types.NewExecResultErrorString("upload", fmt.Sprintf("选择文件失败: %v", err))
+	}
+	if localPath == "" {
+		return types.NewExecResultErrorString("upload", "已取消")
+	}
+	param := a.buildParam(deviceId)
+	dest := remotePath
+	if dest == "" {
+		dest = "/sdcard/"
+	}
+	cmd := adb.BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("push %s %s", localPath, dest))
+	res, err2 := util.Exec(cmd, true, nil)
+	if err2 != nil {
+		return types.NewExecResultFromError(cmd, "", err2)
+	}
+	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
+}
+
+// DownloadFile 从设备下载文件到本地（adb pull）
+func (a *App) DownloadFile(deviceId string, remotePath string) types.ExecResult {
+	fileName := filepath.Base(remotePath)
+	localPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: fileName,
+		Title:           "保存到本地",
+	})
+	if err != nil {
+		return types.NewExecResultErrorString("download", fmt.Sprintf("选择保存路径失败: %v", err))
+	}
+	if localPath == "" {
+		return types.NewExecResultErrorString("download", "已取消")
+	}
+	param := a.buildParam(deviceId)
+	cmd := adb.BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", remotePath, localPath))
+	res, err2 := util.Exec(cmd, true, nil)
+	if err2 != nil {
+		return types.NewExecResultFromError(cmd, "", err2)
+	}
+	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
+}
+
 // GetVersion 返回应用版本号
 func (a *App) GetVersion() string {
 	return Version
+}
+
+// GetBookmarkPaths 获取收藏的路径列表
+func (a *App) GetBookmarkPaths() []string {
+	var paths []string
+	err := a.store.Get(storage.KeyBookmarkPaths, &paths)
+	if err != nil {
+		return []string{}
+	}
+	return paths
+}
+
+// SetBookmarkPaths 保存收藏的路径列表
+func (a *App) SetBookmarkPaths(paths []string) error {
+	return a.store.Set(storage.KeyBookmarkPaths, paths)
 }
