@@ -1,8 +1,8 @@
 import {QuickAction, quickActions} from '../data/quickActions';
 import {ExecuteAction, GetAdbPath} from '../../wailsjs/go/main/App';
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
-import {message, Select} from "antd";
+import {Empty, Input, message, Select} from "antd";
 import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
 import DeviceInfoCard from './DeviceInfoCard';
@@ -34,6 +34,7 @@ function RightContainer() {
     const [showTerminal, setShowTerminal] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [properties, setProperties] = useState<SystemProperty[]>([]);
+    const [searchText, setSearchText] = useState('');
 
     const [selectedPackage, setSelectedPackage] = useState<string>('');
     const [packageList, setPackageList] = useState<string[]>([]);
@@ -42,6 +43,28 @@ function RightContainer() {
     const [deviceInfoString, setDeviceInfoString] = useState<string | null>(null);
 
     const {devices, selectedDevice} = useDeviceStore();
+
+    const filteredQuickActions = useMemo(() => {
+        const keyword = searchText.trim().toLowerCase();
+        if (!keyword) {
+            return quickActions;
+        }
+
+        return quickActions
+            .map(section => {
+                const categoryMatched = section.title.toLowerCase().includes(keyword);
+                return {
+                    ...section,
+                    items: categoryMatched
+                        ? section.items
+                        : section.items.filter(item =>
+                            item.label.toLowerCase().includes(keyword) ||
+                            item.action.toLowerCase().includes(keyword)
+                        )
+                };
+            })
+            .filter(section => section.items.length > 0);
+    }, [searchText]);
 
     // 新增：获取设备信息的函数
     const fetchDeviceInfo = async () => {
@@ -289,8 +312,22 @@ function RightContainer() {
                     infoString={deviceInfoString}
                 />
 
-                {quickActions.map((section, sectionIndex) => (
-                    <div key={sectionIndex} className="flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-4">
+                    <h1 className="text-xl font-semibold text-gray-800">快捷功能</h1>
+                    <Input
+                        value={searchText}
+                        onChange={(event) => setSearchText(event.target.value)}
+                        placeholder="搜索子功能..."
+                        allowClear
+                        prefix={<i className="fa-solid fa-search text-gray-400"/>}
+                        className="max-w-[320px]"
+                    />
+                </div>
+
+                {filteredQuickActions.length === 0 ? (
+                    <Empty description="未找到匹配的子功能"/>
+                ) : filteredQuickActions.map((section) => (
+                    <div key={section.title} className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
 
                             <div className="flex items-center gap-3">
@@ -325,9 +362,9 @@ function RightContainer() {
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {section.items.map((item, itemIndex) => (
+                            {section.items.map((item) => (
                                 <div
-                                    key={itemIndex}
+                                    key={item.action}
                                     onClick={() => handleClick(item)}
                                     className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
                                 >
