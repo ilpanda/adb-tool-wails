@@ -128,15 +128,7 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
-      - name: Install NSIS
-        shell: pwsh
-        run: |
-          choco install nsis -y --no-progress
-          $nsisPath = "${env:ProgramFiles(x86)}\NSIS"
-          Add-Content $env:GITHUB_PATH $nsisPath
-          & "$nsisPath\makensis.exe" /VERSION
-
-      - name: Build (Windows amd64)
+      - name: Build portable (Windows amd64)
         shell: pwsh
         run: |
           cd frontend
@@ -144,13 +136,53 @@ jobs:
           cd ..
           $version = "${{ github.ref_name }}"
           try {
-            wails build -clean -platform windows/amd64 -nsis -webview2 download -ldflags "-X main.Version=$version"
+            wails build -clean -platform windows/amd64 -webview2 download -ldflags "-X main.Version=$version"
           } catch {
             Write-Host "⚠️ 检测到 icon.ico 可能无效（not a valid ICO file），请确认文件格式"
             exit 1
           }
 
-      - name: Package
+      - name: Package portable
+        shell: pwsh
+        run: |
+          cd build/bin
+          Write-Host "✨ 打包前内容:"
+          Get-ChildItem
+          $file = Get-ChildItem -Filter *.exe | Where-Object { $_.Name -notlike "*installer.exe" } | Select-Object -First 1
+          if (-not $file) {
+            Write-Host "❌ 未找到 Windows portable exe 构建产物"
+            exit 1
+          }
+          Compress-Archive -Path $file.Name -DestinationPath adb-tool-windows-amd64-portable.zip
+          Write-Host "✅ 打包完成: $($file.Name) -> adb-tool-windows-amd64-portable.zip"
+
+      - name: Install NSIS
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $nsisPath = "${env:ProgramFiles(x86)}\NSIS"
+          $makensis = "$nsisPath\makensis.exe"
+
+          if (-not (Test-Path $makensis)) {
+            Write-Host "NSIS not found at $makensis, installing with Chocolatey..."
+            choco install nsis -y --no-progress
+          }
+
+          if (-not (Test-Path $makensis)) {
+            throw "makensis.exe not found after NSIS installation"
+          }
+
+          Add-Content $env:GITHUB_PATH $nsisPath
+          & $makensis /VERSION
+
+      - name: Build installer (Windows amd64)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $version = "${{ github.ref_name }}"
+          wails build -clean -platform windows/amd64 -nsis -webview2 download -ldflags "-X main.Version=$version"
+
+      - name: Package installer
         shell: pwsh
         run: |
           cd build/bin
@@ -158,8 +190,8 @@ jobs:
           Get-ChildItem
           $file = Get-ChildItem -Filter *installer.exe | Select-Object -First 1
           if (-not $file) {
-            Write-Host "❌ 未找到 Windows installer 构建产物"
-            exit 1
+            Write-Host "⚠️ 未找到 Windows installer 构建产物，仅发布 portable zip"
+            exit 0
           }
           Compress-Archive -Path $file.Name -DestinationPath adb-tool-windows-amd64-installer.zip
           Write-Host "✅ 打包完成: $($file.Name) -> adb-tool-windows-amd64-installer.zip"
@@ -168,7 +200,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: build/bin/adb-tool-windows-amd64-installer.zip
+          path: build/bin/adb-tool-windows-amd64-*.zip
 
   # === RELEASE ===
   release:
