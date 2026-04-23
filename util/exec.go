@@ -3,14 +3,15 @@ package util
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
 // Exec executes a shell command
 func Exec(command string, ignoreError bool, exitWhen func(string) bool) (string, error) {
-	cmd := exec.Command("/bin/sh", "-c", command)
+	cmd := shellCommand(command)
+	ConfigureCommand(cmd)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -19,8 +20,8 @@ func Exec(command string, ignoreError bool, exitWhen func(string) bool) (string,
 
 	err := cmd.Run()
 
-	stdoutStr := stdout.String()
-	stderrStr := stderr.String()
+	stdoutStr := normalizeCommandOutput(stdout.Bytes())
+	stderrStr := normalizeCommandOutput(stderr.Bytes())
 
 	if stdoutStr != "" && stderrStr == "" {
 		return stdoutStr, nil
@@ -43,7 +44,7 @@ func Exec(command string, ignoreError bool, exitWhen func(string) bool) (string,
 
 		if shouldExit || !ignoreError {
 			Log(stderrStr)
-			os.Exit(1)
+			return "", fmt.Errorf("%s", strings.TrimSpace(stderrStr))
 		}
 	}
 
@@ -55,7 +56,8 @@ func Exec(command string, ignoreError bool, exitWhen func(string) bool) (string,
 }
 
 func ExecBackground(command string) error {
-	cmd := exec.Command("/bin/sh", "-c", command)
+	cmd := shellCommand(command)
+	ConfigureCommand(cmd)
 
 	// 不捕获输出，让它在后台运行
 	cmd.Stdout = nil
@@ -72,6 +74,13 @@ func ExecBackground(command string) error {
 	}()
 
 	return nil
+}
+
+func shellCommand(command string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.Command("cmd", "/C", command)
+	}
+	return exec.Command("/bin/sh", "-c", command)
 }
 
 func Log(msg string) {

@@ -57,25 +57,26 @@ func (a *App) startup(ctx context.Context) {
 	// 初始化存储
 	store, err := storage.NewBadgerStore("config")
 	if err != nil {
-		panic(err)
+		runtime.LogError(ctx, "Failed to initialize storage: "+err.Error())
+	} else {
+		a.store = store
 	}
 
 	if err := a.extractAyaDex(); err != nil {
 		runtime.LogError(ctx, "Failed to extract aya.dex: "+err.Error())
 	}
 
-	a.store = store
 	a.setupEnv()
+	saveAdbPath := ""
+	if a.store != nil {
+		saveAdbPath = a.store.GetString(storage.KeyAdbPath, "")
+	}
+
 	path, err := exec.LookPath("adb")
-	if err == nil {
-		saveAdbPath := store.GetString(storage.KeyAdbPath, "")
-		if path == saveAdbPath && path != "" {
-			a.adbPath = "adb"
-		} else if path != "" {
-			a.adbPath = "adb"
-		} else if saveAdbPath != "" {
-			a.adbPath = saveAdbPath
-		}
+	if err == nil && path != "" {
+		a.adbPath = "adb"
+	} else if saveAdbPath != "" {
+		a.adbPath = saveAdbPath
 	}
 
 	a.deviceTracker = adb.NewDeviceTracker(a.adbPath, func(devices []adb.DeviceInfo) {
@@ -83,6 +84,36 @@ func (a *App) startup(ctx context.Context) {
 	})
 	// 启动跟踪
 	go a.deviceTracker.Start(ctx)
+}
+
+func (a *App) shutdown(ctx context.Context) {
+	a.deviceUpdateMutex.Lock()
+	if a.deviceUpdateTimer != nil {
+		a.deviceUpdateTimer.Stop()
+		a.deviceUpdateTimer = nil
+	}
+	a.deviceUpdateMutex.Unlock()
+
+	a.appListMutex.Lock()
+	if a.appListCancel != nil {
+		a.appListCancel()
+		a.appListCancel = nil
+	}
+	a.appListMutex.Unlock()
+
+	if a.ayaClient != nil {
+		if err := a.ayaClient.Close(); err != nil {
+			runtime.LogError(ctx, "Failed to close Aya client: "+err.Error())
+		}
+		a.ayaClient = nil
+	}
+
+	if a.store != nil {
+		if err := a.store.Close(); err != nil {
+			runtime.LogError(ctx, "Failed to close storage: "+err.Error())
+		}
+		a.store = nil
+	}
 }
 
 func (a *App) setupEnv() {
@@ -257,14 +288,27 @@ func (a *App) CheckAdbPath(path string) types.ExecResult {
 
 func (a *App) UpdateAdbPath(path string) {
 	a.adbPath = path
-	a.deviceTracker.AdbPath = path
+	if a.deviceTracker != nil {
+		a.deviceTracker.AdbPath = path
+	}
+	if a.store != nil {
+		if err := a.store.Set(storage.KeyAdbPath, path); err != nil {
+			runtime.LogError(a.ctx, "Failed to save adb path: "+err.Error())
+		}
+	}
 }
 
 func (a *App) GetAutoOpenTerminal() bool {
+	if a.store == nil {
+		return true
+	}
 	return a.store.GetBool(storage.KeyAutoOpenTerminal, true)
 }
 
 func (a *App) SetAutoOpenTerminal(enabled bool) error {
+	if a.store == nil {
+		return fmt.Errorf("storage is not initialized")
+	}
 	return a.store.Set(storage.KeyAutoOpenTerminal, enabled)
 }
 
@@ -658,6 +702,9 @@ func (a *App) GetVersion() string {
 
 // GetBookmarkPaths 获取收藏的路径列表
 func (a *App) GetBookmarkPaths() []string {
+	if a.store == nil {
+		return []string{}
+	}
 	var paths []string
 	err := a.store.Get(storage.KeyBookmarkPaths, &paths)
 	if err != nil {
@@ -668,5 +715,8 @@ func (a *App) GetBookmarkPaths() []string {
 
 // SetBookmarkPaths 保存收藏的路径列表
 func (a *App) SetBookmarkPaths(paths []string) error {
+	if a.store == nil {
+		return fmt.Errorf("storage is not initialized")
+	}
 	return a.store.Set(storage.KeyBookmarkPaths, paths)
 }

@@ -136,7 +136,7 @@ jobs:
           cd ..
           $version = "${{ github.ref_name }}"
           try {
-            wails build -clean -platform windows/amd64 -skipbindings -s -ldflags "-X main.Version=$version"
+            wails build -clean -platform windows/amd64 -nsis -webview2 download -ldflags "-X main.Version=$version"
           } catch {
             Write-Host "⚠️ 检测到 icon.ico 可能无效（not a valid ICO file），请确认文件格式"
             exit 1
@@ -148,19 +148,19 @@ jobs:
           cd build/bin
           Write-Host "✨ 打包前内容:"
           Get-ChildItem
-          $file = Get-ChildItem -Filter *.exe | Select-Object -First 1
+          $file = Get-ChildItem -Filter *installer.exe | Select-Object -First 1
           if (-not $file) {
-            Write-Host "❌ 未找到 exe 构建产物"
+            Write-Host "❌ 未找到 Windows installer 构建产物"
             exit 1
           }
-          Compress-Archive -Path $file.Name -DestinationPath adb-tool-windows-amd64.zip
-          Write-Host "✅ 打包完成: $($file.Name) -> adb-tool-windows-amd64.zip"
+          Compress-Archive -Path $file.Name -DestinationPath adb-tool-windows-amd64-installer.zip
+          Write-Host "✅ 打包完成: $($file.Name) -> adb-tool-windows-amd64-installer.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: build/bin/adb-tool-windows-amd64.zip
+          path: build/bin/adb-tool-windows-amd64-installer.zip
 
   # === RELEASE ===
   release:

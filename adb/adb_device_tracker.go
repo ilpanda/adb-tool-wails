@@ -1,6 +1,7 @@
 package adb
 
 import (
+	"adb-tool-wails/util"
 	"bufio"
 	"context"
 	"fmt"
@@ -61,6 +62,7 @@ func (dt *DeviceTracker) Start(ctx context.Context) {
 
 func (dt *DeviceTracker) runTrackDevices(ctx context.Context) {
 	cmd := exec.CommandContext(ctx, dt.AdbPath, "track-devices")
+	util.ConfigureCommand(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
