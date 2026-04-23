@@ -1,5 +1,5 @@
 import {QuickAction, quickActions} from '../data/quickActions';
-import {ExecuteAction, GetAdbPath} from '../../wailsjs/go/main/App';
+import {ExecuteAction, GetAdbPath, GetAutoOpenTerminal} from '../../wailsjs/go/main/App';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
 import {Empty, Input, message, Select} from "antd";
@@ -35,6 +35,7 @@ function RightContainer() {
     const [modalVisible, setModalVisible] = useState(false);
     const [properties, setProperties] = useState<SystemProperty[]>([]);
     const [searchText, setSearchText] = useState('');
+    const [autoOpenTerminal, setAutoOpenTerminal] = useState(true);
 
     const [selectedPackage, setSelectedPackage] = useState<string>('');
     const [packageList, setPackageList] = useState<string[]>([]);
@@ -101,7 +102,7 @@ function RightContainer() {
             return
         }
 
-        if (!showTerminal) {
+        if (autoOpenTerminal && !showTerminal) {
             setShowTerminal(true);
         }
 
@@ -239,6 +240,19 @@ function RightContainer() {
     const clearTerminalLogs = () => {
         setTerminalLogs([]);
     };
+
+    useEffect(() => {
+        const loadAutoOpenTerminal = async () => {
+            try {
+                const enabled = await GetAutoOpenTerminal();
+                setAutoOpenTerminal(enabled);
+            } catch (error) {
+                console.error('Failed to load auto open terminal setting:', error);
+            }
+        };
+
+        loadAutoOpenTerminal();
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {

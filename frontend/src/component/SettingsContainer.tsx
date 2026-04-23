@@ -1,16 +1,25 @@
 import React, {useEffect, useState} from 'react';
-import {CheckAdbPath, GetAdbPath, UpdateAdbPath} from "../../wailsjs/go/main/App";
+import {Switch} from 'antd';
+import {
+    CheckAdbPath,
+    GetAdbPath,
+    GetAutoOpenTerminal,
+    SetAutoOpenTerminal,
+    UpdateAdbPath
+} from "../../wailsjs/go/main/App";
 
 function SettingsContainer() {
     const [adbPath, setAdbPath] = useState('');
     const [tempPath, setTempPath] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [autoOpenTerminal, setAutoOpenTerminal] = useState<boolean | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // 组件加载时读取配置
     useEffect(() => {
         loadAdbPath();
+        loadAutoOpenTerminal();
     }, []);
 
     const loadAdbPath = async () => {
@@ -99,13 +108,32 @@ function SettingsContainer() {
         }
     };
 
+    const loadAutoOpenTerminal = async () => {
+        try {
+            const enabled = await GetAutoOpenTerminal();
+            setAutoOpenTerminal(enabled);
+        } catch (error) {
+            console.error('加载 Terminal 自动打开配置失败:', error);
+        }
+    };
+
+    const handleAutoOpenTerminalChange = async (checked: boolean) => {
+        setAutoOpenTerminal(checked);
+        try {
+            await SetAutoOpenTerminal(checked);
+        } catch (error) {
+            setAutoOpenTerminal(!checked);
+            setMessage({type: 'error', text: '保存 Terminal 自动打开配置失败'});
+        }
+    };
+
     return (
         <div className="flex-1 h-full overflow-y-auto bg-gray-50 p-6">
-            <div className="max-w-3xl mx-auto">
-                <div className="bg-white rounded-lg shadow-md p-8">
+            <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white rounded-lg shadow-xs p-8">
                     {/* 标题 */}
                     <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-gray-800 mb-2">设置</h1>
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2">ADB 设置</h1>
                         <p className="text-gray-600">指定 Android Debug Bridge (ADB) 可执行文件的完整路径</p>
                     </div>
 
@@ -212,6 +240,21 @@ function SettingsContainer() {
                                     className="bg-blue-100 px-1 rounded">/usr/local/bin/adb</code></li>
                             </ul>
                         </div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-xs p-8">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-sm font-semibold text-gray-800 mb-1">快捷功能</h2>
+                            <p className="text-sm text-gray-600">执行快捷功能后自动打开底部 Terminal</p>
+                        </div>
+                        {autoOpenTerminal !== null && (
+                            <Switch
+                                checked={autoOpenTerminal}
+                                onChange={handleAutoOpenTerminalChange}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

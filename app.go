@@ -260,6 +260,14 @@ func (a *App) UpdateAdbPath(path string) {
 	a.deviceTracker.AdbPath = path
 }
 
+func (a *App) GetAutoOpenTerminal() bool {
+	return a.store.GetBool(storage.KeyAutoOpenTerminal, true)
+}
+
+func (a *App) SetAutoOpenTerminal(enabled bool) error {
+	return a.store.Set(storage.KeyAutoOpenTerminal, enabled)
+}
+
 func (a *App) getAllFragment(param adb.ExecuteParams) types.ExecResult {
 	activityResult := adb.GetCurrentPackageAndActivityName(param)
 	res := activityResult.Res
