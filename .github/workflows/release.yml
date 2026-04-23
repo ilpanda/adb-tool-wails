@@ -157,32 +157,36 @@ jobs:
           Write-Host "✅ 打包完成: $($file.Name) -> adb-tool-windows-amd64-portable.zip"
 
       - name: Install NSIS
-        shell: pwsh
+        uses: crazy-max/ghaction-chocolatey@v2
         continue-on-error: true
+        with:
+          args: install nsis -y --no-progress
+
+      - name: Check NSIS
+        id: nsis
+        shell: pwsh
         run: |
           $nsisPath = "${env:ProgramFiles(x86)}\NSIS"
           $makensis = "$nsisPath\makensis.exe"
 
-          if (-not (Test-Path $makensis)) {
-            Write-Host "NSIS not found at $makensis, installing with Chocolatey..."
-            choco install nsis -y --no-progress
+          if (Test-Path $makensis) {
+            Add-Content $env:GITHUB_PATH $nsisPath
+            & $makensis /VERSION
+            "available=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Warning "makensis.exe not found. Installer build will be skipped."
+            "available=false" >> $env:GITHUB_OUTPUT
           }
-
-          if (-not (Test-Path $makensis)) {
-            throw "makensis.exe not found after NSIS installation"
-          }
-
-          Add-Content $env:GITHUB_PATH $nsisPath
-          & $makensis /VERSION
 
       - name: Build installer (Windows amd64)
+        if: steps.nsis.outputs.available == 'true'
         shell: pwsh
-        continue-on-error: true
         run: |
           $version = "${{ github.ref_name }}"
           wails build -clean -platform windows/amd64 -nsis -webview2 download -ldflags "-X main.Version=$version"
 
       - name: Package installer
+        if: steps.nsis.outputs.available == 'true'
         shell: pwsh
         run: |
           cd build/bin
