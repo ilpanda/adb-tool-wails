@@ -27,6 +27,7 @@ var versionMap = map[string]string{
 	"34": "Android 14.0, U, API 34",
 	"35": "Android 15.0, V, API 35",
 	"36": "Android 16.0, W, API 36",
+	"37": "Android 17.0, C, API 37",
 }
 
 func GetVersionBuild(key string) string {
