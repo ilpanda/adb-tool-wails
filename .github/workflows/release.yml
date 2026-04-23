@@ -128,6 +128,14 @@ jobs:
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          $nsisPath = "${env:ProgramFiles(x86)}\NSIS"
+          Add-Content $env:GITHUB_PATH $nsisPath
+          & "$nsisPath\makensis.exe" /VERSION
+
       - name: Build (Windows amd64)
         shell: pwsh
         run: |
