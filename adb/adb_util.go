@@ -32,6 +32,7 @@ var (
 	reWifiSSID    = regexp.MustCompile(`mWifiInfo\s+SSID: "?(.+?)"?,`)
 	reFirstNumber = regexp.MustCompile(`:\s*([\d,]+)`)
 	reDataFree    = regexp.MustCompile(`Data-Free:\s*(\d+)K\s*/\s*(\d+)K`)
+	reFragmentRow = regexp.MustCompile(`^\s*#\d+`)
 )
 
 func BuildAdbCmd(adbPath string, deviceId string, shellCmd string) string {
@@ -49,18 +50,23 @@ func BuildAdbShellCmd(adbPath string, deviceId string, shellCmd string) string {
 }
 
 func GetCurrentPackageAndActivityName(param ExecuteParams) types.ExecResult {
-	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep mResumedActivity | awk '{print $4}'")
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities")
 	result, err := util.Exec(cmd, true, nil)
-
-	if err != nil || strings.TrimSpace(result) == "" {
-		cmd = BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep ResumedActivity | grep -v top | awk '{print $4}'")
-		result, err = util.Exec(cmd, true, nil)
-		if err != nil {
-			return types.NewExecResultFromError(cmd, "", err)
-		}
-		return types.NewExecResultSuccess(cmd, strings.TrimSuffix(result, "}\n"))
+	if err != nil {
+		return types.NewExecResultFromError(cmd, "", err)
 	}
-	return types.NewExecResultSuccess(cmd, strings.TrimSuffix(result, "}\n"))
+
+	for _, line := range util.MultiLine(result) {
+		if !strings.Contains(line, "mResumedActivity") && !strings.Contains(line, "ResumedActivity") {
+			continue
+		}
+		component := extractActivityComponent(line)
+		if component != "" {
+			return types.NewExecResultSuccess(cmd, component)
+		}
+	}
+
+	return types.NewExecResultErrorString(cmd, "not found")
 }
 
 func GetCurrentPackageName(param ExecuteParams) types.ExecResult {
@@ -76,13 +82,61 @@ func GetCurrentPackageName(param ExecuteParams) types.ExecResult {
 }
 
 func GetAllActivity(param ExecuteParams) types.ExecResult {
-	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities | grep -e 'Hist #' -e '* Hist'")
-	return execCmd(cmd)
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, "dumpsys activity activities")
+	result, err := util.Exec(cmd, true, nil)
+	if err != nil {
+		return types.NewExecResultFromError(cmd, "", err)
+	}
+
+	lines := filterActivityHistoryLines(result)
+	return types.NewExecResultSuccess(cmd, strings.Join(lines, "\n"))
 }
 
 func GetAllFragment(param ExecuteParams) types.ExecResult {
-	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys activity %s | grep -E '^\\s*#\\d' | grep -v -E 'ReportFragment|plan'", param.PackageName))
-	return execCmd(cmd)
+	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("dumpsys activity %s", param.PackageName))
+	result, err := util.Exec(cmd, true, nil)
+	if err != nil {
+		return types.NewExecResultFromError(cmd, "", err)
+	}
+
+	lines := filterFragmentLines(result)
+	return types.NewExecResultSuccess(cmd, strings.Join(lines, "\n"))
+}
+
+func extractActivityComponent(line string) string {
+	for _, field := range strings.Fields(line) {
+		if !strings.Contains(field, "/") {
+			continue
+		}
+		return strings.Trim(field, "{}")
+	}
+	return ""
+}
+
+func filterActivityHistoryLines(content string) []string {
+	lines := util.MultiLine(content)
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.Contains(line, "Hist #") || strings.Contains(line, "* Hist") {
+			result = append(result, line)
+		}
+	}
+	return result
+}
+
+func filterFragmentLines(content string) []string {
+	lines := util.MultiLine(content)
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if !reFragmentRow.MatchString(line) {
+			continue
+		}
+		if strings.Contains(line, "ReportFragment") || strings.Contains(line, "plan") {
+			continue
+		}
+		result = append(result, line)
+	}
+	return result
 }
 
 func KillApp(param ExecuteParams) types.ExecResult {
@@ -165,7 +219,7 @@ func GrantAllPermission(param ExecuteParams) types.ExecResult {
 		grantCmdsForDisplay = append(grantCmdsForDisplay, displayCmd)
 	}
 
-	batchCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("'%s'", strings.Join(grantCmdsForExec, " ; ")))
+	batchCmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, strings.Join(grantCmdsForExec, " ; "))
 	result := execCmd(batchCmd)
 
 	successCount := len(grantablePermissions)
