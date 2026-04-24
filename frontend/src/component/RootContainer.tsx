@@ -6,6 +6,7 @@ import SettingsContainer from "./SettingsContainer";
 import ApplicationList from "./ApplicationList";
 import MemoryMonitor from "./MemoryMonitor";
 import FileManager from "./FileManager";
+import LogViewer from "./LogViewer";
 
 function RootContainer() {
     const [selectedView, setSelectedView] = useState('1');
@@ -17,6 +18,7 @@ function RootContainer() {
         {selectedView === '4' && <ApplicationList />}
         {selectedView === '5' && <MemoryMonitor />}
         {selectedView === '6' && <FileManager />}
+        {selectedView === '7' && <LogViewer />}
     </div>)
 }
 

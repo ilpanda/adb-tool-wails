@@ -2,13 +2,13 @@ package aya
 
 import (
 	"adb-tool-wails/adb"
+	"adb-tool-wails/applog"
 	"adb-tool-wails/util"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -80,15 +80,15 @@ func (c *Client) Connect(localDexPath string) error {
 		// 检查版本
 		remoteVersion, err := c.getRemoteVersion()
 		if err != nil {
-			log.Printf("Failed to get remote version: %v, will restart server", err)
+			applog.Warnf(applog.CategoryAya, "remote_version_failed device=%s err=%q", c.param.DeviceId, err.Error())
 			c.Close()
 		} else if remoteVersion == AyaDexVersion {
 			// 版本一致，直接使用现有连接
-			log.Printf("Server version %s matches, reusing existing server", remoteVersion)
+			applog.Infof(applog.CategoryAya, "server_reused device=%s version=%s", c.param.DeviceId, remoteVersion)
 			return nil
 		} else {
 			// 版本不一致，需要更新
-			log.Printf("Server version mismatch: remote=%s, local=%s, will update", remoteVersion, AyaDexVersion)
+			applog.Warnf(applog.CategoryAya, "server_version_mismatch device=%s remote=%s local=%s", c.param.DeviceId, remoteVersion, AyaDexVersion)
 			c.Close()
 		}
 	}
@@ -201,12 +201,12 @@ func (c *Client) pushDex(localDexPath string) error {
 		return err
 	}
 
-	log.Printf("Pushing DEX from %s to device %s", localDexPath, c.param.DeviceId)
+	applog.Infof(applog.CategoryAya, "dex_push_started device=%s path=%s", c.param.DeviceId, localDexPath)
 
 	// 创建目录
 	mkdirCmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "mkdir -p /data/local/tmp/aya")
 	if _, err := util.Exec(mkdirCmd, true, nil); err != nil {
-		log.Printf("mkdir warning: %v", err)
+		applog.Warnf(applog.CategoryAya, "dex_remote_dir_prepare_failed device=%s err=%q", c.param.DeviceId, err.Error())
 	}
 
 	if err := c.checkCancelled(); err != nil {
@@ -219,13 +219,13 @@ func (c *Client) pushDex(localDexPath string) error {
 		return fmt.Errorf("push failed: %w", err)
 	}
 
-	log.Printf("DEX pushed successfully")
+	applog.Infof(applog.CategoryAya, "dex_push_completed device=%s", c.param.DeviceId)
 	return nil
 }
 
 // killServer 杀掉已存在的服务进程
 func (c *Client) killServer() {
-	log.Printf("Killing existing Aya server on device %s", c.param.DeviceId)
+	applog.Infof(applog.CategoryAya, "server_kill_requested device=%s", c.param.DeviceId)
 
 	// 方法1：通过 pkill 杀进程
 	cmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "pkill -f io.liriliri.aya.Server")
@@ -247,22 +247,22 @@ func (c *Client) startServer() error {
 		return err
 	}
 
-	log.Printf("Starting Aya server on device %s", c.param.DeviceId)
+	applog.Infof(applog.CategoryAya, "server_start_requested device=%s", c.param.DeviceId)
 
 	cmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "CLASSPATH=/data/local/tmp/aya/aya.dex app_process /system/bin io.liriliri.aya.Server &")
 
-	log.Printf("Starting server on device cmd %s", cmd)
+	applog.Infof(applog.CategoryAya, "server_start_cmd device=%s cmd=%q", c.param.DeviceId, cmd)
 	if err := util.ExecBackground(cmd); err != nil {
 		return fmt.Errorf("start server failed: %w", err)
 	}
 
-	log.Printf("Aya server started")
+	applog.Infof(applog.CategoryAya, "server_start_dispatched device=%s", c.param.DeviceId)
 	return nil
 }
 
 // waitForServer 等待服务启动
 func (c *Client) waitForServer(timeout time.Duration) error {
-	log.Printf("Waiting for Aya server to be ready...")
+	applog.Infof(applog.CategoryAya, "server_wait_ready device=%s timeout_ms=%d", c.param.DeviceId, timeout.Milliseconds())
 
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -277,7 +277,7 @@ func (c *Client) waitForServer(timeout time.Duration) error {
 				return fmt.Errorf("server start timeout after %v", timeout)
 			}
 			if c.isRunning() {
-				log.Printf("Aya server is ready")
+				applog.Infof(applog.CategoryAya, "server_ready device=%s", c.param.DeviceId)
 				return nil
 			}
 		}
@@ -290,7 +290,7 @@ func (c *Client) connectSocket() error {
 		return err
 	}
 
-	log.Printf("Establishing socket connection to device %s", c.param.DeviceId)
+	applog.Infof(applog.CategoryAya, "socket_connect_started device=%s", c.param.DeviceId)
 
 	// 1. 建立端口转发
 	forwardCmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, "forward tcp:0 localabstract:aya")
@@ -305,7 +305,7 @@ func (c *Client) connectSocket() error {
 		return fmt.Errorf("failed to get forwarded port")
 	}
 
-	log.Printf("ADB forwarded local port: %s", c.localPort)
+	applog.Infof(applog.CategoryAya, "adb_forward_created device=%s local_port=%s", c.param.DeviceId, c.localPort)
 
 	if err := c.checkCancelled(); err != nil {
 		c.removeForward()
@@ -330,7 +330,7 @@ func (c *Client) connectSocket() error {
 	}
 
 	c.conn = conn
-	log.Printf("Socket connection established to %s", addr)
+	applog.Infof(applog.CategoryAya, "socket_connected device=%s addr=%s", c.param.DeviceId, addr)
 
 	return nil
 }
@@ -340,7 +340,7 @@ func (c *Client) removeForward() {
 	if c.localPort != "" {
 		cmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("forward --remove tcp:%s", c.localPort))
 		if _, err := util.Exec(cmd, true, nil); err != nil {
-			log.Printf("Warning: failed to remove forward: %v", err)
+			applog.Warnf(applog.CategoryAya, "adb_forward_remove_failed device=%s local_port=%s err=%q", c.param.DeviceId, c.localPort, err.Error())
 		}
 	}
 }
@@ -373,7 +373,7 @@ func (c *Client) readLoop() {
 			if err != io.EOF {
 				c.mu.Lock()
 				if !c.closed {
-					log.Printf("Read error: %v", err)
+					applog.Warnf(applog.CategoryAya, "socket_read_failed device=%s err=%q", c.param.DeviceId, err.Error())
 				}
 				c.mu.Unlock()
 			}
@@ -400,7 +400,7 @@ func (c *Client) readLoop() {
 
 			resp := &pb.Response{}
 			if err := proto.Unmarshal(msgData, resp); err != nil {
-				log.Printf("Failed to unmarshal response: %v", err)
+				applog.Warnf(applog.CategoryAya, "response_unmarshal_failed device=%s err=%q", c.param.DeviceId, err.Error())
 				continue
 			}
 
@@ -437,7 +437,7 @@ func (c *Client) SendMessage(method string, params interface{}) (map[string]inte
 		Params: string(paramsJSON),
 	}
 
-	log.Printf("Sending request: method=%s, id=%s", method, id)
+	applog.Infof(applog.CategoryAya, "request_sent device=%s method=%s id=%s", c.param.DeviceId, method, id)
 
 	respCh := make(chan *pb.Response, 1)
 	c.mu.Lock()
@@ -470,7 +470,7 @@ func (c *Client) SendMessage(method string, params interface{}) (map[string]inte
 
 	select {
 	case resp := <-respCh:
-		log.Printf("Received response: id=%s", resp.Id)
+		applog.Infof(applog.CategoryAya, "response_received device=%s id=%s", c.param.DeviceId, resp.Id)
 
 		var result map[string]interface{}
 		if err := json.Unmarshal([]byte(resp.Result), &result); err != nil {
@@ -505,13 +505,13 @@ func (c *Client) Close() error {
 	readStarted := c.readStarted
 	c.mu.Unlock()
 
-	log.Printf("Closing Aya client connection")
+	applog.Infof(applog.CategoryAya, "client_closing device=%s", c.param.DeviceId)
 
 	var err error
 
 	if conn != nil {
 		if closeErr := conn.Close(); closeErr != nil {
-			log.Printf("Error closing connection: %v", closeErr)
+			applog.Warnf(applog.CategoryAya, "client_close_failed device=%s err=%q", c.param.DeviceId, closeErr.Error())
 			err = closeErr
 		}
 	}
@@ -521,7 +521,7 @@ func (c *Client) Close() error {
 		select {
 		case <-c.readDone:
 		case <-time.After(2 * time.Second):
-			log.Printf("Warning: readLoop did not finish in time")
+			applog.Warnf(applog.CategoryAya, "read_loop_close_timeout device=%s", c.param.DeviceId)
 		}
 	}
 

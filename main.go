@@ -1,7 +1,9 @@
 package main
 
 import (
+	"adb-tool-wails/applog"
 	"embed"
+	goruntime "runtime"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -18,11 +20,19 @@ var assets embed.FS
 var ayaDexData []byte
 
 func main() {
+	logManager, err := applog.NewManager("adb-tool-wails")
+	if err != nil {
+		println("failed to initialize log manager:", err.Error())
+	} else {
+		applog.Infof(applog.CategoryStartup, "logger_ready dir=%s", logManager.Directory())
+	}
+
 	// Create an instance of the app structure
-	app := NewApp()
+	app := NewApp(logManager)
+	applog.Infof(applog.CategoryStartup, "app_bootstrap version=%s os=%s arch=%s", Version, goruntime.GOOS, goruntime.GOARCH)
 
 	// Create application with options
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:  "adb-tool-wails",
 		Width:  1024,
 		Height: 768,
@@ -38,6 +48,6 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		applog.Errorf(applog.CategoryStartup, "app_start_failed err=%q", err.Error())
 	}
 }

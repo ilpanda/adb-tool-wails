@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -84,9 +85,9 @@ func shellCommand(command string) *exec.Cmd {
 }
 
 func Log(msg string) {
-	fmt.Println(msg)
+	log.Println(msg)
 }
 
 func LogE(msg string) {
-	fmt.Printf("[Error] : %s\n", msg)
+	log.Printf("[Error] : %s", msg)
 }

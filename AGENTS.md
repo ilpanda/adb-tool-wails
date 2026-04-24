@@ -50,9 +50,16 @@ Go `App` struct methods are bound to the frontend via Wails auto-generated bindi
 ### Key Frontend Structure
 
 - **State:** Zustand stores in `frontend/src/store/` — `deviceStore.ts` (device state), `appListStore.ts` (app list with per-device caching).
-- **Views:** `RootContainer.tsx` switches between 6 views via numeric keys: actions (`'1'`, RightContainer), FAQ (`'2'`), settings (`'3'`), app list (`'4'`, ApplicationList), memory monitor (`'5'`, MemoryMonitor), file manager (`'6'`, FileManager).
+- **Views:** `RootContainer.tsx` switches between 7 views via numeric keys: actions (`'1'`, `RightContainer`), FAQ (`'2'`, `FAQContainer`), settings (`'3'`, `SettingsContainer`), app list (`'4'`, `ApplicationList`), memory monitor (`'5'`, `MemoryMonitor`), file manager (`'6'`, `FileManager`), diagnostic logs (`'7'`, `LogViewer`).
 - **Actions:** `frontend/src/data/quickActions.ts` defines the `ActionType` union and ~48 quick actions across 5 sections (common, app, keys, quick settings, system).
 - **UI:** React 18 + Ant Design v5 + Tailwind CSS v4 + Recharts (memory charts) + react-markdown (FAQ).
+
+### Frontend Stack Requirement
+
+- Prefer **Tailwind CSS** for layout, spacing, typography, color, and most component styling.
+- Prefer **Ant Design** for mature interactive components and complex widgets such as `Table`, `Modal`, `Drawer`, `Form`, `Select`, `Switch`, `Tooltip`, and feedback components.
+- New frontend work should follow the existing `Tailwind CSS + Ant Design` combination rather than introducing another UI framework or large custom styling system.
+- When adjusting UI, keep visual consistency with the existing Ant Design behaviors while using Tailwind utility classes for page composition and local styling.
 
 ### Aya DEX Version Coupling
 

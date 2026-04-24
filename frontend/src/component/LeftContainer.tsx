@@ -64,6 +64,7 @@ function LeftContainer({selectedView, onViewChange}: {
         {key: '4', icon: 'fa-list', label: '应用列表', iconColor: 'text-purple-500'},
         {key: '5', icon: 'fa-memory', label: '内存监控', iconColor: 'text-green-500'},
         {key: '6', icon: 'fa-folder-open', label: '文件管理', iconColor: 'text-yellow-500'},
+        {key: '7', icon: 'fa-file-lines', label: '诊断日志', iconColor: 'text-rose-500'},
         {key: '2', icon: 'fa-circle-question', label: '常见问题', iconColor: 'text-blue-500'},
         {key: '3', icon: 'fa-gear', label: '设置', iconColor: 'text-gray-500'},
 

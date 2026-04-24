@@ -2,6 +2,7 @@ package main
 
 import (
 	"adb-tool-wails/adb"
+	"adb-tool-wails/applog"
 	"adb-tool-wails/aya"
 	"adb-tool-wails/storage"
 	"adb-tool-wails/types"
@@ -9,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +25,7 @@ import (
 type App struct {
 	ctx               context.Context
 	store             *storage.BadgerStore
+	logManager        *applog.Manager
 	deviceTracker     *adb.DeviceTracker
 	adbPath           string
 	deviceUpdateTimer *time.Timer
@@ -46,24 +47,28 @@ type Action struct {
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{}
+func NewApp(logManager *applog.Manager) *App {
+	return &App{logManager: logManager}
 }
 
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	applog.Infof(applog.CategoryStartup, "startup_begin version=%s", Version)
 	// 初始化存储
 	store, err := storage.NewBadgerStore("config")
 	if err != nil {
-		runtime.LogError(ctx, "Failed to initialize storage: "+err.Error())
+		applog.Errorf(applog.CategoryStartup, "storage_init_failed err=%q", err.Error())
 	} else {
 		a.store = store
+		applog.Infof(applog.CategoryStartup, "storage_ready namespace=config")
 	}
 
 	if err := a.extractAyaDex(); err != nil {
-		runtime.LogError(ctx, "Failed to extract aya.dex: "+err.Error())
+		applog.Errorf(applog.CategoryStartup, "aya_dex_extract_failed err=%q", err.Error())
+	} else {
+		applog.Infof(applog.CategoryStartup, "aya_dex_ready path=%s", a.ayaDexPath)
 	}
 
 	a.setupEnv()
@@ -73,17 +78,22 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	path, err := exec.LookPath("adb")
+	adbSource := "unset"
 	if err == nil && path != "" {
 		a.adbPath = "adb"
+		adbSource = "system"
 	} else if saveAdbPath != "" {
 		a.adbPath = saveAdbPath
+		adbSource = "saved"
 	}
+	applog.Infof(applog.CategoryStartup, "adb_path_selected source=%s path=%s", adbSource, a.adbPath)
 
 	a.deviceTracker = adb.NewDeviceTracker(a.adbPath, func(devices []adb.DeviceInfo) {
 		a.scheduleDeviceUpdate(devices)
 	})
 	// 启动跟踪
 	go a.deviceTracker.Start(ctx)
+	applog.Infof(applog.CategoryStartup, "device_tracker_started adb_path=%s", a.adbPath)
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -103,16 +113,22 @@ func (a *App) shutdown(ctx context.Context) {
 
 	if a.ayaClient != nil {
 		if err := a.ayaClient.Close(); err != nil {
-			runtime.LogError(ctx, "Failed to close Aya client: "+err.Error())
+			applog.Warnf(applog.CategoryStartup, "aya_client_close_failed err=%q", err.Error())
 		}
 		a.ayaClient = nil
 	}
 
 	if a.store != nil {
 		if err := a.store.Close(); err != nil {
-			runtime.LogError(ctx, "Failed to close storage: "+err.Error())
+			applog.Warnf(applog.CategoryStartup, "storage_close_failed err=%q", err.Error())
 		}
 		a.store = nil
+	}
+	applog.Infof(applog.CategoryStartup, "shutdown_completed")
+	if a.logManager != nil {
+		if err := a.logManager.Close(); err != nil {
+			println("failed to close log manager:", err.Error())
+		}
 	}
 }
 
@@ -170,13 +186,23 @@ var keyActionMap = map[string]string{
 }
 
 // ExecuteAction 执行快捷操作
-func (a *App) ExecuteAction(ac Action) types.ExecResult {
+func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 	action := ac.Action
-	fmt.Printf("execute action : %s\n", action)
+	start := time.Now()
+	applog.Infof(applog.CategoryAction, "action_started action=%s device=%s package=%s", action, ac.DeviceId, ac.TargetPackageName)
+	defer func() {
+		duration := time.Since(start).Milliseconds()
+		if result.Error != "" {
+			applog.Warnf(applog.CategoryAction, "action_failed action=%s device=%s package=%s duration_ms=%d err=%q", action, ac.DeviceId, ac.TargetPackageName, duration, result.Error)
+			return
+		}
+		applog.Infof(applog.CategoryAction, "action_succeeded action=%s device=%s package=%s duration_ms=%d", action, ac.DeviceId, ac.TargetPackageName, duration)
+	}()
 
 	deviceName := adb.GetDeviceNameArray(a.adbPath)
 	if len(deviceName) == 0 {
-		return types.NewExecResultErrorString("", "no devices，请使用数据线连接手机，并打开开发者模式")
+		result = types.NewExecResultErrorString("", "no devices，请使用数据线连接手机，并打开开发者模式")
+		return
 	}
 
 	param := adb.ExecuteParams{
@@ -189,80 +215,82 @@ func (a *App) ExecuteAction(ac Action) types.ExecResult {
 
 	// 按键事件统一处理
 	if keyCode, ok := keyActionMap[action]; ok {
-		return adb.SendKeyEvent(param, keyCode)
+		result = adb.SendKeyEvent(param, keyCode)
+		return
 	}
 
 	switch action {
 	case "view-current-activity":
-		return adb.GetCurrentPackageAndActivityName(param)
+		result = adb.GetCurrentPackageAndActivityName(param)
 	case "view-current-fragment":
-		return a.getAllFragment(param)
+		result = a.getAllFragment(param)
 	case "view-all-activities":
-		return adb.GetAllActivity(param)
+		result = adb.GetAllActivity(param)
 	case "screenshot":
-		return adb.Screenshot(param)
+		result = adb.Screenshot(param)
 	case "reset-permissions":
-		return adb.RevokePermission(param)
+		result = adb.RevokePermission(param)
 	case "grant-permissions":
-		return adb.GrantAllPermission(param)
+		result = adb.GrantAllPermission(param)
 	case "force-stop":
-		return adb.KillApp(param)
+		result = adb.KillApp(param)
 	case "clear-data":
-		return adb.ClearApp(param)
+		result = adb.ClearApp(param)
 	case "restart-app":
-		return adb.RestartApp(param)
+		result = adb.RestartApp(param)
 	case "reboot-device":
-		return adb.Reboot(param)
+		result = adb.Reboot(param)
 	case "shutdown-device":
-		return adb.Shutdown(param)
+		result = adb.Shutdown(param)
 	case "get-all-packages":
-		return adb.GetAllPackages(param)
+		result = adb.GetAllPackages(param)
 	case "install-app":
-		return adb.InstallApp(param)
+		result = adb.InstallApp(param)
 	case "uninstall-app":
-		return adb.UninstallApp(param)
+		result = adb.UninstallApp(param)
 	case "get-system-info":
-		return adb.GetDeviceInfo(param)
+		result = adb.GetDeviceInfo(param)
 	case "format-sys-info":
-		return adb.FormatSysMemInfo(param)
+		result = adb.FormatSysMemInfo(param)
 	case "get-system-property":
-		return adb.GetAllSystemProperties(param)
+		result = adb.GetAllSystemProperties(param)
 	case "export-app":
-		return adb.ExportAppPackagePath(param)
+		result = adb.ExportAppPackagePath(param)
 	case "install-app-path":
-		return adb.GetAppInstallPath(param)
+		result = adb.GetAppInstallPath(param)
 	case "dump-pid":
-		return adb.PackagePid(param)
+		result = adb.PackagePid(param)
 	case "dump-memory-info":
-		return adb.DumpSysMemInfo(param)
+		result = adb.DumpSysMemInfo(param)
 	case "dump-smaps":
-		return adb.SaveSmaps(param)
+		result = adb.SaveSmaps(param)
 	case "dump-show-map":
-		return adb.SaveShowMap(param)
+		result = adb.SaveShowMap(param)
 	case "dump-thread":
-		return adb.SaveThreadInfo(param)
+		result = adb.SaveThreadInfo(param)
 	case "dump-hprof":
-		return adb.SaveHprof(param)
+		result = adb.SaveHprof(param)
 	case "get-package-info":
-		return adb.GetAppDesc(param)
+		result = adb.GetAppDesc(param)
 	case "clear-restart-app":
-		return adb.ClearAndRestartApp(param)
+		result = adb.ClearAndRestartApp(param)
 	case "view-package":
-		return adb.GetCurrentPackageName(param)
+		result = adb.GetCurrentPackageName(param)
 	case "toggle-gpu-profile":
-		return adb.ToggleDevOption(param, "debug.hwui.profile", "visual_bars")
+		result = adb.ToggleDevOption(param, "debug.hwui.profile", "visual_bars")
 	case "toggle-gpu-overdraw":
-		return adb.ToggleDevOption(param, "debug.hwui.overdraw", "show")
+		result = adb.ToggleDevOption(param, "debug.hwui.overdraw", "show")
 	case "toggle-layout-bounds":
-		return adb.ToggleDevOption(param, "debug.layout", "true")
+		result = adb.ToggleDevOption(param, "debug.layout", "true")
 	case "jump-application-detail":
-		return adb.JumpToAppDetailSettings(param)
+		result = adb.JumpToAppDetailSettings(param)
 	case "jump-locale", "jump-developer", "jump-application", "jump-wifi-settings",
 		"jump-notification", "jump-bluetooth", "jump-input", "jump-display":
-		return adb.JumpToSettings(param)
+		result = adb.JumpToSettings(param)
+	default:
+		result = types.NewExecResultFromString(action, "", fmt.Sprintf("不支持的操作: %s", action))
 	}
-
-	return types.NewExecResultFromString(action, "", fmt.Sprintf("不支持的操作: %s", action))
+	return
 }
 
 func (a *App) GetAdbPath() types.ExecResult {
@@ -293,9 +321,10 @@ func (a *App) UpdateAdbPath(path string) {
 	}
 	if a.store != nil {
 		if err := a.store.Set(storage.KeyAdbPath, path); err != nil {
-			runtime.LogError(a.ctx, "Failed to save adb path: "+err.Error())
+			applog.Errorf(applog.CategoryADB, "adb_path_save_failed path=%s err=%q", path, err.Error())
 		}
 	}
+	applog.Infof(applog.CategoryADB, "adb_path_updated path=%s", path)
 }
 
 func (a *App) GetAutoOpenTerminal() bool {
@@ -522,7 +551,7 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 	}
 
 	totalPackages := len(packageNames)
-	log.Printf("Total packages to fetch: %d", totalPackages)
+	applog.Infof(applog.CategoryAction, "app_list_started device=%s total_packages=%d", deviceId, totalPackages)
 
 	// 发送开始事件
 	emitProgress(totalPackages, 0, false)
@@ -534,7 +563,7 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 	for i := 0; i < totalPackages; i += batchSize {
 		// 检查是否已取消
 		if isCancelled() {
-			log.Println("App list loading cancelled")
+			applog.Warnf(applog.CategoryAction, "app_list_cancelled device=%s", deviceId)
 			return nil, context.Canceled
 		}
 
@@ -544,7 +573,7 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 		}
 
 		batch := packageNames[i:end]
-		log.Printf("Fetching batch %d-%d of %d", i+1, end, totalPackages)
+		applog.Infof(applog.CategoryAction, "app_list_batch_fetch device=%s start=%d end=%d total=%d", deviceId, i+1, end, totalPackages)
 
 		// 批量获取当前批次的应用信息
 		batchApps, err := client.GetPackageInfos(batch)
@@ -552,7 +581,7 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 			if isCancelled() {
 				return nil, context.Canceled
 			}
-			log.Printf("Failed to get batch %d-%d: %v", i+1, end, err)
+			applog.Warnf(applog.CategoryAction, "app_list_batch_failed device=%s start=%d end=%d err=%q", deviceId, i+1, end, err.Error())
 			continue
 		}
 
@@ -561,7 +590,7 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 		// 发送进度更新
 		emitProgress(totalPackages, len(allApps), false)
 
-		log.Printf("Progress: %d/%d apps loaded", len(allApps), totalPackages)
+		applog.Infof(applog.CategoryAction, "app_list_progress device=%s loaded=%d total=%d", deviceId, len(allApps), totalPackages)
 	}
 
 	// 检查是否已取消，取消则不发送完成事件
@@ -572,7 +601,7 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 	// 发送完成事件
 	emitProgress(totalPackages, len(allApps), true)
 
-	log.Printf("Completed: %d apps loaded", len(allApps))
+	applog.Infof(applog.CategoryAction, "app_list_completed device=%s loaded=%d total=%d", deviceId, len(allApps), totalPackages)
 
 	return allApps, nil
 }
@@ -588,23 +617,149 @@ func (a *App) CancelApplicationListLoading() {
 	a.appListMutex.Unlock()
 
 	if cancel != nil {
-		log.Println("Cancelling previous app list loading task...")
+		applog.Warnf(applog.CategoryAction, "app_list_cancel_previous")
 		cancel()
 
 		// 等待前一个任务完成
 		if done != nil {
 			select {
 			case <-done:
-				log.Println("Previous task finished")
+				applog.Infof(applog.CategoryAction, "app_list_previous_cancelled")
 			case <-time.After(3 * time.Second):
-				log.Println("Warning: previous task did not finish in time")
+				applog.Warnf(applog.CategoryAction, "app_list_previous_cancel_timeout")
 			}
 		}
 	}
 }
 
 func (a *App) LogMsg(msg string) {
-	println(msg)
+	applog.Infof(applog.CategoryLog, "%s", msg)
+}
+
+func (a *App) GetLogStatus() applog.StatusDTO {
+	if a.logManager == nil {
+		return applog.StatusDTO{}
+	}
+
+	status, err := a.logManager.Status()
+	if err != nil {
+		applog.Warnf(applog.CategoryLog, "log_status_failed err=%q", err.Error())
+		return applog.StatusDTO{}
+	}
+
+	return applog.StatusDTO{
+		Directory:   status.Directory,
+		CurrentFile: status.CurrentFile,
+		CurrentSize: status.CurrentSize,
+		FileCount:   status.FileCount,
+		TotalSize:   status.TotalSize,
+	}
+}
+
+func (a *App) ListLogFiles() []applog.FileDTO {
+	if a.logManager == nil {
+		return []applog.FileDTO{}
+	}
+
+	files, err := a.logManager.ListFiles()
+	if err != nil {
+		applog.Warnf(applog.CategoryLog, "log_list_failed err=%q", err.Error())
+		return []applog.FileDTO{}
+	}
+
+	result := make([]applog.FileDTO, 0, len(files))
+	for _, file := range files {
+		result = append(result, applog.FileDTO{
+			Name:       file.Name,
+			Size:       file.Size,
+			ModifiedAt: file.Modified.Format(time.RFC3339),
+			IsCurrent:  file.IsCurrent,
+		})
+	}
+
+	return result
+}
+
+func (a *App) ReadLogChunk(fileName string, cursor int64, maxBytes int64) (applog.ChunkDTO, error) {
+	if a.logManager == nil {
+		return applog.ChunkDTO{}, fmt.Errorf("log manager is not initialized")
+	}
+
+	chunk, err := a.logManager.ReadChunk(fileName, cursor, maxBytes)
+	if err != nil {
+		return applog.ChunkDTO{}, err
+	}
+
+	return applog.ChunkDTO{
+		FileName:   chunk.FileName,
+		Content:    chunk.Content,
+		NextCursor: chunk.NextCursor,
+		HasMore:    chunk.HasMore,
+		FileSize:   chunk.FileSize,
+	}, nil
+}
+
+func (a *App) ExportLogs() types.ExecResult {
+	if a.logManager == nil {
+		return types.NewExecResultErrorString("export_logs", "日志管理器未初始化")
+	}
+
+	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: fmt.Sprintf("adb-tool-wails-logs-%s.zip", time.Now().Format("20060102-150405")),
+		Title:           "导出日志",
+	})
+	if err != nil {
+		return types.NewExecResultErrorString("export_logs", fmt.Sprintf("选择导出路径失败: %v", err))
+	}
+	if savePath == "" {
+		return types.NewExecResultErrorString("export_logs", "已取消")
+	}
+
+	if err := a.logManager.ExportZip(savePath); err != nil {
+		applog.Warnf(applog.CategoryLog, "log_export_failed path=%s err=%q", savePath, err.Error())
+		return types.NewExecResultErrorString("export_logs", err.Error())
+	}
+	applog.Infof(applog.CategoryLog, "log_exported path=%s", savePath)
+
+	return types.NewExecResultSuccess("export_logs", savePath)
+}
+
+func (a *App) ClearLogFile(fileName string) types.ExecResult {
+	if a.logManager == nil {
+		return types.NewExecResultErrorString("clear_log_file", "日志管理器未初始化")
+	}
+
+	if err := a.logManager.ClearFile(fileName); err != nil {
+		applog.Warnf(applog.CategoryLog, "log_clear_failed file=%s err=%q", fileName, err.Error())
+		return types.NewExecResultErrorString("clear_log_file", err.Error())
+	}
+
+	return types.NewExecResultSuccess("clear_log_file", fileName)
+}
+
+func (a *App) OpenLogDirectory() types.ExecResult {
+	if a.logManager == nil {
+		return types.NewExecResultErrorString("open_log_directory", "日志目录不可用")
+	}
+
+	logDir := a.logManager.Directory()
+	var cmd *exec.Cmd
+	switch goruntime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", logDir)
+	case "darwin":
+		cmd = exec.Command("open", logDir)
+	default:
+		cmd = exec.Command("xdg-open", logDir)
+	}
+
+	if err := cmd.Start(); err != nil {
+		applog.Warnf(applog.CategoryLog, "log_directory_open_failed path=%s err=%q", logDir, err.Error())
+		return types.NewExecResultError("open_log_directory", err)
+	}
+	applog.Infof(applog.CategoryLog, "log_directory_opened path=%s", logDir)
+
+	return types.NewExecResultSuccess("open_log_directory", logDir)
 }
 
 // buildParam 构建 ADB 执行参数
