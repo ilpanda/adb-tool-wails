@@ -20,11 +20,12 @@ var assets embed.FS
 var ayaDexData []byte
 
 func main() {
-	logManager, err := applog.NewManager("adb-tool-wails")
+	mirrorStdout := IsDebugBuild()
+	logManager, err := applog.NewManager("adb-tool-wails", mirrorStdout)
 	if err != nil {
 		println("failed to initialize log manager:", err.Error())
 	} else {
-		applog.Infof(applog.CategoryStartup, "logger_ready dir=%s", logManager.Directory())
+		applog.Infof(applog.CategoryStartup, "logger_ready dir=%s mirror_stdout=%t", logManager.Directory(), mirrorStdout)
 	}
 
 	// Create an instance of the app structure

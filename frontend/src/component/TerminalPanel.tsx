@@ -254,10 +254,6 @@ function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
                         </>
                     )}
                 </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    <span className="font-mono">ADB 已连接</span>
-                </div>
             </div>
         </div>
     );

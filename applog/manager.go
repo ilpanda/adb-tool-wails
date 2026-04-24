@@ -64,7 +64,7 @@ type Manager struct {
 	closed       bool
 }
 
-func NewManager(appName string) (*Manager, error) {
+func NewManager(appName string, mirrorStdout bool) (*Manager, error) {
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
 		return nil, err
@@ -96,7 +96,11 @@ func NewManager(appName string) (*Manager, error) {
 	go manager.flushLoop()
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	log.SetOutput(manager)
+	if mirrorStdout {
+		log.SetOutput(io.MultiWriter(os.Stdout, manager))
+	} else {
+		log.SetOutput(manager)
+	}
 
 	return manager, nil
 }

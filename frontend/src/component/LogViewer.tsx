@@ -9,7 +9,6 @@ import {
     Segmented,
     Space,
     Spin,
-    Statistic,
     Tag,
     Tooltip,
     Typography,
@@ -250,14 +249,6 @@ function LogViewer() {
                             <Paragraph copyable className="!mb-0 text-xs !text-slate-600">
                                 {status?.directory || '-'}
                             </Paragraph>
-                            <div className="grid grid-cols-2 gap-3">
-                                <Card size="small">
-                                    <Statistic title="文件数" value={status?.fileCount ?? 0}/>
-                                </Card>
-                                <Card size="small">
-                                    <Statistic title="总大小" value={formatBytes(status?.totalSize ?? 0)} valueStyle={{fontSize: 18}}/>
-                                </Card>
-                            </div>
                             <Button type="primary" icon={<DownloadOutlined/>} block onClick={handleExport}>
                                 导出日志 ZIP
                             </Button>
