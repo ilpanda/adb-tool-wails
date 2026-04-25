@@ -771,10 +771,17 @@ func (a *App) buildParam(deviceId string) adb.ExecuteParams {
 	}
 }
 
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
 // ListDirectory 列出设备目录内容
 func (a *App) ListDirectory(deviceId string, path string) types.ExecResult {
 	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("ls -la %s", path))
+	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("ls -lan -- %s", shellQuote(path)))
 	res, err := util.Exec(cmd, true, nil)
 	if err != nil {
 		return types.NewExecResultFromError(cmd, "", err)
@@ -785,7 +792,7 @@ func (a *App) ListDirectory(deviceId string, path string) types.ExecResult {
 // ReadFileContent 读取设备文件内容
 func (a *App) ReadFileContent(deviceId string, path string) types.ExecResult {
 	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("cat %s", path))
+	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("cat %s", shellQuote(path)))
 	res, err := util.Exec(cmd, true, nil)
 	if err != nil {
 		return types.NewExecResultFromError(cmd, "", err)
@@ -796,7 +803,7 @@ func (a *App) ReadFileContent(deviceId string, path string) types.ExecResult {
 // DeleteRemoteFile 删除设备文件
 func (a *App) DeleteRemoteFile(deviceId string, path string) types.ExecResult {
 	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm -rf %s", path))
+	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm -rf -- %s", shellQuote(path)))
 	res, err := util.Exec(cmd, true, nil)
 	if err != nil {
 		return types.NewExecResultFromError(cmd, "", err)

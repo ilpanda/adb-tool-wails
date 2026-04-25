@@ -1,18 +1,26 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Dropdown, Empty, Input, Modal, Popconfirm, Spin, Tree, Tooltip, message} from 'antd';
-import type {TreeDataNode, MenuProps} from 'antd';
+import {startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState} from 'react';
+import {Button, Dropdown, Empty, Input, Modal, Segmented, Spin, Tooltip, message} from 'antd';
+import type {MenuProps} from 'antd';
 import {
     DeleteOutlined,
     DownloadOutlined,
     EyeOutlined,
-    ReloadOutlined,
-    UploadOutlined,
-    EnterOutlined,
+    FolderOpenOutlined,
     LoadingOutlined,
-    StarOutlined,
+    ReloadOutlined,
     StarFilled,
+    StarOutlined,
+    UploadOutlined,
 } from '@ant-design/icons';
-import {DeleteRemoteFile, DownloadFile, ListDirectory, ReadFileContent, UploadFile, GetBookmarkPaths, SetBookmarkPaths} from "../../wailsjs/go/main/App";
+import {
+    DeleteRemoteFile,
+    DownloadFile,
+    GetBookmarkPaths,
+    ListDirectory,
+    ReadFileContent,
+    SetBookmarkPaths,
+    UploadFile,
+} from "../../wailsjs/go/main/App";
 import {useDeviceStore} from "../store/deviceStore";
 
 interface FileEntry {
@@ -25,8 +33,6 @@ interface FileEntry {
     fullPath: string;
 }
 
-type ExtTreeNode = TreeDataNode & {_entry?: FileEntry};
-
 function formatSize(raw: number): string {
     if (raw < 0) return '-';
     if (raw < 1024) return `${raw} B`;
@@ -35,152 +41,223 @@ function formatSize(raw: number): string {
     return `${(raw / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+function normalizePath(path: string): string {
+    const trimmed = path.trim();
+    if (!trimmed) return '/';
+    const normalized = trimmed.replace(/\/+/g, '/');
+    if (normalized === '/') return '/';
+    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+}
+
+function getParentPath(path: string): string {
+    const normalized = normalizePath(path);
+    if (normalized === '/') return '/';
+    return normalized.slice(0, normalized.lastIndexOf('/')) || '/';
+}
+
+function parseLsLine(line: string, parentPath: string): FileEntry | null {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('total')) return null;
+    if (trimmed.startsWith('ls:') || trimmed.includes('No such file') || trimmed.includes('Permission denied')) {
+        return null;
+    }
+
+    const androidStyleMatch = trimmed.match(/^(\S+)\s+\d+\s+\S+\s+\S+\s+(\d+)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(.+)$/);
+    const gnuStyleMatch = trimmed.match(/^(\S+)\s+\d+\s+\S+\s+\S+\s+(\d+)\s+([A-Za-z]{3}\s+\d{1,2}\s+(?:\d{2}:\d{2}|\d{4}))\s+(.+)$/);
+    const compactStyleMatch = trimmed.match(/^(\S+)\s+(\d+)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(.+)$/);
+
+    const match = androidStyleMatch || gnuStyleMatch || compactStyleMatch;
+    if (!match) {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length < 2) return null;
+
+        const permissions = parts[0];
+        if (permissions.startsWith('l')) return null;
+
+        const fallbackName = parts[parts.length - 1];
+        if (!fallbackName || fallbackName === '.' || fallbackName === '..') return null;
+
+        const normalizedParent = normalizePath(parentPath);
+        return {
+            permissions,
+            size: permissions.startsWith('d') ? '-' : '',
+            sizeRaw: permissions.startsWith('d') ? -1 : 0,
+            date: '',
+            name: fallbackName,
+            isDirectory: permissions.startsWith('d'),
+            fullPath: normalizedParent === '/' ? `/${fallbackName}` : `${normalizedParent}/${fallbackName}`,
+        };
+    }
+
+    const [, permissions, sizeText, date, namePart] = match;
+    if (!namePart || namePart === '.' || namePart === '..') return null;
+    if (permissions.startsWith('l')) return null;
+
+    const normalizedParent = normalizePath(parentPath);
+    const isDirectory = permissions.startsWith('d');
+    const sizeNum = parseInt(sizeText, 10);
+    const sizeRaw = isDirectory ? -1 : (Number.isNaN(sizeNum) ? -1 : sizeNum);
+
+    return {
+        permissions,
+        size: formatSize(sizeRaw),
+        sizeRaw,
+        date,
+        name: namePart,
+        isDirectory,
+        fullPath: normalizedParent === '/' ? `/${namePart}` : `${normalizedParent}/${namePart}`,
+    };
+}
+
 function parseLsOutput(output: string, parentPath: string): FileEntry[] {
     const lines = output.split('\n');
     const entries: FileEntry[] = [];
 
     for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('total')) continue;
-
-        const parts = trimmed.split(/\s+/);
-        if (parts.length < 7) continue;
-
-        const permissions = parts[0];
-        const nameStartIndex = 7;
-        const nameStr = parts.slice(nameStartIndex).join(' ');
-        if (!nameStr) continue;
-
-        // 跳过软链接
-        const isSymlink = permissions.startsWith('l');
-        if (isSymlink) continue;
-
-        const name = nameStr;
-
-        if (name === '.' || name === '..') continue;
-
-        const isDirectory = permissions.startsWith('d');
-        const date = `${parts[5]} ${parts[6]}`;
-        const sizeNum = parseInt(parts[4], 10);
-        const sizeRaw = isDirectory ? -1 : (isNaN(sizeNum) ? -1 : sizeNum);
-        const fullPath = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
-
-        entries.push({
-            permissions,
-            size: formatSize(sizeRaw),
-            sizeRaw,
-            date,
-            name,
-            isDirectory,
-            fullPath,
-        });
+        const entry = parseLsLine(line, parentPath);
+        if (entry) entries.push(entry);
     }
 
     entries.sort((a, b) => {
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;
-        return a.name.localeCompare(b.name);
+        return a.name.localeCompare(b.name, 'zh-CN');
     });
 
     return entries;
 }
 
-/** 纯数据的 TreeNode 构建，title 使用 renderTitle 回调延迟渲染 */
-function entriesToTreeData(entries: FileEntry[]): ExtTreeNode[] {
-    return entries.map(entry => ({
-        key: entry.fullPath,
-        title: entry.name,
-        icon: entry.isDirectory
-            ? <i className="fa-solid fa-folder text-amber-400"/>
-            : <i className="fa-regular fa-file text-blue-400 text-xs"/>,
-        isLeaf: !entry.isDirectory,
-        _entry: entry,
-    }));
-}
-
-/** 在 nodeMap 中注册节点，用于 O(1) 查找 */
-function registerNodes(nodes: ExtTreeNode[], map: Map<string, ExtTreeNode>) {
-    for (const node of nodes) {
-        map.set(node.key as string, node);
-        if (node.children) registerNodes(node.children as ExtTreeNode[], map);
+function buildBreadcrumbItems(path: string): Array<{label: string; path: string}> {
+    const normalized = normalizePath(path);
+    if (normalized === '/') {
+        return [{label: '/', path: '/'}];
     }
+
+    const segments = normalized.split('/').filter(Boolean);
+    let current = '';
+
+    return [
+        {label: '/', path: '/'},
+        ...segments.map(segment => {
+            current += `/${segment}`;
+            return {label: segment, path: current};
+        }),
+    ];
 }
 
 function FileManager() {
     const {selectedDevice} = useDeviceStore();
-    const [treeData, setTreeData] = useState<ExtTreeNode[]>([]);
+    const [entries, setEntries] = useState<FileEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [fileContent, setFileContent] = useState<string | null>(null);
     const [viewingFileName, setViewingFileName] = useState('');
     const [fileLoading, setFileLoading] = useState(false);
+    const [currentPath, setCurrentPath] = useState('/');
     const [pathInput, setPathInput] = useState('/');
     const [filterText, setFilterText] = useState('');
-    const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
     const [uploading, setUploading] = useState(false);
     const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
-    const [treeHeight, setTreeHeight] = useState(400);
     const [bookmarks, setBookmarks] = useState<string[]>([]);
-    const treeContainerRef = useRef<HTMLDivElement>(null);
-    // 节点索引 Map，key -> node 引用
-    const nodeMapRef = useRef<Map<string, ExtTreeNode>>(new Map());
-    // 存储每个路径对应的 entries 用于过滤
-    const entriesMapRef = useRef<Map<string, FileEntry[]>>(new Map());
-    const refreshPathRef = useRef<(path: string) => Promise<void>>();
+    const [pathPending, setPathPending] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const deferredFilterText = useDeferredValue(filterText);
 
     const handleView = useCallback((entry: FileEntry) => {
         if (!selectedDevice) return;
         setFileLoading(true);
         setViewingFileName(entry.name);
         setFileContent(null);
-        ReadFileContent(selectedDevice.id, entry.fullPath).then(result => {
+
+        ReadFileContent(selectedDevice.id, entry.fullPath).then((result: any) => {
             if (result.error) {
                 message.error(`读取失败: ${result.error}`);
                 return;
             }
             setFileContent(result.res);
-        }).catch(e => {
+        }).catch((e: any) => {
             message.error(`读取失败: ${e.message || e}`);
         }).finally(() => setFileLoading(false));
     }, [selectedDevice]);
 
+    const loadEntries = useCallback(async (path: string): Promise<FileEntry[]> => {
+        if (!selectedDevice) return [];
+
+        const normalized = normalizePath(path);
+        const result = await ListDirectory(selectedDevice.id, normalized);
+        if (result.error) {
+            message.error(`加载失败: ${result.error}`);
+            return [];
+        }
+        return parseLsOutput(result.res, normalized);
+    }, [selectedDevice]);
+
+    const openPath = useCallback(async (path: string) => {
+        const normalized = normalizePath(path);
+        setLoading(true);
+        setPathPending(normalized);
+        setCurrentPath(normalized);
+        setPathInput(normalized);
+        setFilterText('');
+
+        try {
+            const nextEntries = await loadEntries(normalized);
+            setEntries(nextEntries);
+        } finally {
+            setLoading(false);
+            setPathPending(null);
+        }
+    }, [loadEntries]);
+
+    const refreshCurrentPath = useCallback(async () => {
+        await openPath(currentPath);
+    }, [currentPath, openPath]);
+
     const handleDelete = useCallback((entry: FileEntry) => {
         if (!selectedDevice) return;
-        DeleteRemoteFile(selectedDevice.id, entry.fullPath).then(result => {
+
+        DeleteRemoteFile(selectedDevice.id, entry.fullPath).then((result: any) => {
             if (result.error) {
                 message.error(`删除失败: ${result.error}`);
                 return;
             }
             message.success(`已删除: ${entry.name}`);
-            const parentPath = entry.fullPath.substring(0, entry.fullPath.lastIndexOf('/')) || '/';
-            refreshPathRef.current?.(parentPath);
-        }).catch(e => message.error(`删除失败: ${e.message || e}`));
-    }, [selectedDevice]);
+            refreshCurrentPath();
+        }).catch((e: any) => message.error(`删除失败: ${e.message || e}`));
+    }, [refreshCurrentPath, selectedDevice]);
 
     const handleDownload = useCallback((entry: FileEntry) => {
         if (!selectedDevice) return;
-        DownloadFile(selectedDevice.id, entry.fullPath).then(result => {
+
+        DownloadFile(selectedDevice.id, entry.fullPath).then((result: any) => {
             if (result.error) {
                 if (result.error !== '已取消') message.error(`下载失败: ${result.error}`);
                 return;
             }
             message.success(`下载完成: ${entry.name}`);
-        }).catch(e => message.error(`下载失败: ${e.message || e}`));
+        }).catch((e: any) => message.error(`下载失败: ${e.message || e}`));
     }, [selectedDevice]);
 
-    const loadEntries = useCallback(async (path: string): Promise<FileEntry[]> => {
-        if (!selectedDevice) return [];
-        const result = await ListDirectory(selectedDevice.id, path);
-        if (result.error) {
-            message.error(`加载失败: ${result.error}`);
-            return [];
+    const handleOpenDirectory = useCallback(async (entry: FileEntry) => {
+        if (!entry.isDirectory) {
+            handleView(entry);
+            return;
         }
-        const entries = parseLsOutput(result.res, path);
-        entriesMapRef.current.set(path, entries);
-        return entries;
-    }, [selectedDevice]);
+
+        setLoadingKeys(prev => new Set(prev).add(entry.fullPath));
+        try {
+            await openPath(entry.fullPath);
+        } finally {
+            setLoadingKeys(prev => {
+                const next = new Set(prev);
+                next.delete(entry.fullPath);
+                return next;
+            });
+        }
+    }, [handleView, openPath]);
 
     const toggleBookmark = useCallback((path: string) => {
         if (path === '/') return;
+
         setBookmarks(prev => {
             const next = prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path];
             SetBookmarkPaths(next);
@@ -188,223 +265,24 @@ function FileManager() {
         });
     }, []);
 
-    // titleRender：按需渲染每个节点的标题，避免存储大量 JSX
-    const titleRender = useCallback((nodeData: any) => {
-        const entry = nodeData._entry as FileEntry | undefined;
-        if (!entry) return nodeData.title;
-
-        const isNodeLoading = loadingKeys.has(entry.fullPath);
-        const isFav = entry.isDirectory && bookmarks.includes(entry.fullPath);
-
-        return (
-            <div className="flex items-center gap-2 group py-0.5 w-full min-w-0">
-                <span className="truncate text-gray-800 text-sm">{entry.name}</span>
-                {isNodeLoading && <LoadingOutlined className="text-blue-400 text-xs"/>}
-                <span className="text-gray-400 text-xs font-mono flex-shrink-0">{entry.size}</span>
-                <span className="text-gray-300 text-xs font-mono flex-shrink-0">{entry.permissions}</span>
-                <span className="text-gray-300 text-xs flex-shrink-0">{entry.date}</span>
-                {/* 操作按钮，hover 时显示 */}
-                <span className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0 flex-shrink-0 ml-auto"
-                      onClick={e => e.stopPropagation()}>
-                    {entry.isDirectory && (
-                        <Tooltip title={isFav ? '取消收藏' : '收藏路径'}>
-                            <Button type="text" size="small"
-                                    icon={isFav ? <StarFilled className="!text-yellow-400"/> : <StarOutlined/>}
-                                    onClick={() => toggleBookmark(entry.fullPath)}
-                                    className="!text-gray-400 hover:!text-yellow-500"/>
-                        </Tooltip>
-                    )}
-                    {!entry.isDirectory && (
-                        <Tooltip title="查看">
-                            <Button type="text" size="small" icon={<EyeOutlined/>}
-                                    onClick={() => handleView(entry)}
-                                    className="!text-gray-400 hover:!text-blue-500"/>
-                        </Tooltip>
-                    )}
-                    <Tooltip title="下载">
-                        <Button type="text" size="small" icon={<DownloadOutlined/>}
-                                onClick={() => handleDownload(entry)}
-                                className="!text-gray-400 hover:!text-green-500"/>
-                    </Tooltip>
-                    <Popconfirm
-                        title="确认删除"
-                        description={`确定要删除 ${entry.name} 吗？`}
-                        onConfirm={() => handleDelete(entry)}
-                        okText="删除"
-                        cancelText="取消"
-                        okButtonProps={{danger: true}}
-                    >
-                        <Tooltip title="删除">
-                            <Button type="text" size="small" danger icon={<DeleteOutlined/>}
-                                    className="!text-gray-400 hover:!text-red-500"/>
-                        </Tooltip>
-                    </Popconfirm>
-                </span>
-            </div>
-        );
-    }, [handleView, handleDelete, handleDownload, loadingKeys, bookmarks, toggleBookmark]);
-
-    // 加载根目录（重置展开状态）
-    const loadRoot = useCallback(async (rootPath: string = '/') => {
-        setLoading(true);
-        entriesMapRef.current.clear();
-        nodeMapRef.current.clear();
-        try {
-            const entries = await loadEntries(rootPath);
-            const nodes = entriesToTreeData(entries);
-            registerNodes(nodes, nodeMapRef.current);
-            setTreeData(nodes);
-            setExpandedKeys([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [loadEntries]);
-
-    // 刷新当前树（保留展开状态）
-    const refreshTree = useCallback(async (rootPath: string = '/') => {
-        setLoading(true);
-        entriesMapRef.current.clear();
-        nodeMapRef.current.clear();
-        try {
-            const entries = await loadEntries(rootPath);
-            const nodes = entriesToTreeData(entries);
-            registerNodes(nodes, nodeMapRef.current);
-            setTreeData(nodes);
-            // 保留 expandedKeys，已展开的目录会通过 loadData 自动重新加载
-        } finally {
-            setLoading(false);
-        }
-    }, [loadEntries]);
-
-    // 刷新指定路径
-    const refreshPath = useCallback(async (path: string) => {
-        const entries = await loadEntries(path);
-        const newChildren = entriesToTreeData(entries);
-        registerNodes(newChildren, nodeMapRef.current);
-
-        if (path === '/' || path === pathInput) {
-            setTreeData(newChildren);
+    useEffect(() => {
+        if (!selectedDevice) {
+            setEntries([]);
+            setCurrentPath('/');
+            setPathInput('/');
             return;
         }
 
-        // 通过 nodeMap 直接找到父节点并更新
-        const parentNode = nodeMapRef.current.get(path);
-        if (parentNode) {
-            parentNode.children = newChildren;
-            setTreeData(prev => [...prev]); // 触发重渲染
-        } else {
-            // 回退到递归方式
-            const updateChildren = (nodes: ExtTreeNode[]): ExtTreeNode[] => {
-                return nodes.map(node => {
-                    if (node.key === path) return {...node, children: newChildren};
-                    if (node.children) return {...node, children: updateChildren(node.children as ExtTreeNode[])};
-                    return node;
-                });
-            };
-            setTreeData(prev => updateChildren(prev));
-        }
-    }, [loadEntries, pathInput]);
-    refreshPathRef.current = refreshPath;
+        openPath('/');
+    }, [openPath, selectedDevice?.id]);
 
     useEffect(() => {
-        if (selectedDevice) {
-            loadRoot('/');
-            setPathInput('/');
-        }
-    }, [selectedDevice?.id]);
-
-    // 监听树容器高度变化，驱动虚拟滚动
-    useEffect(() => {
-        const el = treeContainerRef.current;
-        if (!el) return;
-        const ro = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                setTreeHeight(Math.floor(entry.contentRect.height));
-            }
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
-
-    // 加载收藏路径
-    useEffect(() => {
-        GetBookmarkPaths().then(paths => setBookmarks(paths || []));
-    }, []);
-
-    const bookmarkMenuItems: MenuProps['items'] = bookmarks.length > 0
-        ? bookmarks.map((p, i) => ({
-            key: i,
-            label: (
-                <div className="flex items-center justify-between gap-3 min-w-[200px]">
-                    <span className="font-mono text-sm truncate">{p}</span>
-                    <Tooltip title="取消收藏">
-                        <DeleteOutlined
-                            className="text-gray-400 hover:text-red-500 flex-shrink-0"
-                            onClick={e => { e.stopPropagation(); toggleBookmark(p); }}
-                        />
-                    </Tooltip>
-                </div>
-            ),
-            onClick: () => { setPathInput(p); loadRoot(p); },
-        }))
-        : [{key: 'empty', label: <span className="text-gray-400 text-sm">暂无收藏路径</span>, disabled: true}];
-
-    // 懒加载子目录
-    const onLoadData = useCallback(async (treeNode: any) => {
-        const entry = treeNode._entry as FileEntry | undefined;
-        if (!entry || treeNode.children) return;
-
-        const key = entry.fullPath;
-        setLoadingKeys(prev => new Set(prev).add(key));
-
-        try {
-            const entries = await loadEntries(key);
-            const children = entriesToTreeData(entries);
-            registerNodes(children, nodeMapRef.current);
-
-            // 通过 nodeMap O(1) 找到目标节点
-            const targetNode = nodeMapRef.current.get(key);
-            if (targetNode) {
-                targetNode.children = children;
-                setTreeData(prev => [...prev]);
-            } else {
-                // 回退到递归
-                setTreeData(prev => {
-                    const updateTree = (nodes: ExtTreeNode[]): ExtTreeNode[] => {
-                        return nodes.map(node => {
-                            if (node.key === key) return {...node, children};
-                            if (node.children) return {...node, children: updateTree(node.children as ExtTreeNode[])};
-                            return node;
-                        });
-                    };
-                    return updateTree(prev);
-                });
-            }
-        } finally {
-            setLoadingKeys(prev => {
-                const next = new Set(prev);
-                next.delete(key);
-                return next;
-            });
-        }
-    }, [loadEntries]);
-
-    // 点击节点时，如果是文件夹则 toggle 展开/收起
-    const handleSelect = useCallback((_: React.Key[], info: any) => {
-        const entry = info.node?._entry as FileEntry | undefined;
-        if (!entry || !entry.isDirectory) return;
-        const key = entry.fullPath;
-        setExpandedKeys(prev =>
-            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-        );
+        GetBookmarkPaths().then((paths: string[] | null | undefined) => setBookmarks(paths || []));
     }, []);
 
     const handlePathSubmit = () => {
-        const trimmed = pathInput.trim();
-        if (!trimmed || !trimmed.startsWith('/')) return;
-        const normalized = trimmed.replace(/\/+/g, '/') || '/';
-        setPathInput(normalized);
-        loadRoot(normalized);
+        if (!selectedDevice) return;
+        openPath(pathInput);
     };
 
     const handleUpload = async () => {
@@ -412,16 +290,17 @@ function FileManager() {
             message.warning('请先连接设备');
             return;
         }
-        const dest = pathInput.trim() || '/sdcard/';
+
         setUploading(true);
         try {
-            const result = await UploadFile(selectedDevice.id, dest);
+            const result = await UploadFile(selectedDevice.id, currentPath);
             if (result.error) {
                 if (result.error !== '已取消') message.error(`上传失败: ${result.error}`);
                 return;
             }
+
             message.success('上传成功');
-            loadRoot(pathInput);
+            await refreshCurrentPath();
         } catch (e: any) {
             message.error(`上传失败: ${e.message || e}`);
         } finally {
@@ -429,128 +308,340 @@ function FileManager() {
         }
     };
 
-    // 过滤树节点
-    const filteredTreeData = useMemo(() => {
-        if (!filterText) return treeData;
-        const lower = filterText.toLowerCase();
+    const filteredEntries = useMemo(() => {
+        if (!deferredFilterText.trim()) return entries;
+        const lower = deferredFilterText.toLowerCase();
+        return entries.filter(entry => entry.name.toLowerCase().includes(lower));
+    }, [deferredFilterText, entries]);
 
-        const filterNodes = (nodes: ExtTreeNode[]): ExtTreeNode[] => {
-            const result: ExtTreeNode[] = [];
-            for (const node of nodes) {
-                const entry = node._entry;
-                const nameMatch = entry?.name.toLowerCase().includes(lower);
-                const filteredChildren = node.children ? filterNodes(node.children as ExtTreeNode[]) : [];
+    const breadcrumbItems = useMemo(() => buildBreadcrumbItems(currentPath), [currentPath]);
 
-                if (nameMatch || filteredChildren.length > 0) {
-                    result.push({
-                        ...node,
-                        children: filteredChildren.length > 0 ? filteredChildren : node.children,
-                    });
-                }
-            }
-            return result;
-        };
+    const bookmarkMenuItems: MenuProps['items'] = bookmarks.length > 0
+        ? bookmarks.map((path, index) => ({
+            key: `${index}-${path}`,
+            label: (
+                <div className="flex items-center justify-between gap-3 min-w-[220px]">
+                    <span className="truncate font-mono text-sm">{path}</span>
+                    <Tooltip title="取消收藏">
+                        <DeleteOutlined
+                            className="flex-shrink-0 text-gray-400 hover:text-red-500"
+                            onClick={event => {
+                                event.stopPropagation();
+                                toggleBookmark(path);
+                            }}
+                        />
+                    </Tooltip>
+                </div>
+            ),
+            onClick: () => openPath(path),
+        }))
+        : [{key: 'empty', label: <span className="text-sm text-gray-400">暂无收藏路径</span>, disabled: true}];
 
-        return filterNodes(treeData);
-    }, [treeData, filterText]);
+    const buildEntryContextMenu = useCallback((entry: FileEntry): NonNullable<MenuProps['items']> => {
+        const isFav = entry.isDirectory && bookmarks.includes(entry.fullPath);
+
+        const items: NonNullable<MenuProps['items']> = [];
+        if (entry.isDirectory) {
+            items.push({
+                key: 'bookmark',
+                label: isFav ? '取消收藏' : '收藏路径',
+                icon: isFav ? <StarFilled /> : <StarOutlined />,
+                onClick: () => toggleBookmark(entry.fullPath),
+            });
+        }
+        if (!entry.isDirectory) {
+            items.push({
+                key: 'view',
+                label: '查看',
+                icon: <EyeOutlined />,
+                onClick: () => handleView(entry),
+            });
+        }
+        items.push({
+            key: 'download',
+            label: '下载',
+            icon: <DownloadOutlined />,
+            onClick: () => handleDownload(entry),
+        });
+        items.push({
+            key: 'delete',
+            label: <span className="text-red-500">删除</span>,
+            icon: <DeleteOutlined className="!text-red-500" />,
+            onClick: () => {
+                Modal.confirm({
+                    title: '确认删除',
+                    content: `确定要删除 ${entry.name} 吗？`,
+                    okText: '删除',
+                    cancelText: '取消',
+                    okButtonProps: {danger: true},
+                    onOk: async () => handleDelete(entry),
+                });
+            },
+        });
+
+        return items;
+    }, [bookmarks, handleDelete, handleDownload, handleView, toggleBookmark]);
+
+    const showParentShortcut = currentPath !== '/' && !deferredFilterText.trim();
 
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50">
-            {/* 顶部工具栏 */}
-            <div className="flex flex-col gap-3 px-4 py-4 bg-white border-b border-gray-200 flex-shrink-0">
-                {/* 第一行：标题 + 路径 + 按钮组 */}
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <i className="fa-solid fa-folder-open text-yellow-500 text-lg"/>
-                        <span className="font-medium text-gray-800 text-base">文件管理</span>
+        <div className="flex h-full flex-1 flex-col overflow-hidden bg-slate-50">
+            <div className="flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-4 py-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                    <div className="flex items-center gap-2 xl:min-w-[120px]">
+                        <i className="fa-solid fa-folder-open text-lg text-amber-500"/>
+                        <span className="text-base font-medium text-slate-800">文件管理</span>
                     </div>
+
                     <Input
                         size="middle"
                         value={pathInput}
                         onChange={e => setPathInput(e.target.value)}
                         onPressEnter={handlePathSubmit}
                         placeholder="输入路径跳转，如 /sdcard/Download"
-                        suffix={
-                            <EnterOutlined
-                                className="text-gray-400 cursor-pointer hover:text-blue-500"
-                                onClick={handlePathSubmit}
-                            />
-                        }
                         className="flex-1"
                         style={{fontFamily: 'monospace'}}
                     />
-                    <div className="flex items-center gap-1 flex-shrink-0">
+
+                    <div className="flex flex-wrap items-center gap-2">
                         <Dropdown menu={{items: bookmarkMenuItems}} trigger={['click']}>
-                            <Tooltip title="收藏夹">
-                                <Button size="middle" icon={<StarOutlined/>}>
-                                    收藏
-                                </Button>
-                            </Tooltip>
+                            <Button size="middle" icon={<StarOutlined/>}>
+                                收藏
+                            </Button>
                         </Dropdown>
                         <Button
-                            icon={<UploadOutlined/>}
                             size="middle"
+                            icon={<FolderOpenOutlined/>}
+                            onClick={handlePathSubmit}
+                        >
+                            打开
+                        </Button>
+                        <Button
+                            size="middle"
+                            icon={<UploadOutlined/>}
                             onClick={handleUpload}
                             loading={uploading}
                         >
                             上传
                         </Button>
                         <Button
-                            icon={<ReloadOutlined/>}
                             size="middle"
-                            onClick={() => refreshTree(pathInput)}
+                            icon={<ReloadOutlined/>}
+                            onClick={refreshCurrentPath}
                             loading={loading}
                         >
                             刷新
                         </Button>
                     </div>
                 </div>
-                {/* 第二行：过滤 */}
-                <div className="flex items-center">
-                    <Input
-                        size="middle"
-                        placeholder="过滤文件名..."
-                        value={filterText}
-                        onChange={e => setFilterText(e.target.value)}
-                        allowClear
-                        prefix={<i className="fa-solid fa-filter text-gray-400"/>}
-                    />
+
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex min-w-0 items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        {breadcrumbItems.map((item, index) => {
+                            const isLast = index === breadcrumbItems.length - 1;
+                            const isRoot = item.path === '/';
+                            const isPending = pathPending === item.path;
+
+                            return (
+                                <div key={item.path} className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => openPath(item.path)}
+                                        className={`shrink-0 rounded-md px-2 py-1 text-sm transition ${
+                                            isLast
+                                                ? 'bg-slate-900 text-white'
+                                                : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <span className="flex min-w-[2.5rem] items-center justify-center gap-1.5">
+                                            <span className="flex h-3.5 w-3.5 items-center justify-center">
+                                                {isPending ? (
+                                                    <LoadingOutlined className="text-xs" />
+                                                ) : isRoot ? (
+                                                    <i className="fa-solid fa-house text-[11px]" />
+                                                ) : null}
+                                            </span>
+                                            <span className={`${isRoot ? 'w-0 overflow-hidden' : ''}`}>
+                                                {isRoot ? '/' : item.label}
+                                            </span>
+                                        </span>
+                                    </button>
+                                    {!isLast && <span className="text-xs text-slate-400">/</span>}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Segmented<'grid' | 'list'>
+                            value={viewMode}
+                            onChange={value => {
+                                startTransition(() => {
+                                    setViewMode(value);
+                                });
+                            }}
+                            options={[
+                                {label: '图标', value: 'grid'},
+                                {label: '列表', value: 'list'},
+                            ]}
+                        />
+                        {currentPath !== '/' && (
+                            <Button onClick={() => openPath(getParentPath(currentPath))}>
+                                返回上一级
+                            </Button>
+                        )}
+                        <Input
+                            size="middle"
+                            placeholder="过滤文件名..."
+                            value={filterText}
+                            onChange={e => setFilterText(e.target.value)}
+                            allowClear
+                            prefix={<i className="fa-solid fa-filter text-gray-400"/>}
+                            className="w-full lg:w-72"
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* 文件树 */}
-            <div className="flex-1 overflow-hidden px-2 py-2" ref={treeContainerRef}>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
                 {!selectedDevice ? (
-                    <div className="flex items-center justify-center h-full">
+                    <div className="flex h-full items-center justify-center">
                         <Empty description="请先连接设备"/>
                     </div>
-                ) : loading && treeData.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
+                ) : loading && entries.length === 0 ? (
+                    <div className="flex h-full items-center justify-center">
                         <Spin tip="加载中..."/>
                     </div>
-                ) : filteredTreeData.length === 0 ? (
-                    <div className="flex items-center justify-center h-full">
+                ) : filteredEntries.length === 0 && !showParentShortcut ? (
+                    <div className="flex h-full items-center justify-center">
                         <Empty description={filterText ? '无匹配文件' : '目录为空'}/>
                     </div>
+                ) : viewMode === 'grid' ? (
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
+                        {showParentShortcut && (
+                            <button
+                                type="button"
+                                onClick={() => openPath(getParentPath(currentPath))}
+                                className="group flex flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center transition hover:bg-slate-100"
+                            >
+                                <div className="flex h-10 w-10 items-center justify-center text-[26px] text-slate-500">
+                                    {pathPending === getParentPath(currentPath)
+                                        ? <LoadingOutlined/>
+                                        : <i className="fa-solid fa-arrow-turn-up"/>}
+                                </div>
+                                <div className="line-clamp-2 break-all text-xs leading-4 text-slate-700">..</div>
+                            </button>
+                        )}
+
+                        {filteredEntries.map(entry => {
+                            const isBusy = loadingKeys.has(entry.fullPath);
+                            const isFav = entry.isDirectory && bookmarks.includes(entry.fullPath);
+
+                            return (
+                                <Dropdown
+                                    key={entry.fullPath}
+                                    trigger={['contextMenu']}
+                                    menu={{items: buildEntryContextMenu(entry)}}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => entry.isDirectory ? handleOpenDirectory(entry) : handleView(entry)}
+                                        className="group flex flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center transition hover:bg-slate-100"
+                                        title={entry.name}
+                                    >
+                                        <div
+                                            className={`relative flex h-10 w-10 shrink-0 items-center justify-center text-[28px] transition ${
+                                                entry.isDirectory
+                                                    ? 'text-amber-500'
+                                                    : 'text-sky-500'
+                                            }`}
+                                        >
+                                            <i className={`fa-solid ${entry.isDirectory ? 'fa-folder' : 'fa-file-lines'}`}/>
+                                            {isBusy && (
+                                                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] text-sky-500 shadow-sm">
+                                                    <LoadingOutlined />
+                                                </span>
+                                            )}
+                                            {isFav && (
+                                                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[9px] text-yellow-500 shadow-sm">
+                                                    <StarFilled />
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="w-full min-w-0">
+                                            <div className="line-clamp-2 break-all text-xs leading-4 text-slate-700">
+                                                {entry.name}
+                                            </div>
+                                        </div>
+                                    </button>
+                                </Dropdown>
+                            );
+                        })}
+                    </div>
                 ) : (
-                    <Tree
-                        showIcon
-                        blockNode
-                        virtual
-                        height={treeHeight}
-                        loadData={onLoadData}
-                        treeData={filteredTreeData}
-                        expandedKeys={expandedKeys}
-                        onExpand={(keys) => setExpandedKeys(keys)}
-                        onSelect={handleSelect}
-                        titleRender={titleRender}
-                        className="file-tree"
-                        style={{background: 'transparent'}}
-                    />
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className="grid grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-500">
+                            <span>名称</span>
+                            <span>修改时间</span>
+                            <span>大小</span>
+                            <span>操作</span>
+                        </div>
+
+                        {showParentShortcut && (
+                            <button
+                                type="button"
+                                onClick={() => openPath(getParentPath(currentPath))}
+                                className="grid w-full grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50"
+                            >
+                                <span className="flex min-w-0 items-center gap-3">
+                                    <span className="flex h-8 w-8 items-center justify-center text-slate-500">
+                                        {pathPending === getParentPath(currentPath)
+                                            ? <LoadingOutlined />
+                                            : <i className="fa-solid fa-arrow-turn-up text-lg"/>}
+                                    </span>
+                                    <span className="truncate text-sm text-slate-800">..</span>
+                                </span>
+                                <span className="text-xs text-slate-400">-</span>
+                                <span className="text-xs text-slate-400">-</span>
+                                <span className="text-xs text-slate-400">返回上一级</span>
+                            </button>
+                        )}
+
+                        {filteredEntries.map(entry => {
+                            const isBusy = loadingKeys.has(entry.fullPath);
+                            const isFav = entry.isDirectory && bookmarks.includes(entry.fullPath);
+
+                            return (
+                                <Dropdown
+                                    key={entry.fullPath}
+                                    trigger={['contextMenu']}
+                                    menu={{items: buildEntryContextMenu(entry)}}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => entry.isDirectory ? handleOpenDirectory(entry) : handleView(entry)}
+                                        className="grid w-full grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-3 border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 last:border-b-0"
+                                    >
+                                        <span className="flex min-w-0 items-center gap-3">
+                                            <span className={`flex h-8 w-8 items-center justify-center text-lg ${entry.isDirectory ? 'text-amber-500' : 'text-sky-500'}`}>
+                                                <i className={`fa-solid ${entry.isDirectory ? 'fa-folder' : 'fa-file-lines'}`}/>
+                                            </span>
+                                            <span className="min-w-0 truncate text-sm text-slate-800">{entry.name}</span>
+                                            {isBusy && <LoadingOutlined className="text-xs text-sky-500" />}
+                                            {isFav && <StarFilled className="text-xs text-yellow-500" />}
+                                        </span>
+                                        <span className="truncate text-xs text-slate-500">{entry.date || '-'}</span>
+                                        <span className="truncate text-xs text-slate-500">{entry.isDirectory ? '-' : entry.size}</span>
+                                        <span className="text-xs text-slate-400">右键操作</span>
+                                    </button>
+                                </Dropdown>
+                            );
+                        })}
+                    </div>
                 )}
             </div>
 
-            {/* 文件内容查看 Modal */}
             <Modal
                 title={
                     <div className="flex items-center gap-2">
@@ -571,7 +662,7 @@ function FileManager() {
                         <Spin tip="读取中..."/>
                     </div>
                 ) : (
-                    <pre className="bg-gray-900 text-green-400 rounded-lg p-4 text-xs font-mono overflow-auto max-h-[60vh] whitespace-pre-wrap break-all">
+                    <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-all rounded-lg bg-gray-900 p-4 text-xs font-mono text-green-400">
                         {fileContent}
                     </pre>
                 )}
