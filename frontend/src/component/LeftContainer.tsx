@@ -60,75 +60,66 @@ function LeftContainer({selectedView, onViewChange}: {
     }
 
     const menuItems = [
-        {key: '1', icon: 'fa-rocket', label: '快捷功能', iconColor: 'text-amber-500'},
-        {key: '4', icon: 'fa-list', label: '应用列表', iconColor: 'text-purple-500'},
-        {key: '5', icon: 'fa-memory', label: '内存监控', iconColor: 'text-green-500'},
-        {key: '6', icon: 'fa-folder-open', label: '文件管理', iconColor: 'text-yellow-500'},
-        {key: '7', icon: 'fa-file-lines', label: '诊断日志', iconColor: 'text-rose-500'},
-        {key: '2', icon: 'fa-circle-question', label: '常见问题', iconColor: 'text-blue-500'},
-        {key: '3', icon: 'fa-gear', label: '设置', iconColor: 'text-gray-500'},
-
-        // {key: '3', icon: 'fa-terminal', label: 'Logcat', iconColor: 'text-green-500'},
-        // {key: '4', icon: 'fa-gear', label: '设置', iconColor: 'text-purple-500'},
+        {key: '1', label: '快捷功能'},
+        {key: '4', label: '应用列表'},
+        {key: '5', label: '内存监控'},
+        {key: '6', label: '文件管理'},
+        {key: '7', label: '诊断日志'},
+        {key: '2', label: '常见问题'},
+        {key: '3', label: '设置'},
     ];
 
     return (
-        <div className="flex w-60 flex-col h-full bg-white border-r border-gray-200 flex-shrink-0">
-            {/* 头部 */}
-            <div className="p-6 border-b border-gray-200">
+        <div className="flex h-full w-[248px] shrink-0 flex-col border-r border-[#E7ECF2] bg-white">
+            <div className="border-b border-gray-200 p-6">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                        <i className="fa-solid fa-mobile text-white text-lg"/>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500">
+                        <i className="fa-solid fa-mobile text-lg text-white"/>
                     </div>
-                    <div className="flex-1 min-w-0 relative" ref={dropdownRef}>
-                        {/* 设备选择器 */}
+                    <div className="relative min-w-0 flex-1" ref={dropdownRef}>
                         <button
                             onClick={() => devices.length > 0 && setIsDropdownOpen(!isDropdownOpen)}
                             disabled={devices.length === 0}
-                            className="w-full flex items-center justify-between gap-2 group"
+                            className="group flex w-full items-center justify-between gap-2"
                         >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
                                 <div
-                                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${devices.length > 0 ? 'bg-blue-500' : 'bg-gray-300'}`}/>
-                                <span className="text-xs text-gray-500 font-mono truncate">
+                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${devices.length > 0 ? 'bg-blue-500' : 'bg-gray-300'}`}/>
+                                <span className="truncate font-mono text-xs text-gray-500">
                                     {getDisplayText()}
                                 </span>
                             </div>
                             {devices.length > 1 && (
-                                <i className={`fa-solid fa-chevron-down text-xs text-gray-400 group-hover:text-gray-600 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}/>
+                                <i className={`fa-solid fa-chevron-down text-xs text-gray-400 transition-transform group-hover:text-gray-600 ${isDropdownOpen ? 'rotate-180' : ''}`}/>
                             )}
                         </button>
 
-                        {/* 下拉菜单 */}
                         {isDropdownOpen && (
-                            <div
-                                className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                            <div className="absolute left-0 right-0 top-full z-10 mt-2 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                                 {devices.map(device => {
-                                    const isChecked = selectedDevice === device
+                                    const isChecked = selectedDevice?.id === device.id
                                     return (
                                         <div
                                             key={device.id}
                                             onClick={() => toggleDevice(device)}
-                                            className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 cursor-pointer transition-colors"
+                                            className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50"
                                         >
-                                            {/* 自定义复选框 */}
                                             <div
-                                                className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-all ${
                                                     isChecked
-                                                        ? 'bg-blue-500 border-blue-500'
-                                                        : 'bg-white border-gray-300 hover:border-gray-400'
+                                                        ? 'border-blue-500 bg-blue-500'
+                                                        : 'border-gray-300 bg-white hover:border-gray-400'
                                                 }`}>
                                                 {isChecked && (
-                                                    <i className="fa-solid fa-check text-white text-xs"/>
+                                                    <i className="fa-solid fa-check text-xs text-white"/>
                                                 )}
                                             </div>
 
-                                            {/* 设备信息 */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-xs font-medium text-gray-900 truncate">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-xs font-medium text-gray-900">
                                                     {device.name}
                                                 </div>
-                                                <div className="text-xs text-gray-400 font-mono truncate">
+                                                <div className="truncate font-mono text-xs text-gray-400">
                                                     {device.id}
                                                 </div>
                                             </div>
@@ -141,32 +132,36 @@ function LeftContainer({selectedView, onViewChange}: {
                 </div>
             </div>
 
-            {/* 菜单 */}
-            <nav className="flex-1 px-4 py-6 overflow-y-auto">
-                {menuItems.map(item => (
-                    <button
-                        key={item.key}
-                        onClick={() => onViewChange(item.key)}
-                        className={`flex items-center justify-center
-                            w-full px-4 py-3 mb-2 rounded-lg
-                            text-left transition-all duration-150 cursor-pointer
-                            ${selectedView === item.key
-                            ? 'bg-gray-100'
-                            : 'hover:bg-gray-100'
-                        }`}>
-                        <i className={`fa-solid ${item.icon} w-5 text-base ${item.iconColor}`}/>
-                        <span
-                            className={`ml-3 text-base font-medium ${selectedView === item.key ? 'text-gray-900' : 'text-gray-700'}`}>
-                            {item.label}
-                        </span>
-                    </button>
-                ))}
+            <nav className="flex-1 overflow-y-auto px-5 py-6">
+                <div className="space-y-1">
+                    {menuItems.map((item) => {
+                        const isActive = selectedView === item.key
+                        return (
+                            <button
+                                type="button"
+                                key={item.key}
+                                onClick={() => onViewChange(item.key)}
+                                className={`relative flex h-12 w-full items-center rounded-[14px] px-5 text-left transition-colors ${
+                                    isActive
+                                        ? 'bg-[#F3F6FB] text-[#111827]'
+                                        : 'text-[#5D6878] hover:bg-[#F7F9FC]'
+                                }`}
+                            >
+                                {isActive && (
+                                    <span className="absolute left-[14px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[#2F6BFF]"/>
+                                )}
+                                <span className={`truncate pl-3 text-base ${isActive ? 'font-semibold' : 'font-medium'}`}>
+                                    {item.label}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
             </nav>
 
-            {/* 版本号 */}
             {version && (
-                <div className="px-4 py-3 border-t border-gray-200 text-center">
-                    <span className="text-xs text-gray-400 font-mono">{version}</span>
+                <div className="border-t border-gray-200 px-4 py-3 text-center">
+                    <span className="font-mono text-xs text-gray-400">{version}</span>
                 </div>
             )}
         </div>
