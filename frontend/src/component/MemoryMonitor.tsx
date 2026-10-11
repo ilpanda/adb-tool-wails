@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
-import {Button, Input, message, Select} from 'antd';
+import {Button, ConfigProvider, Input, message, Select} from 'antd';
 import {
     CloseOutlined,
     CopyOutlined,
@@ -9,7 +9,6 @@ import {
     ExportOutlined,
     PauseCircleOutlined,
     PlayCircleOutlined,
-    SettingOutlined,
 } from '@ant-design/icons';
 import {ExecuteAction, SaveFile, SaveFileAsCsv} from "../../wailsjs/go/main/App";
 import {useDeviceStore} from "../store/deviceStore";
@@ -41,16 +40,46 @@ interface MemoryRegion {
 }
 
 const MEMORY_REGIONS: MemoryRegion[] = [
-    {key: 'javaHeap', name: 'Java Heap', color: '#f97316'},
-    {key: 'nativeHeap', name: 'Native Heap', color: '#ef4444'},
-    {key: 'code', name: 'Code', color: '#8b5cf6'},
-    {key: 'stack', name: 'Stack', color: '#ec4899'},
-    {key: 'graphics', name: 'Graphics', color: '#6366f1'},
-    {key: 'privateOther', name: 'Private Other', color: '#14b8a6'},
-    {key: 'system', name: 'System', color: '#22c55e'},
-    {key: 'unknown', name: 'Unknown', color: '#64748b'},
-    {key: 'totalPss', name: 'Total PSS', color: '#eab308'},
+    {key: 'javaHeap', name: 'Java Heap', color: '#0070f3'},
+    {key: 'nativeHeap', name: 'Native Heap', color: '#e5484d'},
+    {key: 'code', name: 'Code', color: '#f5a623'},
+    {key: 'stack', name: 'Stack', color: '#eb367f'},
+    {key: 'graphics', name: 'Graphics', color: '#7928ca'},
+    {key: 'privateOther', name: 'Private Other', color: '#12a594'},
+    {key: 'system', name: 'System', color: '#46a758'},
+    {key: 'unknown', name: 'Unknown', color: '#a1a1a1'},
+    {key: 'totalPss', name: 'Total PSS', color: '#171717'},
 ];
+
+// 页面局部主题：近黑主色 + 细边框 + 6px 圆角
+const PAGE_THEME = {
+    token: {
+        colorPrimary: '#171717',
+        colorBorder: '#ebebeb',
+        colorText: '#171717',
+        colorTextPlaceholder: '#a1a1a1',
+        borderRadius: 6,
+        controlHeight: 34,
+        boxShadow: '0 2px 2px rgba(0,0,0,0.04), 0 8px 16px -4px rgba(0,0,0,0.08)',
+    },
+};
+
+const MONO = 'font-mono tabular-nums';
+
+const formatDuration = (ms: number): string => {
+    const seconds = Math.round(ms / 1000);
+    if (seconds < 60) return `${seconds} 秒`;
+    const minutes = seconds / 60;
+    if (minutes < 60) return `${Number.isInteger(minutes) ? minutes : minutes.toFixed(1)} 分钟`;
+    const hours = minutes / 60;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`;
+};
+
+const Eyebrow: React.FC<{ children: React.ReactNode }> = ({children}) => (
+    <div className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[#8f8f8f]">
+        {children}
+    </div>
+);
 
 const STORAGE_KEY_PROCESS_NAME = 'memory_monitor_process_name';
 
@@ -146,24 +175,22 @@ const SimpleTooltip: React.FC<{
     }
 
     return (
-        <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-lg text-sm pointer-events-none">
-            <p className="text-gray-800 font-semibold mb-2 pb-1 border-b border-gray-100">
-                {label}
-                <span className="text-xs text-gray-400 ml-2">点击圆点查看详情</span>
-            </p>
-            <div className="space-y-1">
+        <div
+            className="pointer-events-none min-w-[200px] rounded-xl border border-[#ebebeb] bg-white p-3 text-[13px]"
+            style={{boxShadow: PAGE_THEME.token.boxShadow}}
+        >
+            <div className="mb-2 flex items-baseline justify-between gap-4 border-b border-[#f2f2f2] pb-2">
+                <span className={`${MONO} font-medium text-[#171717]`}>{label}</span>
+                <span className="text-[11px] text-[#a1a1a1]">点击圆点查看详情</span>
+            </div>
+            <div className="space-y-1.5">
                 {payload.map((entry, index) => (
-                    <div key={index} className="flex items-center justify-between gap-4">
+                    <div key={index} className="flex items-center justify-between gap-6">
                         <div className="flex items-center gap-2">
-                            <span
-                                className="w-2 h-2 rounded-full"
-                                style={{backgroundColor: entry.color}}
-                            />
-                            <span className="text-gray-600">{entry.name}</span>
+                            <span className="h-2 w-2 rounded-full" style={{backgroundColor: entry.color}}/>
+                            <span className="text-[#4d4d4d]">{entry.name}</span>
                         </div>
-                        <span className="text-gray-800 font-mono font-medium">
-                            {formatMemory(entry.value)}
-                        </span>
+                        <span className={`${MONO} text-[#171717]`}>{formatMemory(entry.value)}</span>
                     </div>
                 ))}
             </div>
@@ -184,51 +211,39 @@ const DetailPanel: React.FC<DetailPanelProps> = ({dataPoint, visible, onClose, o
     if (!visible || !dataPoint) return null;
 
     return (
-        <div className="absolute top-4 right-4 w-80 bg-white border border-gray-200 rounded-xl shadow-xl z-50">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div
+            className="absolute right-4 top-14 z-50 w-80 rounded-xl border border-[#ebebeb] bg-white"
+            style={{boxShadow: PAGE_THEME.token.boxShadow}}
+        >
+            <div className="flex items-start justify-between border-b border-[#f2f2f2] px-4 py-3">
                 <div>
-                    <h3 className="font-semibold text-gray-800">内存详情</h3>
-                    <p className="text-sm text-gray-500">{dataPoint.time}</p>
+                    <Eyebrow>Snapshot</Eyebrow>
+                    <div className={`${MONO} mt-0.5 text-[15px] font-semibold text-[#171717]`}>{dataPoint.time}</div>
                 </div>
-                <Button
-                    type="text"
-                    size="small"
-                    icon={<CloseOutlined/>}
-                    onClick={onClose}
-                />
+                <Button type="text" size="small" icon={<CloseOutlined/>} onClick={onClose}/>
             </div>
 
-            <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
+            <div className="max-h-52 space-y-2 overflow-y-auto px-4 py-3">
                 {MEMORY_REGIONS.map((region) => (
-                    <div key={region.key} className="flex items-center justify-between">
+                    <div key={region.key} className="flex items-center justify-between text-[13px]">
                         <div className="flex items-center gap-2">
-                            <span
-                                className="w-3 h-3 rounded-full"
-                                style={{backgroundColor: region.color}}
-                            />
-                            <span className="text-gray-600 text-sm">{region.name}</span>
+                            <span className="h-2 w-2 rounded-full" style={{backgroundColor: region.color}}/>
+                            <span className={region.key === 'totalPss' ? 'font-medium text-[#171717]' : 'text-[#4d4d4d]'}>
+                                {region.name}
+                            </span>
                         </div>
-                        <span className="text-gray-800 font-mono font-medium text-sm">
+                        <span className={`${MONO} text-[#171717]`}>
                             {formatMemory(dataPoint[region.key] as number)}
                         </span>
                     </div>
                 ))}
             </div>
 
-            <div className="flex gap-2 p-4 border-t border-gray-100">
-                <Button
-                    icon={<CopyOutlined/>}
-                    onClick={() => onCopy(dataPoint)}
-                    className="flex-1"
-                >
+            <div className="flex gap-2 border-t border-[#f2f2f2] px-4 py-3">
+                <Button icon={<CopyOutlined/>} onClick={() => onCopy(dataPoint)} className="flex-1">
                     复制
                 </Button>
-                <Button
-                    type="primary"
-                    icon={<DownloadOutlined/>}
-                    onClick={() => onExport(dataPoint)}
-                    className="flex-1"
-                >
+                <Button type="primary" icon={<DownloadOutlined/>} onClick={() => onExport(dataPoint)} className="flex-1">
                     导出
                 </Button>
             </div>
@@ -462,253 +477,274 @@ const MemoryMonitor: React.FC = () => {
         [handleDotClick]
     );
 
+    const totalRegion = MEMORY_REGIONS.find((region) => region.key === 'totalPss')!;
+    const subRegions = MEMORY_REGIONS.filter((region) => region.key !== 'totalPss');
+    const regionValue = (key: keyof MemInfo): string => latestData[key as keyof MemoryDataPoint] !== undefined
+        ? formatMemory(latestData[key as keyof MemoryDataPoint] as number)
+        : '--';
+
     return (
-        <div className="flex-1 h-full overflow-y-auto bg-gray-50 text-gray-800 p-4">
-            <div className="max-w-7xl mx-auto">
-                {/* 头部 */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <span className="text-blue-600 text-xl">📊</span>
-                        </div>
+        <ConfigProvider theme={PAGE_THEME}>
+            <div className="h-full flex-1 overflow-y-auto bg-[#fafafa] px-8 py-7 text-left text-[#171717]">
+                <div className="mx-auto flex max-w-7xl flex-col gap-5">
+                    {/* 头部 */}
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-800">Android 内存监控</h1>
-                            <p className="text-gray-500 text-sm">实时采集应用内存各区域变化</p>
+                            <Eyebrow>Memory · dumpsys meminfo</Eyebrow>
+                            <h1 className="mt-1 text-[22px] font-semibold leading-7 tracking-[-0.4px] text-[#171717]">
+                                内存监控
+                            </h1>
+                            <p className="mt-1 text-[13px] text-[#8f8f8f]">实时采集应用内存各区域变化</p>
                         </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                        {!isRunning ? (
-                            <Button
-                                type="primary"
-                                icon={<PlayCircleOutlined/>}
-                                onClick={handleStart}
-                                style={{backgroundColor: '#22c55e', borderColor: '#22c55e'}}
-                            >
-                                开始
+                        <div className="flex items-center gap-2">
+                            {!isRunning ? (
+                                <Button type="primary" icon={<PlayCircleOutlined/>} onClick={handleStart}>
+                                    开始
+                                </Button>
+                            ) : (
+                                <Button danger icon={<PauseCircleOutlined/>} onClick={handleStop}>
+                                    暂停
+                                </Button>
+                            )}
+                            <Button icon={<DeleteOutlined/>} onClick={clearData}>
+                                清除
                             </Button>
-                        ) : (
                             <Button
-                                danger
-                                icon={<PauseCircleOutlined/>}
-                                onClick={handleStop}
+                                icon={<ExportOutlined/>}
+                                onClick={handleExportAll}
+                                disabled={isRunning || data.length === 0}
+                                title={isRunning ? '请先暂停采集' : '导出全部数据为 CSV'}
                             >
-                                暂停
+                                导出 CSV
                             </Button>
-                        )}
-                        <Button icon={<DeleteOutlined/>} onClick={clearData}>
-                            清除
-                        </Button>
-                        <Button
-                            icon={<ExportOutlined/>}
-                            onClick={handleExportAll}
-                            disabled={isRunning || data.length === 0}
-                            title={isRunning ? '请先暂停采集' : '导出全部数据为 CSV'}
-                        >
-                            导出 CSV
-                        </Button>
+                        </div>
                     </div>
-                </div>
 
-                {/* 设置面板 */}
-                <div className="bg-white rounded-xl p-4 mb-6 border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                        <SettingOutlined className="text-blue-500"/>
-                        <h3 className="font-semibold text-gray-700">采集设置</h3>
+                    {/* 设置面板 */}
+                    <div className="rounded-xl border border-[#ebebeb] bg-white p-5">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr_1fr]">
+                            <div>
+                                <label className="mb-1.5 block text-[13px] font-medium text-[#4d4d4d]">进程名</label>
+                                <Input
+                                    value={processName}
+                                    onChange={(e) => setProcessName(e.target.value)}
+                                    placeholder="com.example.app"
+                                    disabled={isRunning}
+                                    autoCapitalize="off"
+                                    autoCorrect="off"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    className="font-mono"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1.5 block text-[13px] font-medium text-[#4d4d4d]">采集间隔</label>
+                                <Select
+                                    value={intervalTime}
+                                    onChange={(value) => setIntervalTime(value)}
+                                    className="w-full"
+                                    disabled={isRunning}
+                                    options={[
+                                        {value: 1000, label: '1秒'},
+                                        {value: 2000, label: '2秒'},
+                                        {value: 5000, label: '5秒'},
+                                    ]}
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1.5 flex items-baseline justify-between text-[13px] font-medium text-[#4d4d4d]">
+                                    <span>数据点数</span>
+                                    <span className="text-[12px] font-normal text-[#a1a1a1]">
+                                        监控时长 ≈ {formatDuration(maxDataPoints * intervalTime)}
+                                    </span>
+                                </label>
+                                <Select
+                                    value={maxDataPoints}
+                                    disabled={isRunning}
+                                    onChange={(value) => setMaxDataPoints(value)}
+                                    className="w-full"
+                                    options={[
+                                        {value: 30, label: '30 点'},
+                                        {value: 60, label: '60 点'},
+                                        {value: 120, label: '120 点'},
+                                        {value: 300, label: '300 点'},
+                                        {value: 900, label: '900 点'},
+                                    ]}
+                                />
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-sm text-gray-500 mb-1">进程名</label>
-                            <Input
-                                value={processName}
-                                onChange={(e) => setProcessName(e.target.value)}
-                                placeholder="com.example.app"
-                                disabled={isRunning}
-                                autoCapitalize="off"
-                                autoCorrect="off"
-                                autoComplete="off"
-                                spellCheck={false}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm text-gray-500 mb-1">采集间隔</label>
-                            <Select
-                                value={intervalTime}
-                                onChange={(value) => setIntervalTime(value)}
-                                className="w-full"
-                                disabled={isRunning}
-                                options={[
-                                    {value: 1000, label: '1秒'},
-                                    {value: 2000, label: '2秒'},
-                                    {value: 5000, label: '5秒'},
-                                ]}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm text-gray-500 mb-1">采集数据个数（数据点数 × 采集间隔 = 监控时长）</label>
-                            <Select
-                                value={maxDataPoints}
-                                disabled={isRunning}
-                                onChange={(value) => setMaxDataPoints(value)}
-                                className="w-full"
-                                options={[
-                                    {value: 30, label: '30 点'},
-                                    {value: 60, label: '60 点'},
-                                    {value: 120, label: '120 点'},
-                                    {value: 300, label: '300 点'},
-                                    {value: 900, label: '900 点'},
-                                ]}
-                            />
-                        </div>
-                    </div>
-                </div>
 
-                {/* 当前内存状态卡片 */}
-                <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 mb-6">
-                    {MEMORY_REGIONS.map((region) => (
+                    {/* 当前内存状态：点击切换曲线显示 */}
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(220px,1fr)_3fr]">
                         <button
-                            key={region.key}
-                            onClick={() => toggleRegion(region.key)}
-                            className={`p-3 rounded-xl transition-all bg-white border-2 shadow-sm hover:shadow-md ${
-                                visibleRegions[region.key] ? 'opacity-100' : 'opacity-40'
+                            onClick={() => toggleRegion(totalRegion.key)}
+                            className={`flex flex-col justify-between rounded-xl border bg-white p-5 text-left transition-all hover:border-[#d4d4d4] ${
+                                visibleRegions[totalRegion.key] ? 'border-[#ebebeb]' : 'border-dashed border-[#ebebeb] opacity-45'
                             }`}
-                            style={{
-                                borderColor: visibleRegions[region.key] ? region.color : '#e5e7eb',
-                            }}
                         >
-                            <div
-                                className="w-3 h-3 rounded-full mb-2"
-                                style={{backgroundColor: region.color}}
-                            />
-                            <div className="text-xs text-gray-500 truncate">{region.name}</div>
-                            <div className="text-sm font-semibold text-gray-800 truncate">
-                                {latestData[region.key as keyof MemoryDataPoint] !== undefined
-                                    ? formatMemory(latestData[region.key as keyof MemoryDataPoint] as number)
-                                    : '--'}
+                            <div className="flex items-center justify-between">
+                                <Eyebrow>{totalRegion.name}</Eyebrow>
+                                <span
+                                    className="h-2 w-2 rounded-full"
+                                    style={{backgroundColor: visibleRegions[totalRegion.key] ? totalRegion.color : 'transparent', boxShadow: `inset 0 0 0 1.5px ${totalRegion.color}`}}
+                                />
+                            </div>
+                            <div className={`${MONO} mt-4 text-[32px] font-semibold leading-10 tracking-[-1px] text-[#171717]`}>
+                                {regionValue(totalRegion.key)}
+                            </div>
+                            <div className="mt-1 truncate font-mono text-[12px] text-[#a1a1a1]">
+                                {processName || '<package>'}
                             </div>
                         </button>
-                    ))}
-                </div>
 
-                {/* 图表区域 */}
-                <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm relative">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-blue-500 text-lg">📈</span>
-                            <h2 className="text-lg font-semibold text-gray-700">内存变化趋势</h2>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <span
-                                className={`w-2 h-2 rounded-full ${
-                                    isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-                                }`}
-                            />
-                            <span>{isRunning ? '采集中...' : '已暂停'}</span>
-                            <span className="ml-2 text-gray-400">
-                                {data.length}/{maxDataPoints}
-                            </span>
-                            {!autoScroll && data.length > viewWindow && (
-                                <span className="ml-2 text-orange-500 text-xs">
-                                    (查看历史)
-                                </span>
-                            )}
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {subRegions.map((region) => (
+                                <button
+                                    key={region.key}
+                                    onClick={() => toggleRegion(region.key)}
+                                    className={`rounded-xl border bg-white px-4 py-3 text-left transition-all hover:border-[#d4d4d4] ${
+                                        visibleRegions[region.key] ? 'border-[#ebebeb]' : 'border-dashed border-[#ebebeb] opacity-45'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className="h-2 w-2 shrink-0 rounded-full"
+                                            style={{backgroundColor: visibleRegions[region.key] ? region.color : 'transparent', boxShadow: `inset 0 0 0 1.5px ${region.color}`}}
+                                        />
+                                        <span className="truncate text-[12px] text-[#8f8f8f]">{region.name}</span>
+                                    </div>
+                                    <div className={`${MONO} mt-1.5 truncate text-[17px] font-semibold text-[#171717]`}>
+                                        {regionValue(region.key)}
+                                    </div>
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* 详情面板 */}
-                    <DetailPanel
-                        dataPoint={selectedDataPoint}
-                        visible={showDetailPanel}
-                        onClose={() => setShowDetailPanel(false)}
-                        onExport={handleExportDataPoint}
-                        onCopy={handleCopyDataPoint}
-                    />
+                    {/* 图表区域 */}
+                    <div className="relative rounded-xl border border-[#ebebeb] bg-white">
+                        <div className="flex items-center justify-between border-b border-[#f2f2f2] px-5 py-3.5">
+                            <div>
+                                <Eyebrow>Trend</Eyebrow>
+                                <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-[#171717]">内存变化趋势</h2>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!autoScroll && data.length > viewWindow && (
+                                    <span className="rounded-full bg-[#ffefcf] px-2.5 py-0.5 text-[12px] text-[#ab570a]">
+                                        查看历史
+                                    </span>
+                                )}
+                                <span className="flex items-center gap-1.5 rounded-full border border-[#ebebeb] px-2.5 py-0.5 text-[12px] text-[#4d4d4d]">
+                                    <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'animate-pulse bg-[#0070f3]' : 'bg-[#a1a1a1]'}`}/>
+                                    {isRunning ? '采集中' : '已暂停'}
+                                </span>
+                                <span className={`${MONO} rounded-full border border-[#ebebeb] px-2.5 py-0.5 text-[12px] text-[#4d4d4d]`}>
+                                    {data.length} / {maxDataPoints}
+                                </span>
+                            </div>
+                        </div>
 
-                    <div className="h-80">
-                        {data.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={displayData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb"/>
-                                    <XAxis
-                                        dataKey="time"
-                                        stroke="#9ca3af"
-                                        tick={{fontSize: 12}}
-                                        interval="preserveStartEnd"
-                                    />
-                                    <YAxis
-                                        stroke="#9ca3af"
-                                        tick={{fontSize: 12}}
-                                        tickFormatter={(value: number) => formatMemory(value)}
-                                    />
-                                    <Tooltip content={<SimpleTooltip/>}/>
-                                    <Legend/>
-                                    {MEMORY_REGIONS.map(
-                                        (region) =>
-                                            visibleRegions[region.key] && (
-                                                <Line
-                                                    key={region.key}
-                                                    type="monotone"
-                                                    dataKey={region.key}
-                                                    name={region.name}
-                                                    stroke={region.color}
-                                                    strokeWidth={2}
-                                                    dot={false}
-                                                    activeDot={createActiveDot(region.color)}
-                                                    isAnimationActive={false}
-                                                />
-                                            )
-                                    )}
-                                </LineChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-gray-400">
-                                <div className="text-center">
-                                    <div className="text-5xl mb-3 opacity-50">💾</div>
-                                    <p>点击"开始"按钮开始采集内存数据</p>
-                                    <p className="text-sm mt-2 font-mono bg-gray-100 px-3 py-1 rounded inline-block text-gray-600">
+                        {/* 详情面板 */}
+                        <DetailPanel
+                            dataPoint={selectedDataPoint}
+                            visible={showDetailPanel}
+                            onClose={() => setShowDetailPanel(false)}
+                            onExport={handleExportDataPoint}
+                            onCopy={handleCopyDataPoint}
+                        />
+
+                        <div className="h-80 px-3 pb-2 pt-4">
+                            {data.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={displayData} margin={{top: 8, right: 28, left: 8, bottom: 0}}>
+                                        <CartesianGrid stroke="#f2f2f2" vertical={false}/>
+                                        <XAxis
+                                            dataKey="time"
+                                            stroke="#ebebeb"
+                                            tick={{fontSize: 11, fill: '#8f8f8f', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}
+                                            tickLine={false}
+                                            interval="preserveStartEnd"
+                                        />
+                                        <YAxis
+                                            stroke="#ebebeb"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            width={80}
+                                            tick={{fontSize: 11, fill: '#8f8f8f', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}
+                                            tickFormatter={(value: number) => formatMemory(value)}
+                                        />
+                                        <Tooltip content={<SimpleTooltip/>} cursor={{stroke: '#d4d4d4', strokeDasharray: '3 3'}}/>
+                                        <Legend
+                                            iconType="circle"
+                                            iconSize={7}
+                                            wrapperStyle={{fontSize: 12, color: '#4d4d4d', paddingTop: 8}}
+                                        />
+                                        {MEMORY_REGIONS.map(
+                                            (region) =>
+                                                visibleRegions[region.key] && (
+                                                    <Line
+                                                        key={region.key}
+                                                        type="monotone"
+                                                        dataKey={region.key}
+                                                        name={region.name}
+                                                        stroke={region.color}
+                                                        strokeWidth={region.key === 'totalPss' ? 2.25 : 1.5}
+                                                        dot={false}
+                                                        activeDot={createActiveDot(region.color)}
+                                                        isAnimationActive={false}
+                                                    />
+                                                )
+                                        )}
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ebebeb] text-[#8f8f8f]">
+                                        <PlayCircleOutlined/>
+                                    </div>
+                                    <p className="text-[14px] text-[#4d4d4d]">点击「开始」采集内存数据</p>
+                                    <code className="rounded-md border border-[#ebebeb] bg-[#fafafa] px-3 py-1.5 font-mono text-[12px] text-[#4d4d4d]">
+                                        <span className="text-[#a1a1a1]">$ </span>
                                         adb shell dumpsys meminfo {processName || '<package>'}
-                                    </p>
+                                    </code>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 时间轴滚动条 */}
+                        {data.length > viewWindow && (
+                            <div className="px-5 pb-4">
+                                <div className="mb-1 flex items-center justify-between">
+                                    <span className={`${MONO} text-[11px] text-[#a1a1a1]`}>{data[0]?.time}</span>
+                                    <span className={`${MONO} text-[11px] text-[#a1a1a1]`}>{data[data.length - 1]?.time}</span>
+                                </div>
+                                <div
+                                    ref={scrollRef}
+                                    className="h-3 overflow-x-auto rounded-full bg-[#f2f2f2]"
+                                    onScroll={handleScroll}
+                                    style={{
+                                        scrollbarWidth: 'thin',
+                                        scrollbarColor: '#171717 #f2f2f2'
+                                    }}
+                                >
+                                    <div style={{width: scrollContentWidth, height: '1px'}}/>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* 时间轴滚动条 */}
-                    {data.length > viewWindow && (
-                        <div className="mt-4">
-                            <div className="flex items-center gap-3 px-2 mb-1">
-                                <span className="text-xs text-gray-400">
-                                    {data[0]?.time}
-                                </span>
-                                <span className="flex-1"/>
-                                <span className="text-xs text-gray-400">
-                                    {data[data.length - 1]?.time}
-                                </span>
-                            </div>
-                            <div
-                                ref={scrollRef}
-                                className="overflow-x-auto h-3 bg-gray-100 rounded"
-                                onScroll={handleScroll}
-                                style={{
-                                    scrollbarWidth: 'thin',
-                                    scrollbarColor: '#6366f1 #e5e7eb'
-                                }}
-                            >
-                                <div style={{width: scrollContentWidth, height: '1px'}}/>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* 底部说明 */}
-                <div className="mt-4 text-sm text-gray-400 text-center">
-                    <p>
-                        ℹ️ 数据通过 adb shell dumpsys meminfo 命令采集 | 点击上方内存区域卡片可显示/隐藏对应曲线 |
-                        悬浮图表后点击圆点可导出该时刻的完整数据 | 暂停后可导出全部数据为 CSV
-                    </p>
+                    {/* 底部说明 */}
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#8f8f8f]">
+                        <span>· 数据来源 <code className="font-mono text-[#4d4d4d]">dumpsys meminfo</code></span>
+                        <span>· 点击上方卡片显示 / 隐藏对应曲线</span>
+                        <span>· 悬浮图表后点击圆点可导出该时刻完整数据</span>
+                        <span>· 暂停后可导出全部数据为 CSV</span>
+                    </div>
                 </div>
             </div>
-        </div>
+        </ConfigProvider>
     );
 };
 

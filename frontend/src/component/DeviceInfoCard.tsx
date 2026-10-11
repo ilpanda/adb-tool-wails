@@ -80,11 +80,13 @@ const DeviceInfoCard: React.FC<DeviceInfoCardProps> = ({ infoString, loading = f
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-4">
                         {deviceInfoItems.map((item, index) => (
-                            <div key={index} className="grid grid-cols-[auto_1fr] gap-x-2">
+                            <div key={index} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 min-w-0">
                                 <span className="text-gray-400 text-[13px] whitespace-nowrap">
                                     {item.label}:
                                 </span>
-                                <span className={`text-[13px] break-words ${item.value === '--' ? 'text-gray-300' : 'text-gray-700'}`}>
+                                <span
+                                    title={item.value}
+                                    className={`text-[13px] truncate ${item.value === '--' ? 'text-gray-300' : 'text-gray-700'}`}>
                                     {item.value}
                                 </span>
                             </div>
