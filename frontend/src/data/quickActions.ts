@@ -46,6 +46,7 @@ export type ActionType =
     | 'toggle-layout-bounds'
     | 'dump-thread'
     | 'dump-show-map'
+    | 'thread-sched'
     ;
 
 
@@ -90,6 +91,7 @@ export const quickActions: QuickActionSection[] = [
             { icon: 'fa-table-list', label: '导出 showmap', color: 'text-yellow-600', bgColor: 'bg-yellow-50', action: 'dump-show-map' },
             { icon: 'fa-chart-pie', label: '导出 hprof', color: 'text-violet-600', bgColor: 'bg-violet-50', action: 'dump-hprof' },
             { icon: 'fa-layer-group', label: '导出线程信息', color: 'text-lime-600', bgColor: 'bg-lime-50', action: 'dump-thread' },
+            { icon: 'fa-microchip', label: '线程优先级与核绑定', color: 'text-fuchsia-600', bgColor: 'bg-fuchsia-50', action: 'thread-sched' },
             { icon: 'fa-skull-crossbones', label: '杀死应用', color: 'text-gray-700', bgColor: 'bg-gray-100', action: 'force-stop' },
             { icon: 'fa-trash-alt', label: '清除数据', color: 'text-red-500', bgColor: 'bg-red-50', action: 'clear-data' },
             { icon: 'fa-broom', label: '清除数据并重启应用', color: 'text-pink-600', bgColor: 'bg-pink-50', action: 'clear-restart-app' },

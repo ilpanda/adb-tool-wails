@@ -6,6 +6,7 @@ import {Empty, Input, message, Select} from "antd";
 import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
 import DeviceInfoCard from './DeviceInfoCard';
+import ThreadSchedModal from './ThreadSchedModal';
 
 interface CommandLog {
     id: number;
@@ -36,6 +37,7 @@ function RightContainer() {
     const [properties, setProperties] = useState<SystemProperty[]>([]);
     const [searchText, setSearchText] = useState('');
     const [autoOpenTerminal, setAutoOpenTerminal] = useState(true);
+    const [threadSchedVisible, setThreadSchedVisible] = useState(false);
 
     const [selectedPackage, setSelectedPackage] = useState<string>('');
     const [packageList, setPackageList] = useState<string[]>([]);
@@ -100,6 +102,15 @@ function RightContainer() {
         if (adbPath.error) {
             message.error("请在设置项配置 adb 路径。")
             return
+        }
+
+        if (action.action === 'thread-sched') {
+            if (!selectedPackage) {
+                message.warning("请先选择应用包名");
+                return;
+            }
+            setThreadSchedVisible(true);
+            return;
         }
 
         if (autoOpenTerminal && !showTerminal) {
@@ -316,6 +327,13 @@ function RightContainer() {
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 properties={properties}
+            />
+
+            <ThreadSchedModal
+                visible={threadSchedVisible}
+                onClose={() => setThreadSchedVisible(false)}
+                packageName={selectedPackage}
+                deviceId={devices.length > 1 && selectedDevice ? selectedDevice.id.toString() : ""}
             />
 
             {/* 主内容区域 */}

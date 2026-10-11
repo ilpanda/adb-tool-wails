@@ -789,6 +789,15 @@ func (a *App) ListDirectory(deviceId string, path string) types.ExecResult {
 	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
 }
 
+// GetThreadSchedInfo 获取进程内所有线程的优先级与可运行核，pid <= 0 时取包名主进程
+func (a *App) GetThreadSchedInfo(deviceId string, packageName string, pid int) (adb.ThreadSchedResult, error) {
+	adbPath := a.adbPath
+	if adbPath == "" {
+		adbPath = "adb"
+	}
+	return adb.GetThreadSchedInfo(adbPath, deviceId, packageName, pid)
+}
+
 // ReadFileContent 读取设备文件内容
 func (a *App) ReadFileContent(deviceId string, path string) types.ExecResult {
 	param := a.buildParam(deviceId)
