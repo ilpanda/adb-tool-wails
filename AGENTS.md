@@ -61,6 +61,13 @@ Go `App` struct methods are bound to the frontend via Wails auto-generated bindi
 - New frontend work should follow the existing `Tailwind CSS + Ant Design` combination rather than introducing another UI framework or large custom styling system.
 - When adjusting UI, keep visual consistency with the existing Ant Design behaviors while using Tailwind utility classes for page composition and local styling.
 
+### UI Design Requirements
+
+- **Read [DESIGN.md](DESIGN.md) before creating or changing any UI**, including pages, dialogs, drawers, and shared components. It is the source of truth for the project's visual design.
+- Follow its color, typography, spacing, radius, border, and elevation tokens. Apply the app-control guidance (such as 6px button corners), and use its semantic error/warning colors for destructive actions and cautions.
+- Implement the design with the existing **Tailwind CSS + Ant Design** stack. Ant Design defaults are not a substitute for the design specification; use local theme tokens and Tailwind utilities to align the affected components.
+- Verify the rendered result against `DESIGN.md`, including text hierarchy, interaction states, and narrow-window layout. Preserve accessible focus and existing confirmation behavior.
+
 ### Aya DEX Version Coupling
 
 `AyaDexVersion` in `aya/client.go` **must match** `versionName` in `server/server/build.gradle`. A mismatch triggers a server restart on the device. When updating the Aya server, bump both values and `versionCode` in the Gradle file.

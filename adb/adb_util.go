@@ -465,35 +465,6 @@ func GetAllSystemProperties(param ExecuteParams) types.ExecResult {
 	return execCmd(cmd)
 }
 
-func InstallApp(param ExecuteParams) types.ExecResult {
-	filePath, err := runtime.OpenFileDialog(param.Ctxt, runtime.OpenDialogOptions{
-		Title: "选择 APK 文件",
-		Filters: []runtime.FileFilter{
-			{
-				DisplayName: "Android APK (*.apk)",
-				Pattern:     "*.apk",
-			},
-			{
-				DisplayName: "所有文件 (*.*)",
-				Pattern:     "*.*",
-			},
-		},
-	})
-
-	if err != nil {
-		return types.NewExecResultError("installApp", err)
-	}
-
-	if filePath == "" {
-		return types.NewExecResultErrorString("installApp", "用户取消安装")
-	}
-
-	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("install -d -t %s", filePath))
-	res := execCmd(cmd)
-
-	return res
-}
-
 func UninstallApp(param ExecuteParams) types.ExecResult {
 	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("uninstall %s", param.PackageName))
 	return execCmd(cmd)
@@ -1360,7 +1331,7 @@ func execCmds(cmds ...string) types.ExecResult {
 		result := execCmd(cmd)
 		allCmds = append(allCmds, cmd)
 		if result.Error != "" {
-			return types.NewExecResultFromError(strings.Join(allCmds, "\n"), result.Res, fmt.Errorf(result.Error))
+			return types.NewExecResultFromString(strings.Join(allCmds, "\n"), result.Res, result.Error)
 		}
 	}
 	finalCmd := strings.Join(allCmds, "\n")

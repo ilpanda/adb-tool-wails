@@ -7,10 +7,12 @@ import ApplicationList from "./ApplicationList";
 import MemoryMonitor from "./MemoryMonitor";
 import FileManager from "./FileManager";
 import LogViewer from "./LogViewer";
+import APKInstallConfirm from "./APKInstallConfirm";
 
 function RootContainer() {
     const [selectedView, setSelectedView] = useState('1');
     return (<div className="flex items-stretch h-screen w-screen ">
+        <APKInstallConfirm />
         <LeftContainer selectedView={selectedView} onViewChange={setSelectedView}/>
         {selectedView === '1' && <RightContainer />}
         {selectedView === '2' && <FAQContainer />}
