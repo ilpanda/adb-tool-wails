@@ -1,264 +1,267 @@
-import React, {useEffect, useState} from 'react';
-import {Switch} from 'antd';
+import {useEffect, useState} from 'react';
+import type {ReactNode} from 'react';
+import {Button, Input, Segmented, message as toast} from 'antd';
 import {
     CheckAdbPath,
     GetAdbPath,
-    GetAutoOpenTerminal,
-    SetAutoOpenTerminal,
+    GetTerminalOpenMode,
+    GetVersion,
+    OpenLogDirectory,
+    SetTerminalOpenMode,
     UpdateAdbPath
 } from "../../wailsjs/go/main/App";
+import PageHeader, {Eyebrow} from "./PageHeader";
+
+type Feedback = { type: 'success' | 'error'; title: string; detail?: string };
+type TerminalOpenMode = 'always' | 'error' | 'never';
+
+const TERMINAL_MODE_HINT: Record<TerminalOpenMode, string> = {
+    always: '每次执行后都展开底部执行记录',
+    error: '只在命令失败时展开，成功的结果通过提示和结果面板展示',
+    never: '不自动展开，可随时点击底部「执行记录」查看',
+};
+
+function SettingsSection({eyebrow, title, children}: { eyebrow: string; title: string; children: ReactNode }) {
+    return (
+        <section>
+            <div className="mb-2 px-1">
+                <Eyebrow>{eyebrow}</Eyebrow>
+                <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-ink">{title}</h2>
+            </div>
+            <div className="divide-y divide-hairline-soft rounded-xl border border-hairline bg-elevated shadow-whisper">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+function SettingsRow({label, description, control, children}: {
+    label: string;
+    description?: ReactNode;
+    control?: ReactNode;
+    children?: ReactNode;
+}) {
+    return (
+        <div className="px-5 py-4">
+            <div className="flex items-center justify-between gap-6">
+                <div className="min-w-0">
+                    <div className="text-[14px] font-medium text-ink">{label}</div>
+                    {description && <div className="mt-0.5 text-[13px] text-mute">{description}</div>}
+                </div>
+                {control && <div className="flex shrink-0 items-center gap-2">{control}</div>}
+            </div>
+            {children}
+        </div>
+    );
+}
 
 function SettingsContainer() {
     const [adbPath, setAdbPath] = useState('');
+    const [adbError, setAdbError] = useState('');
     const [tempPath, setTempPath] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [autoOpenTerminal, setAutoOpenTerminal] = useState<boolean | null>(null);
-    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
+    const [terminalMode, setTerminalMode] = useState<TerminalOpenMode | null>(null);
+    const [version, setVersion] = useState('');
+    const [feedback, setFeedback] = useState<Feedback | null>(null);
 
-    // 组件加载时读取配置
     useEffect(() => {
-        loadAdbPath();
-        loadAutoOpenTerminal();
+        void loadAdbPath();
+        GetTerminalOpenMode().then(mode => setTerminalMode(mode as TerminalOpenMode)).catch(error => console.error('加载执行记录打开方式失败:', error));
+        GetVersion().then(setVersion);
     }, []);
 
     const loadAdbPath = async () => {
         try {
-            let adbPath = ""
-            let adbResult = await GetAdbPath();
-            if (adbResult.res) {
-                adbPath = adbResult.res;
-            }
-            setAdbPath(adbPath);
+            const result = await GetAdbPath();
+            setAdbPath(result.res || '');
+            setAdbError(result.error || '');
+            if (!result.res) setIsEditing(true);
         } catch (error) {
             console.error('加载 ADB 路径失败:', error);
         }
     };
 
-    const handleTestConnection = async () => {
+    const runCheck = async (path: string) => {
+        setIsTesting(true);
+        setFeedback(null);
         try {
-            const result = await CheckAdbPath(adbPath);
-            if (result.res) {
-                setMessage({type: 'success', text: `连接成功！ADB 版本:\n ${result.res}`});
-            } else {
-                setMessage({type: 'error', text: `连接失败:\n ${result.error}`});
+            const result = await CheckAdbPath(path);
+            if (!result.error && result.res) {
+                setFeedback({type: 'success', title: 'ADB 可用', detail: result.res.trim()});
+                return true;
             }
+            setFeedback({type: 'error', title: '无法执行 ADB', detail: result.error || '没有输出'});
+            return false;
         } catch (error) {
-            setMessage({type: 'error', text: 'ADB 连接测试失败'});
+            setFeedback({type: 'error', title: 'ADB 检测失败', detail: String(error)});
+            return false;
+        } finally {
+            setIsTesting(false);
         }
     };
 
     const handleEdit = () => {
+        setTempPath(adbPath);
         setIsEditing(true);
-        setMessage(null);
+        setFeedback(null);
     };
 
     const handleCancel = () => {
         setIsEditing(false);
-        setMessage(null);
+        setFeedback(null);
     };
 
     const handleSave = async () => {
-        if (!tempPath.trim()) {
-            setMessage({type: 'error', text: 'ADB 路径不能为空'});
+        const path = tempPath.trim();
+        if (!path) {
+            setFeedback({type: 'error', title: 'ADB 路径不能为空'});
             return;
         }
 
         setIsSaving(true);
-        setMessage(null);
-
         try {
-            await UpdateAdbPath(tempPath);
+            await UpdateAdbPath(path);
             await loadAdbPath();
             setIsEditing(false);
-            setMessage({type: 'success', text: '保存成功！'});
+            toast.success('ADB 路径已保存');
+            await runCheck(path);
         } catch (error) {
-            setMessage({type: 'error', text: '保存失败，请重试'});
+            setFeedback({type: 'error', title: '保存失败，请重试', detail: String(error)});
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleAutoDetect = async () => {
-        if (!tempPath.trim()) {
-            setMessage({type: 'error', text: 'ADB 路径不能为空'});
-            return;
-        }
-
-        setMessage(null);
+    const handleTerminalModeChange = async (mode: TerminalOpenMode) => {
+        const previous = terminalMode;
+        setTerminalMode(mode);
         try {
-            const result = await CheckAdbPath(tempPath);
-            if (!result.error) {
-                setTempPath(tempPath);
-                setMessage({
-                    type: 'success',
-                    text: result.res
-                });
-            } else {
-                setMessage({
-                    type: 'error',
-                    text: result.error
-                });
-            }
+            await SetTerminalOpenMode(mode);
         } catch (error) {
-            setMessage({
-                type: 'error',
-                text: '自动检测失败'
-            });
+            setTerminalMode(previous);
+            toast.error('保存执行记录打开方式失败');
         }
     };
 
-    const loadAutoOpenTerminal = async () => {
-        try {
-            const enabled = await GetAutoOpenTerminal();
-            setAutoOpenTerminal(enabled);
-        } catch (error) {
-            console.error('加载 Terminal 自动打开配置失败:', error);
-        }
+    const handleOpenLogDir = async () => {
+        const result = await OpenLogDirectory();
+        if (result.error) toast.error(result.error);
     };
 
-    const handleAutoOpenTerminalChange = async (checked: boolean) => {
-        setAutoOpenTerminal(checked);
-        try {
-            await SetAutoOpenTerminal(checked);
-        } catch (error) {
-            setAutoOpenTerminal(!checked);
-            setMessage({type: 'error', text: '保存 Terminal 自动打开配置失败'});
-        }
-    };
+    const adbStatus = adbPath
+        ? <StatusPill tone="ok">已找到</StatusPill>
+        : <StatusPill tone="error">未找到</StatusPill>;
 
     return (
-        <div className="flex-1 h-full overflow-y-auto bg-gray-50 p-6">
-            <div className="max-w-3xl mx-auto space-y-6">
-                <div className="bg-white rounded-lg shadow-xs p-8">
-                    {/* 标题 */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-gray-800 mb-2">ADB 设置</h1>
-                        <p className="text-gray-600">指定 Android Debug Bridge (ADB) 可执行文件的完整路径</p>
-                    </div>
+        <div className="h-full min-w-0 flex-1 overflow-y-auto bg-canvas px-8 py-7 text-left text-ink">
+            <div className="mx-auto flex max-w-3xl flex-col gap-7">
+                <PageHeader
+                    eyebrow="Preferences"
+                    title="设置"
+                    description="配置 ADB 可执行文件与应用行为"
+                />
 
-                    {/* ADB 路径设置 */}
-                    <div className="space-y-6">
-                        <div>
-                            {!isEditing && adbPath ? (
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-                                            <code className="text-sm text-gray-700 font-mono break-all">
-                                                {adbPath || '\u00A0'}
-                                            </code>
-                                        </div>
-                                        <button
-                                            onClick={handleEdit}
-                                            className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 cursor-pointer"
-                                        >
-                                            <i className="fa-solid fa-pen-to-square"></i>
-                                            编辑
-                                        </button>
-                                    </div>
-
-                                    <button
-                                        onClick={handleTestConnection}
-                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 cursor-pointer"
-                                    >
-                                        <i className="fa-solid fa-plug"></i>
-                                        测试连接
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="flex gap-3">
-                                        <input
-                                            type="text"
-                                            value={tempPath}
-                                            onChange={(e) => setTempPath(e.target.value)}
-                                            placeholder="输入 ADB 路径，例如: /usr/local/bin/adb"
-                                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                                        />
-                                        <button
-                                            onClick={handleAutoDetect}
-                                            className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer">
-                                            <i className="fa-solid fa-wand-magic-sparkles"></i>
+                <SettingsSection eyebrow="Android Debug Bridge" title="ADB">
+                    <SettingsRow
+                        label="ADB 可执行文件"
+                        description={isEditing ? '填写 adb 可执行文件的完整路径' : (
+                            adbPath
+                                ? <span className="break-all font-mono text-[12px] text-body">{adbPath}</span>
+                                : adbError || '未在 PATH 中找到 adb，请手动指定'
+                        )}
+                        control={isEditing ? adbStatus : <>
+                            {adbStatus}
+                            <Button onClick={() => void runCheck(adbPath)} loading={isTesting} disabled={!adbPath}>测试连接</Button>
+                            <Button onClick={handleEdit}>修改</Button>
+                        </>}
+                    >
+                        {isEditing && (
+                            <div className="mt-3 flex flex-col gap-3">
+                                <Input
+                                    autoFocus
+                                    value={tempPath}
+                                    onChange={event => setTempPath(event.target.value)}
+                                    onPressEnter={() => void handleSave()}
+                                    placeholder="/usr/local/bin/adb 或 C:\platform-tools\adb.exe"
+                                    className="!font-mono !text-[13px]"
+                                />
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-[12px] text-faint">
+                                        macOS / Linux 可在终端执行 <code className="rounded border border-hairline bg-canvas px-1 font-mono text-[11px] text-body">which adb</code> 查看路径
+                                    </span>
+                                    <div className="flex shrink-0 gap-2">
+                                        {adbPath && <Button onClick={handleCancel} disabled={isSaving}>取消</Button>}
+                                        <Button onClick={() => void runCheck(tempPath.trim())} loading={isTesting} disabled={!tempPath.trim()}>
                                             检测
-                                        </button>
-                                    </div>
-
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={handleSave}
-                                            disabled={isSaving}
-                                            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-blue-300 flex items-center gap-2 cursor-pointer"
-                                        >
-                                            {isSaving ? (
-                                                <>
-                                                    <i className="fa-solid fa-spinner fa-spin"></i>
-                                                    保存中...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <i className="fa-solid fa-floppy-disk"></i>
-                                                    保存
-                                                </>
-                                            )}
-                                        </button>
-                                        <button
-                                            onClick={handleCancel}
-                                            disabled={isSaving}
-                                            className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:bg-gray-200"
-                                        >
-                                            取消
-                                        </button>
+                                        </Button>
+                                        <Button type="primary" onClick={() => void handleSave()} loading={isSaving}>保存</Button>
                                     </div>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* 提示信息 */}
-                        {message && (
-                            <div className={`p-4 rounded-lg flex items-center gap-3 ${
-                                message.type === 'success'
-                                    ? 'bg-green-50 text-green-800 border border-green-200'
-                                    : 'bg-red-50 text-red-800 border border-red-200'
-                            }`}>
-                                <i className={`fa-solid ${
-                                    message.type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'
-                                }`}></i>
-                                <span className="whitespace-pre-line">{message.text}</span>
                             </div>
                         )}
 
-                        {/* 帮助信息 */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <h3 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                                <i className="fa-solid fa-circle-info"></i>
-                                提示
-                            </h3>
-                            <ul className="text-sm text-blue-700 space-y-1 ml-6 list-disc">
-                                <li>请输入完整路径，例如: <code
-                                    className="bg-blue-100 px-1 rounded">C:\platform-tools\adb.exe</code></li>
-                                <li>macOS/Linux 示例: <code
-                                    className="bg-blue-100 px-1 rounded">/usr/local/bin/adb</code></li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+                        {feedback && (
+                            <div className={`mt-3 rounded-lg border px-4 py-3 ${
+                                feedback.type === 'success' ? 'border-hairline bg-canvas' : 'border-error-soft bg-error-soft'
+                            }`}>
+                                <div className={`flex items-center gap-2 text-[13px] font-medium ${feedback.type === 'success' ? 'text-ink' : 'text-error'}`}>
+                                    <i className={`fa-solid ${feedback.type === 'success' ? 'fa-circle-check text-link' : 'fa-circle-exclamation'}`}/>
+                                    {feedback.title}
+                                </div>
+                                {feedback.detail && (
+                                    <pre className={`m-0 mt-1.5 whitespace-pre-wrap break-all font-mono text-[12px] leading-5 ${feedback.type === 'success' ? 'text-mute' : 'text-error/80'}`}>
+                                        {feedback.detail}
+                                    </pre>
+                                )}
+                            </div>
+                        )}
+                    </SettingsRow>
+                </SettingsSection>
 
-                <div className="bg-white rounded-lg shadow-xs p-8">
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <h2 className="text-sm font-semibold text-gray-800 mb-1">快捷功能</h2>
-                            <p className="text-sm text-gray-600">执行快捷功能后自动打开底部 Terminal</p>
-                        </div>
-                        {autoOpenTerminal !== null && (
-                            <Switch
-                                checked={autoOpenTerminal}
-                                onChange={handleAutoOpenTerminalChange}
+                <SettingsSection eyebrow="Quick actions" title="快捷功能">
+                    <SettingsRow
+                        label="自动展开执行记录"
+                        description={terminalMode ? TERMINAL_MODE_HINT[terminalMode] : '执行快捷功能后何时展开底部执行记录'}
+                        control={terminalMode !== null && (
+                            <Segmented<TerminalOpenMode>
+                                value={terminalMode}
+                                onChange={value => void handleTerminalModeChange(value)}
+                                options={[
+                                    {value: 'always', label: '总是'},
+                                    {value: 'error', label: '仅失败时'},
+                                    {value: 'never', label: '从不'},
+                                ]}
                             />
                         )}
-                    </div>
-                </div>
+                    />
+                </SettingsSection>
+
+                <SettingsSection eyebrow="About" title="关于">
+                    <SettingsRow
+                        label="版本"
+                        control={<span className="font-mono text-[13px] text-body">{version || '-'}</span>}
+                    />
+                    <SettingsRow
+                        label="运行日志"
+                        description="遇到问题时可在「诊断日志」中查看或导出"
+                        control={<Button onClick={() => void handleOpenLogDir()}>打开日志目录</Button>}
+                    />
+                </SettingsSection>
             </div>
         </div>
+    );
+}
+
+function StatusPill({tone, children}: { tone: 'ok' | 'error'; children: ReactNode }) {
+    return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium ${
+            tone === 'ok' ? 'bg-link-soft text-link-deep' : 'bg-error-soft text-error'
+        }`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${tone === 'ok' ? 'bg-link' : 'bg-error'}`}/>
+            {children}
+        </span>
     );
 }
 

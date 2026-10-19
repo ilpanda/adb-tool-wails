@@ -25,6 +25,7 @@ const versionDowngradeError = "INSTALL_FAILED_VERSION_DOWNGRADE"
 var apkPackagePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$`)
 
 func InstallApp(param ExecuteParams) types.ExecResult {
+	param.Stage(StageDialog)
 	filePath, err := runtime.OpenFileDialog(param.Ctxt, runtime.OpenDialogOptions{
 		Title: "选择 APK 文件",
 		Filters: []runtime.FileFilter{
@@ -32,11 +33,12 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
 		},
 	})
+	param.Stage(StageRunning)
 	if err != nil {
 		return types.NewExecResultError("installApp", err)
 	}
 	if filePath == "" {
-		return types.NewExecResultErrorString("installApp", "用户取消安装")
+		return types.NewExecResultCanceled("installApp", "用户取消安装")
 	}
 
 	// 单设备时前端不传序列号；先固定设备，避免确认期间连接变化后操作其他设备。
@@ -66,6 +68,9 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 			})
 			defer cancel()
 			defer runtime.EventsEmit(param.Ctxt, "apk-downgrade-confirm-closed", requestID)
+			// 等待用户确认期间不计入执行耗时
+			param.Stage(StageDialog)
+			defer param.Stage(StageRunning)
 			runtime.EventsEmit(param.Ctxt, "apk-downgrade-confirm", map[string]string{
 				"requestId": requestID, "packageName": packageName,
 				"fileName": filepath.Base(filePath),

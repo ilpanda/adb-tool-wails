@@ -1,259 +1,226 @@
-// TerminalPanel.tsx
-import { useState, useRef, useEffect } from 'react';
-import {message} from "antd";
-import {ExecuteAction, SaveFile} from "../../wailsjs/go/main/App";
+import {useEffect, useMemo, useRef, useState} from 'react';
+import type {MouseEvent as ReactMouseEvent} from 'react';
+import {Button, Empty, Input, Segmented, Tooltip, message} from 'antd';
+import {CloseOutlined, CompressOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, ExpandOutlined, SearchOutlined} from '@ant-design/icons';
+import {SaveFile} from '../../wailsjs/go/main/App';
+import {ActionTask, elapsedMs, formatElapsed, isActive, useActionTaskStore} from '../store/actionTaskStore';
+import {useNow} from '../hooks/useNow';
+import {Eyebrow} from './PageHeader';
 
-interface TerminalLog {
-    id: number;
-    type: 'command' | 'output';
-    content: string;
-    timestamp: string;
-    action?: string;
-    icon?: string;
-    success?: boolean;
-    duration?: string;
+type Filter = 'all' | 'error';
+
+const STATUS_ICON: Record<string, {icon: string; className: string}> = {
+    dialog: {icon: 'fa-circle-notch fa-spin', className: 'text-link'},
+    running: {icon: 'fa-circle-notch fa-spin', className: 'text-link'},
+    pulling: {icon: 'fa-circle-notch fa-spin', className: 'text-link'},
+    success: {icon: 'fa-circle-check', className: 'text-link'},
+    error: {icon: 'fa-circle-xmark', className: 'text-error'},
+    canceled: {icon: 'fa-circle-minus', className: 'text-faint'},
+};
+
+const STAGE_TEXT: Record<string, string> = {
+    dialog: '等待选择文件…',
+    running: '执行中…',
+    pulling: '正在保存到电脑…',
+};
+
+function formatClock(ts: number) {
+    return new Date(ts).toLocaleTimeString('zh-CN', {hour12: false});
 }
 
-interface TerminalPanelProps {
-    isOpen: boolean;
-    onClose: () => void;
-    logs: TerminalLog[];
-    onClear: () => void;
+function copy(text: string) {
+    void navigator.clipboard.writeText(text);
+    message.success('已复制');
 }
 
-function TerminalPanel({ isOpen, onClose, logs, onClear }: TerminalPanelProps) {
-    const [terminalHeight, setTerminalHeight] = useState(400);
-    const [isFullscreen, setIsFullscreen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const terminalEndRef = useRef<HTMLDivElement>(null);
+function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defaultOpen: boolean }) {
+    const [open, setOpen] = useState(defaultOpen);
+    const openDetail = useActionTaskStore(state => state.openDetail);
+    const status = STATUS_ICON[task.status];
+    const active = isActive(task);
+    const body = task.status === 'error' || task.status === 'canceled' ? task.error : task.output;
 
-    const filteredLogs = logs.filter(log =>
-        log.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (log.action && log.action.toLowerCase().includes(searchTerm.toLowerCase()))
+    useEffect(() => {
+        if (task.status === 'error') setOpen(true);
+    }, [task.status]);
+
+    return (
+        <div className={`border-b border-hairline-soft ${task.status === 'error' ? 'bg-error-soft/30' : ''}`}>
+            <button
+                type="button"
+                onClick={() => setOpen(value => !value)}
+                className="group flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-canvas"
+            >
+                <i className={`fa-solid ${status.icon} w-3.5 text-center text-[12px] ${status.className}`}/>
+                <span className="w-16 shrink-0 font-mono text-[11px] tabular-nums text-faint">{formatClock(task.createdAt)}</span>
+                <span className="shrink-0 text-[13px] font-medium text-ink">{task.label}</span>
+                {task.packageName && <span className="min-w-0 truncate font-mono text-[11px] text-mute">{task.packageName}</span>}
+                <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-mute">
+                    {active ? STAGE_TEXT[task.status] : ''} {task.status === 'dialog' ? '' : formatElapsed(elapsedMs(task, now))}
+                </span>
+                <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={event => {
+                        event.stopPropagation();
+                        openDetail(task.id);
+                    }}
+                    className="shrink-0 rounded px-1.5 text-[12px] text-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+                >
+                    详情
+                </span>
+                <i className={`fa-solid fa-chevron-right text-[9px] text-faint transition-transform ${open ? 'rotate-90' : ''}`}/>
+            </button>
+
+            {open && (
+                <div className="space-y-2 px-4 pb-3 pl-[52px] font-mono text-[12px] leading-5">
+                    {task.cmd && (
+                        <div className="group/cmd flex items-start gap-2">
+                            <span className="select-none text-faint">$</span>
+                            <span className="min-w-0 flex-1 whitespace-pre-wrap break-all text-body">{task.cmd}</span>
+                            <CopyOutlined className="mt-1 shrink-0 cursor-pointer text-faint opacity-0 hover:text-ink group-hover/cmd:opacity-100" onClick={() => copy(task.cmd)}/>
+                        </div>
+                    )}
+                    {active ? (
+                        <div className="text-faint">{STAGE_TEXT[task.status]}</div>
+                    ) : body ? (
+                        <div className="group/out relative">
+                            <pre className={`m-0 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border px-3 py-2 ${
+                                task.status === 'error' ? 'border-error-soft bg-elevated text-error' : 'border-hairline bg-canvas text-ink'
+                            }`}>
+                                {body.trim()}
+                            </pre>
+                            <CopyOutlined className="absolute right-2 top-2 cursor-pointer text-faint opacity-0 hover:text-ink group-hover/out:opacity-100" onClick={() => copy(body)}/>
+                        </div>
+                    ) : (
+                        <div className="text-faint">（无输出）</div>
+                    )}
+                </div>
+            )}
+        </div>
     );
+}
 
-    const copyLog = (content: string) => {
-        navigator.clipboard.writeText(content);
-        message.success("复制成功")
-    };
+// 快捷功能的执行记录：点击时立即插入一条，执行完成后原地更新
+function TerminalPanel() {
+    const {tasks, panelOpen, setPanelOpen, clearFinished} = useActionTaskStore();
+    const [height, setHeight] = useState(320);
+    const [fullscreen, setFullscreen] = useState(false);
+    const [filter, setFilter] = useState<Filter>('all');
+    const [keyword, setKeyword] = useState('');
+    const endRef = useRef<HTMLDivElement>(null);
+    const now = useNow(tasks.some(isActive), 200);
 
-    const exportLogs = async () => {
+    const visible = useMemo(() => {
+        const lower = keyword.trim().toLowerCase();
+        return tasks.filter(task => {
+            if (filter === 'error' && task.status !== 'error') return false;
+            if (!lower) return true;
+            return [task.label, task.packageName, task.cmd, task.output, task.error].some(text => text.toLowerCase().includes(lower));
+        });
+    }, [filter, keyword, tasks]);
 
-        const logText = logs.map(log => {
-            if (log.type === 'command') {
-                return `[${log.timestamp}] $ ${log.content}\n`;
-            } else {
-                return `[${log.timestamp}] $ 命令执行结果：\n\n${log.content}\n`;
-            }
-        }).join('\n');
-        await SaveFile(logText, "save_log")
-    };
+    const errorCount = tasks.filter(task => task.status === 'error').length;
 
-    const handleMouseDown = (e: React.MouseEvent) => {
-        e.preventDefault();
+    useEffect(() => {
+        if (panelOpen) endRef.current?.scrollIntoView({block: 'end'});
+    }, [panelOpen, tasks.length]);
 
-        const startY = e.clientY;
-        const startHeight = terminalHeight;
-
+    const handleResize = (event: ReactMouseEvent) => {
+        event.preventDefault();
+        const startY = event.clientY;
+        const startHeight = height;
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'ns-resize';
 
-        const handleMouseMove = (e: MouseEvent) => {
-            e.preventDefault();
-
-            requestAnimationFrame(() => {
-                const diff = startY - e.clientY;
-                const newHeight = Math.min(Math.max(200, startHeight + diff), window.innerHeight - 100);
-                setTerminalHeight(newHeight);
-            });
+        const onMove = (e: MouseEvent) => {
+            const next = Math.min(Math.max(180, startHeight + startY - e.clientY), window.innerHeight - 120);
+            requestAnimationFrame(() => setHeight(next));
         };
-
-        const handleMouseUp = () => {
+        const onUp = () => {
             document.body.style.userSelect = '';
             document.body.style.cursor = '';
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
         };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     };
 
-    useEffect(() => {
-        terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [logs]);
+    const handleExport = async () => {
+        const text = tasks.map(task => [
+            `[${formatClock(task.createdAt)}] ${task.label}${task.packageName ? ` (${task.packageName})` : ''} · ${task.status} · ${formatElapsed(elapsedMs(task))}`,
+            task.cmd && `$ ${task.cmd}`,
+            (task.error || task.output).trim(),
+        ].filter(Boolean).join('\n')).join('\n\n');
+        await SaveFile(text, 'quick_action_log');
+    };
 
-    if (!isOpen) return null;
+    if (!panelOpen) return null;
 
     return (
         <div
-            className={`bg-white border-t-2 border-blue-500 shadow-2xl flex flex-col ${
-                isFullscreen ? 'absolute inset-0 z-50' : ''
-            }`}
-            style={{
-                height: isFullscreen ? '100%' : `${terminalHeight}px`
-            }}
+            className={`flex flex-col border-t border-hairline bg-elevated text-left ${fullscreen ? 'absolute inset-0 z-40' : 'shrink-0'}`}
+            style={fullscreen ? undefined : {height}}
         >
-            {/* 拖拽手柄 */}
-            {!isFullscreen && (
-                <div
-                    className="h-3 cursor-ns-resize bg-gray-100 hover:bg-blue-200 flex items-center justify-center group"
-                    onMouseDown={handleMouseDown}
-                >
-                    <div className="w-12 h-1 bg-gray-300 rounded-full group-hover:bg-blue-400"></div>
+            {!fullscreen && (
+                <div onMouseDown={handleResize} className="group flex h-1.5 shrink-0 cursor-ns-resize items-center justify-center hover:bg-hairline-soft">
+                    <span className="h-0.5 w-10 rounded-full bg-hairline group-hover:bg-faint"/>
                 </div>
             )}
 
-            {/* Terminal 头部 */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                    <div className="flex gap-1.5">
-                        <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                        <div className="w-3 h-3 rounded-full bg-green-400"></div>
-                    </div>
-                    <div className="h-4 w-px bg-gray-300"></div>
-                    <i className="fa-solid fa-terminal text-blue-600 text-sm"></i>
-                    <span className="text-sm font-semibold text-blue-600 font-mono">ADB Terminal</span>
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <span className="bg-blue-100 px-2 py-0.5 rounded font-medium">
-                            {logs.filter(l => l.type === 'command').length} cmds
-                        </span>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                    {/* 搜索框 */}
-                    <div className="relative mr-2">
-                        <i className="fa-solid fa-search absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
-                        <input
-                            type="text"
-                            placeholder="搜索..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-48 bg-white text-gray-900 text-xs pl-7 pr-3 py-1.5 rounded border border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                    </div>
-
-                    <button
-                        onClick={exportLogs}
-                        disabled={logs.length === 0}
-                        className="p-1.5 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="导出日志"
-                    >
-                        <i className="fa-solid fa-download text-sm"></i>
-                    </button>
-                    <button
-                        onClick={onClear}
-                        disabled={logs.length === 0}
-                        className="p-1.5 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="清空"
-                    >
-                        <i className="fa-solid fa-trash-can text-sm"></i>
-                    </button>
-                    <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                    <button
-                        onClick={() => setIsFullscreen(!isFullscreen)}
-                        className="p-1.5 hover:bg-gray-200 rounded text-gray-600 hover:text-gray-900"
-                        title={isFullscreen ? '退出全屏' : '全屏'}
-                    >
-                        <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'} text-sm`}></i>
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 hover:bg-red-100 rounded text-gray-600 hover:text-red-600"
-                        title="关闭"
-                    >
-                        <i className="fa-solid fa-xmark text-sm"></i>
-                    </button>
+            <div className="flex shrink-0 items-center gap-3 border-b border-hairline-soft px-4 py-2">
+                <Eyebrow>Execution log · {tasks.length}</Eyebrow>
+                <Segmented
+                    size="small"
+                    value={filter}
+                    onChange={value => setFilter(value as Filter)}
+                    options={[
+                        {value: 'all', label: '全部'},
+                        {value: 'error', label: `失败${errorCount ? ` ${errorCount}` : ''}`},
+                    ]}
+                />
+                <Input
+                    size="small"
+                    allowClear
+                    value={keyword}
+                    onChange={event => setKeyword(event.target.value)}
+                    prefix={<SearchOutlined className="text-faint"/>}
+                    placeholder="搜索命令或输出"
+                    className="!w-48"
+                />
+                <div className="ml-auto flex items-center gap-0.5">
+                    <Tooltip title="导出记录">
+                        <Button type="text" size="small" icon={<DownloadOutlined/>} disabled={tasks.length === 0} onClick={() => void handleExport()}/>
+                    </Tooltip>
+                    <Tooltip title="清空已完成的记录">
+                        <Button type="text" size="small" icon={<DeleteOutlined/>} disabled={tasks.length === 0} onClick={clearFinished}/>
+                    </Tooltip>
+                    <Tooltip title={fullscreen ? '退出全屏' : '全屏'}>
+                        <Button type="text" size="small" icon={fullscreen ? <CompressOutlined/> : <ExpandOutlined/>} onClick={() => setFullscreen(value => !value)}/>
+                    </Tooltip>
+                    <Tooltip title="收起">
+                        <Button type="text" size="small" icon={<CloseOutlined/>} onClick={() => {
+                            setFullscreen(false);
+                            setPanelOpen(false);
+                        }}/>
+                    </Tooltip>
                 </div>
             </div>
 
-            {/* Terminal 内容 */}
-            <div className="flex-1 overflow-auto p-4 font-mono text-sm bg-gray-50">
-                {filteredLogs.length === 0 && logs.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                        <i className="fa-solid fa-terminal text-5xl mb-4 opacity-30"></i>
-                        <p className="text-base font-medium mb-2 text-gray-600">终端已就绪</p>
-                        <p className="text-xs text-gray-500">点击功能按钮执行命令，或使用搜索过滤历史记录</p>
-                    </div>
-                ) : filteredLogs.length === 0 && logs.length > 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                        <i className="fa-solid fa-search text-5xl mb-4 opacity-30"></i>
-                        <p className="text-sm text-gray-600">未找到匹配 "{searchTerm}" 的结果</p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                {visible.length === 0 ? (
+                    <div className="flex h-full items-center justify-center">
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={tasks.length === 0 ? '还没有执行记录' : '没有匹配的记录'}/>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        {filteredLogs.map((log) => (
-                            <div key={log.id} className="group">
-                                {log.type === 'command' ? (
-                                    <div className="flex items-start gap-2 ">
-                                        <span className="text-blue-600 select-none text-base leading-6 font-bold">❯</span>
-                                        <div className="flex-1 min-w-0  items-center">
-                                            <div className="flex items-center gap-2 mb-1.5 mt-1 ">
-                                                <span className="text-blue-600 text-xs font-medium">{log.timestamp}</span>
-                                                <span className="text-purple-600 text-xs font-bold bg-purple-100 px-2 py-0.5 rounded">
-                                                    {log.action}
-                                                </span>
-                                            </div>
-                                            {log.content && <div className="flex items-start gap-2 group/cmd">
-                                                <span className="text-green-700 flex-1 whitespace-pre-wrap break-all leading-relaxed font-medium">
-                                                   参考执行命令：<br/>{log.content}
-                                                </span>
-                                                <button
-                                                    onClick={() => copyLog(log.content)}
-                                                    className="opacity-100  text-gray-400 hover:text-blue-600 shrink-0 mt-0.5 cursor-pointer"
-                                                    title="复制命令"
-                                                >
-                                                    <i className="fa-solid fa-copy text-base"></i>
-                                                </button>
-                                            </div>}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-start gap-2 ml-6 mt-2">
-                                        <div className="flex-1 bg-white rounded-lg p-3 border border-gray-200 hover:border-blue-300 shadow-sm group/output">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-gray-500 text-xs font-medium">{log.timestamp}</span>
-                                                    <span className="text-gray-400 text-xs">·</span>
-                                                    <span className="text-green-600 text-xs font-semibold">命令执行耗时：{log.duration}s</span>
-                                                    {log.success}
-                                                </div>
-                                                <button
-                                                    onClick={() => copyLog(log.content)}
-                                                    className="opacity-100  text-gray-400 hover:text-blue-600 p-1 cursor-pointer"
-                                                    title="复制输出"
-                                                >
-                                                    <i className="fa-solid fa-copy text-base"></i>
-                                                </button>
-                                            </div>
-                                            <pre className="text-gray-700 whitespace-pre-wrap break-words text-xs leading-relaxed">
-                                               命令执行结果： {log.content}
-                                            </pre>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                    <>
+                        {visible.map((task, index) => (
+                            <TaskRow key={task.id} task={task} now={now} defaultOpen={index === visible.length - 1 || task.status === 'error'}/>
                         ))}
-                        <div ref={terminalEndRef} />
-                    </div>
+                        <div ref={endRef}/>
+                    </>
                 )}
-            </div>
-
-            {/* Terminal 底部状态栏 */}
-            <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-xs">
-                <div className="flex items-center gap-4 text-gray-600">
-                    <span className="font-mono">总计 {logs.length} 行</span>
-                    <span className="text-gray-400">|</span>
-                    <span className="font-mono">{logs.filter(l => l.type === 'command').length} 条命令</span>
-                    {searchTerm && (
-                        <>
-                            <span className="text-gray-400">|</span>
-                            <span className="text-blue-600 font-medium">过滤: {filteredLogs.length} 条结果</span>
-                        </>
-                    )}
-                </div>
             </div>
         </div>
     );

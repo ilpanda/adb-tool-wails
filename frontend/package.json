@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "7.0.0",
     "@tailwindcss/vite": "^4.1.16",
     "antd": "^5.28.0",
     "react": "^18.2.0",

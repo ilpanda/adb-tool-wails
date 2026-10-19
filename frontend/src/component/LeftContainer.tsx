@@ -2,166 +2,177 @@ import {useEffect, useRef, useState} from 'react';
 import {EventsOn} from "../../wailsjs/runtime";
 import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
 import {GetDeviceNameArray, GetVersion} from "../../wailsjs/go/main/App";
+import {Eyebrow} from "./PageHeader";
 
+const MENU_GROUPS: Array<{title: string; items: Array<{key: string; label: string; icon: string}>}> = [
+    {
+        title: 'Tools',
+        items: [
+            {key: '1', label: '快捷功能', icon: 'fa-bolt'},
+            {key: '4', label: '应用列表', icon: 'fa-table-cells-large'},
+            {key: '5', label: '内存监控', icon: 'fa-chart-line'},
+            {key: '6', label: '文件管理', icon: 'fa-folder'},
+        ],
+    },
+    {
+        title: 'Support',
+        items: [
+            {key: '7', label: '诊断日志', icon: 'fa-file-waveform'},
+            {key: '2', label: '常见问题', icon: 'fa-circle-question'},
+            {key: '3', label: '设置', icon: 'fa-gear'},
+        ],
+    },
+];
+
+// 设备列表变化后保持当前选择；当前设备断开时回落到第一台
+function syncSelection(devices: DeviceInfo[]) {
+    const {selectedDevice, setDevices, setSelectedDevices} = useDeviceStore.getState();
+    setDevices(devices);
+    const stillConnected = selectedDevice && devices.find(device => device.id === selectedDevice.id);
+    if (stillConnected) {
+        if (stillConnected.name !== selectedDevice.name) setSelectedDevices(stillConnected);
+        return;
+    }
+    setSelectedDevices(devices[0] ?? null);
+}
 
 function LeftContainer({selectedView, onViewChange}: {
     selectedView: string;
     onViewChange: (view: string) => void
 }) {
-    const {devices, setDevices, selectedDevice, toggleDevice, setSelectedDevices} = useDeviceStore();
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-    const [version, setVersion] = useState('')
-    const dropdownRef = useRef<HTMLDivElement>(null)
+    const {devices, selectedDevice, setSelectedDevices} = useDeviceStore();
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [version, setVersion] = useState('');
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        return EventsOn("adb_update", (devices: DeviceInfo[]) => {
-            console.log("devices", devices);
-            setDevices(devices)
-            // 自动选中第一个设备
-            if (devices.length > 0 && selectedDevice === null) {
-                setSelectedDevices(devices[0])
-            } else if (devices.length === 0) {
-                setSelectedDevices(null);
-            }
-        });
+        return EventsOn("adb_update", (next: DeviceInfo[]) => syncSelection(next || []));
     }, []);
 
     useEffect(() => {
-        let fetchDeviceArray = async () => {
-            const result = await GetDeviceNameArray();
-            setDevices(result)
-            if (result.length > 0 && selectedDevice === null) {
-                setSelectedDevices(result[0])
-            }
-        };
-        fetchDeviceArray()
-    }, []);
-
-    useEffect(() => {
-        GetVersion().then(setVersion)
+        GetDeviceNameArray().then(result => syncSelection(result || []));
+        GetVersion().then(setVersion);
     }, []);
 
     // 点击外部关闭下拉框
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsDropdownOpen(false)
+                setIsDropdownOpen(false);
             }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [])
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
-    const getDisplayText = () => {
-        if (devices.length === 0) return '等待连接...'
-        if (selectedDevice === null) return '请选择设备'
-        const device = devices.find(d => d.id === selectedDevice.id)
-        return device?.name || '未知设备'
-    }
-
-    const menuItems = [
-        {key: '1', label: '快捷功能'},
-        {key: '4', label: '应用列表'},
-        {key: '5', label: '内存监控'},
-        {key: '6', label: '文件管理'},
-        {key: '7', label: '诊断日志'},
-        {key: '2', label: '常见问题'},
-        {key: '3', label: '设置'},
-    ];
+    const connected = devices.length > 0;
+    const current = selectedDevice ? devices.find(device => device.id === selectedDevice.id) : undefined;
 
     return (
-        <div className="flex h-full w-[248px] shrink-0 flex-col border-r border-[#E7ECF2] bg-white">
-            <div className="border-b border-gray-200 p-6">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500">
-                        <i className="fa-solid fa-mobile text-lg text-white"/>
-                    </div>
-                    <div className="relative min-w-0 flex-1" ref={dropdownRef}>
-                        <button
-                            onClick={() => devices.length > 0 && setIsDropdownOpen(!isDropdownOpen)}
-                            disabled={devices.length === 0}
-                            className="group flex w-full items-center justify-between gap-2"
-                        >
-                            <div className="flex min-w-0 flex-1 items-center gap-2">
-                                <div
-                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${devices.length > 0 ? 'bg-blue-500' : 'bg-gray-300'}`}/>
-                                <span className="truncate font-mono text-xs text-gray-500">
-                                    {getDisplayText()}
-                                </span>
-                            </div>
-                            {devices.length > 1 && (
-                                <i className={`fa-solid fa-chevron-down text-xs text-gray-400 transition-transform group-hover:text-gray-600 ${isDropdownOpen ? 'rotate-180' : ''}`}/>
-                            )}
-                        </button>
-
-                        {isDropdownOpen && (
-                            <div className="absolute left-0 right-0 top-full z-10 mt-2 max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                                {devices.map(device => {
-                                    const isChecked = selectedDevice?.id === device.id
-                                    return (
-                                        <div
-                                            key={device.id}
-                                            onClick={() => toggleDevice(device)}
-                                            className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50"
-                                        >
-                                            <div
-                                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-all ${
-                                                    isChecked
-                                                        ? 'border-blue-500 bg-blue-500'
-                                                        : 'border-gray-300 bg-white hover:border-gray-400'
-                                                }`}>
-                                                {isChecked && (
-                                                    <i className="fa-solid fa-check text-xs text-white"/>
-                                                )}
-                                            </div>
-
-                                            <div className="min-w-0 flex-1">
-                                                <div className="truncate text-xs font-medium text-gray-900">
-                                                    {device.name}
-                                                </div>
-                                                <div className="truncate font-mono text-xs text-gray-400">
-                                                    {device.id}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        )}
-                    </div>
+        <div className="flex h-full w-[220px] shrink-0 flex-col border-r border-hairline bg-canvas text-left">
+            {/* 品牌 */}
+            <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ink">
+                    <i className="fa-brands fa-android text-[15px] text-white"/>
                 </div>
+                <span className="text-[15px] font-semibold tracking-[-0.3px] text-ink">ADB Tool</span>
             </div>
 
-            <nav className="flex-1 overflow-y-auto px-5 py-6">
-                <div className="space-y-1">
-                    {menuItems.map((item) => {
-                        const isActive = selectedView === item.key
-                        return (
-                            <button
-                                type="button"
-                                key={item.key}
-                                onClick={() => onViewChange(item.key)}
-                                className={`relative flex h-12 w-full items-center rounded-[14px] px-5 text-left transition-colors ${
-                                    isActive
-                                        ? 'bg-[#F3F6FB] text-[#111827]'
-                                        : 'text-[#5D6878] hover:bg-[#F7F9FC]'
-                                }`}
-                            >
-                                {isActive && (
-                                    <span className="absolute left-[14px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[#2F6BFF]"/>
-                                )}
-                                <span className={`truncate pl-3 text-base ${isActive ? 'font-semibold' : 'font-medium'}`}>
-                                    {item.label}
-                                </span>
-                            </button>
-                        )
-                    })}
-                </div>
+            {/* 设备切换 */}
+            <div className="relative px-3" ref={dropdownRef}>
+                <button
+                    type="button"
+                    onClick={() => connected && setIsDropdownOpen(open => !open)}
+                    disabled={!connected}
+                    className={`flex w-full items-center gap-2.5 rounded-lg border border-hairline bg-elevated px-3 py-2.5 text-left shadow-whisper transition-colors ${
+                        connected ? 'cursor-pointer hover:border-[#d9d9d9]' : 'cursor-default'
+                    } ${isDropdownOpen ? 'border-[#d9d9d9]' : ''}`}
+                >
+                    <span className="relative flex h-2 w-2 shrink-0">
+                        {connected && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-link opacity-30"/>}
+                        <span className={`relative inline-flex h-2 w-2 rounded-full ${connected ? 'bg-link' : 'bg-faint'}`}/>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-ink">
+                            {current?.name || (connected ? '选择设备' : '未连接设备')}
+                        </span>
+                        <span className="block truncate font-mono text-[11px] text-faint">
+                            {current?.id || (connected ? `${devices.length} 台设备可用` : '等待 USB 调试连接')}
+                        </span>
+                    </span>
+                    {connected && (
+                        <i className={`fa-solid fa-chevron-down shrink-0 text-[10px] text-faint transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}/>
+                    )}
+                </button>
+
+                {isDropdownOpen && (
+                    <div className="absolute left-3 right-3 top-full z-20 mt-1.5 overflow-hidden rounded-lg border border-hairline bg-elevated p-1 shadow-floating">
+                        <div className="px-2.5 pb-1 pt-1.5">
+                            <Eyebrow>Devices · {devices.length}</Eyebrow>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {devices.map(device => {
+                                const isSelected = selectedDevice?.id === device.id;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={device.id}
+                                        onClick={() => {
+                                            setSelectedDevices(device);
+                                            setIsDropdownOpen(false);
+                                        }}
+                                        className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
+                                            isSelected ? 'bg-hairline-soft' : 'hover:bg-canvas'
+                                        }`}
+                                    >
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate text-[13px] text-ink">{device.name}</span>
+                                            <span className="block truncate font-mono text-[11px] text-faint">{device.id}</span>
+                                        </span>
+                                        {isSelected && <i className="fa-solid fa-check shrink-0 text-[11px] text-ink"/>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* 导航 */}
+            <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-5">
+                {MENU_GROUPS.map(group => (
+                    <div key={group.title} className="mb-5 last:mb-0">
+                        <div className="px-2.5 pb-1.5">
+                            <Eyebrow>{group.title}</Eyebrow>
+                        </div>
+                        <div className="space-y-0.5">
+                            {group.items.map(item => {
+                                const isActive = selectedView === item.key;
+                                return (
+                                    <button
+                                        type="button"
+                                        key={item.key}
+                                        onClick={() => onViewChange(item.key)}
+                                        className={`flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-[14px] transition-colors ${
+                                            isActive
+                                                ? 'bg-elevated font-medium text-ink shadow-[0_0_0_1px_var(--color-hairline),var(--shadow-whisper)]'
+                                                : 'text-body hover:bg-hairline-soft hover:text-ink'
+                                        }`}
+                                    >
+                                        <i className={`fa-solid ${item.icon} w-4 text-center text-[13px] ${isActive ? 'text-ink' : 'text-mute'}`}/>
+                                        <span className="truncate">{item.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
             </nav>
 
             {version && (
-                <div className="border-t border-gray-200 px-4 py-3 text-center">
-                    <span className="font-mono text-xs text-gray-400">{version}</span>
+                <div className="flex items-center justify-between border-t border-hairline px-5 py-3 font-mono text-[11px] text-faint">
+                    <span>Version</span>
+                    <span>{version}</span>
                 </div>
             )}
         </div>

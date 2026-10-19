@@ -1,66 +1,52 @@
 @import "tailwindcss";
 
+/* 设计 token，与 DESIGN.md / src/theme.ts 保持一致 */
+@theme {
+    --font-sans: Geist, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --color-ink: #171717;
+    --color-body: #4d4d4d;
+    --color-mute: #8f8f8f;
+    --color-faint: #a1a1a1;
+    --color-hairline: #ebebeb;
+    --color-hairline-soft: #f2f2f2;
+    --color-canvas: #fafafa;
+    --color-elevated: #ffffff;
+    --color-link: #0070f3;
+    --color-link-deep: #0761d1;
+    --color-link-soft: #d3e5ff;
+    --color-error: #ee0000;
+    --color-error-soft: #ffe5e5;
+    --color-warning: #f5a623;
+    --color-warning-soft: #ffefcf;
+    --color-warning-deep: #ab570a;
+
+    /* 快捷功能图标色调：浅底 + 深色图标 */
+    --color-tone-teal: #188779;
+    --color-tone-teal-soft: #EAF7F3;
+    --color-tone-blue: #3976C5;
+    --color-tone-blue-soft: #EDF4FD;
+    --color-tone-violet: #8059BA;
+    --color-tone-violet-soft: #F3EEFA;
+    --color-tone-amber: #AC751D;
+    --color-tone-amber-soft: #FCF4E5;
+    --color-tone-rose: #C6535D;
+    --color-tone-rose-soft: #FCEFF0;
+    --color-tone-slate: #62748B;
+    --color-tone-slate-soft: #EEF2F6;
+
+    --shadow-whisper: 0 1px 1px rgba(0, 0, 0, 0.04);
+    --shadow-floating: 0 2px 2px rgba(0, 0, 0, 0.04), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+}
+
 html {
-    background-color: white;
+    background-color: var(--color-canvas);
 }
 
 body {
     margin: 0;
-    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
-}
-
-@font-face {
-    font-family: "Nunito";
-    font-style: normal;
-    font-weight: 400;
-    src: local(""),
-    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
-}
-
-#app {
-    height: 100vh;
-    text-align: center;
-}
-
-/* FileManager 文件树样式 */
-.file-tree .ant-tree-treenode {
-    width: 100%;
-    padding: 0 !important;
-}
-
-.file-tree .ant-tree-node-content-wrapper {
-    flex: 1;
-    min-width: 0;
-    display: flex !important;
-    align-items: center;
-    border-radius: 6px;
-    padding: 2px 6px !important;
-    transition: background 0.15s;
-}
-
-.file-tree .ant-tree-node-content-wrapper:hover {
-    background-color: #f0f5ff !important;
-}
-
-.file-tree .ant-tree-title {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-}
-
-.file-tree .ant-tree-iconEle {
-    width: 20px !important;
-    margin-right: 6px !important;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.file-tree .ant-tree-switcher {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
 }

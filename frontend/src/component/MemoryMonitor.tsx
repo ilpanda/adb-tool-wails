@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import {ExecuteAction, SaveFile, SaveFileAsCsv} from "../../wailsjs/go/main/App";
 import {useDeviceStore} from "../store/deviceStore";
+import {Eyebrow} from "./PageHeader";
 
 // 内存信息接口（与后端对应）
 interface MemInfo {
@@ -74,12 +75,6 @@ const formatDuration = (ms: number): string => {
     const hours = minutes / 60;
     return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`;
 };
-
-const Eyebrow: React.FC<{ children: React.ReactNode }> = ({children}) => (
-    <div className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[#8f8f8f]">
-        {children}
-    </div>
-);
 
 const STORAGE_KEY_PROCESS_NAME = 'memory_monitor_process_name';
 

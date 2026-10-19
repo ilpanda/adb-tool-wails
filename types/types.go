@@ -4,6 +4,18 @@ type ExecResult struct {
 	Cmd   string `json:"cmd"`
 	Res   string `json:"res"`
 	Error string `json:"error,omitempty"`
+	// Canceled 表示用户主动取消（如关闭了文件选择框），不算失败
+	Canceled bool `json:"canceled,omitempty"`
+	// LocalPath 为导出类操作保存到本机的文件或目录
+	LocalPath string `json:"localPath,omitempty"`
+}
+
+func NewExecResultCanceled(cmd string, msg string) ExecResult {
+	return ExecResult{
+		Cmd:      cmd,
+		Error:    msg,
+		Canceled: true,
+	}
 }
 
 func NewExecResultSuccess(cmd string, res string) ExecResult {

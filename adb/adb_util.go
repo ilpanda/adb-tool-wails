@@ -24,6 +24,20 @@ type ExecuteParams struct {
 	Ctxt        context.Context
 	DeviceId    string
 	AdbPath     string
+	// OnStage 上报执行阶段，供前端区分"等待用户选择文件"和"命令执行中"
+	OnStage func(stage string)
+}
+
+const (
+	StageDialog  = "dialog"
+	StageRunning = "running"
+	StagePulling = "pulling"
+)
+
+func (p ExecuteParams) Stage(stage string) {
+	if p.OnStage != nil {
+		p.OnStage(stage)
+	}
 }
 
 var (
@@ -354,23 +368,31 @@ func ExportAppPackagePath(param ExecuteParams) types.ExecResult {
 	if pathResult.Error != "" {
 		return pathResult
 	}
+	param.Stage(StageDialog)
 	dir, err := runtime.OpenDirectoryDialog(param.Ctxt, runtime.OpenDialogOptions{
 		Title: "选择导出目录",
 	})
+	param.Stage(StageRunning)
 
 	if err != nil {
-		return types.NewExecResultErrorString(pathCmd, pathResult.Error)
+		return types.NewExecResultErrorString(pathCmd, err.Error())
 	}
 
 	if dir == "" {
-		return types.NewExecResultErrorString(pathCmd, "用户取消选择导出目录")
+		return types.NewExecResultCanceled(pathCmd, "用户取消选择导出目录")
 	}
-	path := strings.TrimPrefix(strings.TrimSpace(pathResult.Res), "package:")
+	// 分包应用会返回多行 package:，基础包在第一行
+	path := strings.TrimPrefix(strings.TrimSpace(strings.Split(strings.TrimSpace(pathResult.Res), "\n")[0]), "package:")
 
 	targetApkName := filepath.Join(strings.TrimSpace(dir), param.PackageName+".apk")
-	cmd := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", path, targetApkName))
-
-	return execCmd(cmd)
+	param.Stage(StagePulling)
+	// 以参数列表执行，导出目录含空格时也能正确拉取
+	result := runAPKCommand(param, "pull", path, targetApkName)
+	if result.Error == "" {
+		result.LocalPath = targetApkName
+		result.Res = fmt.Sprintf("APK 已导出到: %s", targetApkName)
+	}
+	return result
 }
 
 func GetDeviceNameArray(adbPath string) []string {
@@ -486,6 +508,7 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 		desktopDir = homeDir
 	}
 
+	param.Stage(StageDialog)
 	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
 		DefaultDirectory: desktopDir,
 		DefaultFilename:  defaultFilename,
@@ -506,8 +529,9 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString("screenshot", fmt.Sprintf("保存对话框错误: %v", err))
 	}
 
+	param.Stage(StageRunning)
 	if savePath == "" {
-		return types.NewExecResultErrorString("", "用户取消保存")
+		return types.NewExecResultCanceled("", "用户取消保存")
 	}
 
 	// 2. 执行截图命令
@@ -522,6 +546,7 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 	}
 
 	// 步骤2: 拉取到本地
+	param.Stage(StagePulling)
 	cmdPull := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s \"%s\"", devicePath, savePath))
 	res, err = util.Exec(cmdPull, false, nil)
 	if err != nil {
@@ -539,7 +564,9 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultErrorString(finalCmd, "截图保存失败，文件不存在")
 	}
 
-	return types.NewExecResultSuccess(finalCmd, fmt.Sprintf("截图已保存到: %s", savePath))
+	result := types.NewExecResultSuccess(finalCmd, fmt.Sprintf("截图已保存到: %s", savePath))
+	result.LocalPath = savePath
+	return result
 }
 
 func GetDeviceInfo(param ExecuteParams) types.ExecResult {
@@ -995,6 +1022,7 @@ func isRoot(param ExecuteParams) bool {
 // SaveFileOptions 保存文件的选项
 type SaveFileOptions struct {
 	Ctxt          context.Context
+	OnStage       func(stage string)
 	FilePrefix    string // 文件名前缀，如 "smaps", "debuggerd"
 	DialogTitle   string // 对话框标题
 	FileExtension string // 文件扩展名，如 ".txt"
@@ -1025,6 +1053,9 @@ func PrepareFileSave(opts SaveFileOptions) SaveFileResult {
 	timestamp := time.Now().Format("2006_01_02_15_04_05")
 	saveFileName := fmt.Sprintf("%s_%s%s", timestamp, opts.FilePrefix, opts.FileExtension)
 
+	if opts.OnStage != nil {
+		opts.OnStage(StageDialog)
+	}
 	savePath, _ := runtime.SaveFileDialog(opts.Ctxt, runtime.SaveDialogOptions{
 		DefaultDirectory: desktopDir,
 		DefaultFilename:  saveFileName,
@@ -1033,6 +1064,9 @@ func PrepareFileSave(opts SaveFileOptions) SaveFileResult {
 			{DisplayName: opts.FilterDisplay, Pattern: opts.FilterPattern},
 		},
 	})
+	if opts.OnStage != nil {
+		opts.OnStage(StageRunning)
+	}
 
 	if savePath == "" {
 		return SaveFileResult{Canceled: true}
@@ -1047,7 +1081,9 @@ func writeResultToFile(savePath string, content string, cmd string) types.ExecRe
 	if err != nil {
 		return types.NewExecResultError(cmd, err)
 	}
-	return types.NewExecResultSuccess(cmd, "success")
+	result := types.NewExecResultSuccess(cmd, fmt.Sprintf("已保存到: %s", savePath))
+	result.LocalPath = savePath
+	return result
 }
 
 // SaveSmaps 保存 smaps 信息
@@ -1059,6 +1095,7 @@ func SaveSmaps(param ExecuteParams) types.ExecResult {
 
 	saveResult := PrepareFileSave(SaveFileOptions{
 		Ctxt:          param.Ctxt,
+		OnStage:       param.OnStage,
 		FilePrefix:    "smaps",
 		DialogTitle:   "保存 smaps",
 		FileExtension: ".txt",
@@ -1067,7 +1104,7 @@ func SaveSmaps(param ExecuteParams) types.ExecResult {
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultErrorString("", "用户取消保存")
+		return types.NewExecResultCanceled("", "用户取消保存")
 	}
 
 	result := dumpSmaps(param)
@@ -1090,6 +1127,7 @@ func SaveShowMap(param ExecuteParams) types.ExecResult {
 
 	saveResult := PrepareFileSave(SaveFileOptions{
 		Ctxt:          param.Ctxt,
+		OnStage:       param.OnStage,
 		FilePrefix:    "show_map",
 		DialogTitle:   "保存 show_map",
 		FileExtension: ".txt",
@@ -1098,7 +1136,7 @@ func SaveShowMap(param ExecuteParams) types.ExecResult {
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultErrorString("", "用户取消保存")
+		return types.NewExecResultCanceled("", "用户取消保存")
 	}
 
 	result := dumpShowMap(param)
@@ -1125,6 +1163,7 @@ func SaveThreadInfo(param ExecuteParams) types.ExecResult {
 
 	saveResult := PrepareFileSave(SaveFileOptions{
 		Ctxt:          param.Ctxt,
+		OnStage:       param.OnStage,
 		FilePrefix:    "thread_info",
 		DialogTitle:   "保存 thread",
 		FileExtension: ".txt",
@@ -1133,7 +1172,7 @@ func SaveThreadInfo(param ExecuteParams) types.ExecResult {
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultErrorString("", "用户取消保存")
+		return types.NewExecResultCanceled("", "用户取消保存")
 	}
 
 	result := doSaveThreadInfo(param)
@@ -1188,7 +1227,7 @@ func saveFileAs(Ctxt context.Context, content string, fileNamePrefix string, dia
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultErrorString("", "用户取消保存")
+		return types.NewExecResultCanceled("", "用户取消保存")
 	}
 	return writeResultToFile(saveResult.SavePath, content, "")
 }
@@ -1214,6 +1253,7 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 
 	saveResult := PrepareFileSave(SaveFileOptions{
 		Ctxt:          param.Ctxt,
+		OnStage:       param.OnStage,
 		FilePrefix:    "hprof",
 		DialogTitle:   "保存 hprof",
 		FileExtension: ".hprof",
@@ -1222,7 +1262,7 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultErrorString("", "用户取消保存")
+		return types.NewExecResultCanceled("", "用户取消保存")
 	}
 
 	timestamp := time.Now().Format("2006_01_02_15_04_05")
@@ -1236,17 +1276,19 @@ func SaveHprof(param ExecuteParams) types.ExecResult {
 		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 hprof"+"\n"+result.Res, result.Error)
 	}
 
-	pullCmd := fmt.Sprintf("pull %s %s", hprofSdcardPath, saveResult.SavePath)
-	pullResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, pullCmd))
+	param.Stage(StagePulling)
+	pullResult := runAPKCommand(param, "pull", hprofSdcardPath, saveResult.SavePath)
 	if pullResult.Error != "" {
 		return pullResult
 	}
 	finalCmd := result.Cmd + "\n" + pullResult.Cmd
 
-	rmResult := execCmd(BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s", hprofSdcardPath)))
+	rmResult := execCmd(BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s", hprofSdcardPath)))
 	finalCmd = finalCmd + "\n" + rmResult.Cmd
 
-	return types.NewExecResultSuccess(finalCmd, "success")
+	success := types.NewExecResultSuccess(finalCmd, fmt.Sprintf("hprof 已保存到: %s", saveResult.SavePath))
+	success.LocalPath = saveResult.SavePath
+	return success
 }
 
 func PackagePid(param ExecuteParams) types.ExecResult {

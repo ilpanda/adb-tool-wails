@@ -44,6 +44,14 @@ type Action struct {
 	Action            string `json:"action"`
 	TargetPackageName string `json:"targetPackageName"`
 	DeviceId          string `json:"deviceId"`
+	// TaskId 由前端生成，执行阶段通过 action-stage 事件按此 id 推送
+	TaskId string `json:"taskId,omitempty"`
+}
+
+// ActionStage action-stage 事件的数据
+type ActionStage struct {
+	TaskId string `json:"taskId"`
+	Stage  string `json:"stage"`
 }
 
 // NewApp creates a new App application struct
@@ -212,6 +220,11 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		DeviceId:    ac.DeviceId,
 		AdbPath:     a.adbPath,
 	}
+	if ac.TaskId != "" {
+		param.OnStage = func(stage string) {
+			runtime.EventsEmit(a.ctx, "action-stage", ActionStage{TaskId: ac.TaskId, Stage: stage})
+		}
+	}
 
 	// 按键事件统一处理
 	if keyCode, ok := keyActionMap[action]; ok {
@@ -327,18 +340,48 @@ func (a *App) UpdateAdbPath(path string) {
 	applog.Infof(applog.CategoryADB, "adb_path_updated path=%s", path)
 }
 
-func (a *App) GetAutoOpenTerminal() bool {
+// GetTerminalOpenMode 快捷功能执行后何时打开执行记录：always / error / never
+func (a *App) GetTerminalOpenMode() string {
 	if a.store == nil {
-		return true
+		return "error"
 	}
-	return a.store.GetBool(storage.KeyAutoOpenTerminal, true)
+	switch mode := a.store.GetString(storage.KeyTerminalOpenMode, "error"); mode {
+	case "always", "error", "never":
+		return mode
+	default:
+		return "error"
+	}
 }
 
-func (a *App) SetAutoOpenTerminal(enabled bool) error {
+func (a *App) SetTerminalOpenMode(mode string) error {
+	if mode != "always" && mode != "error" && mode != "never" {
+		return fmt.Errorf("unknown terminal open mode: %s", mode)
+	}
 	if a.store == nil {
 		return fmt.Errorf("storage is not initialized")
 	}
-	return a.store.Set(storage.KeyAutoOpenTerminal, enabled)
+	return a.store.Set(storage.KeyTerminalOpenMode, mode)
+}
+
+// RevealPath 在系统文件管理器中显示并选中本地文件
+func (a *App) RevealPath(path string) types.ExecResult {
+	if _, err := os.Stat(path); err != nil {
+		return types.NewExecResultError("reveal", err)
+	}
+	var cmd *exec.Cmd
+	switch goruntime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", "/select,", path)
+	case "darwin":
+		cmd = exec.Command("open", "-R", path)
+	default:
+		cmd = exec.Command("xdg-open", filepath.Dir(path))
+	}
+	if err := cmd.Start(); err != nil {
+		return types.NewExecResultError("reveal", err)
+	}
+	go func() { _ = cmd.Wait() }()
+	return types.NewExecResultSuccess("reveal", path)
 }
 
 func (a *App) getAllFragment(param adb.ExecuteParams) types.ExecResult {
@@ -771,24 +814,6 @@ func (a *App) buildParam(deviceId string) adb.ExecuteParams {
 	}
 }
 
-func shellQuote(value string) string {
-	if value == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
-}
-
-// ListDirectory 列出设备目录内容
-func (a *App) ListDirectory(deviceId string, path string) types.ExecResult {
-	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("ls -lan -- %s", shellQuote(path)))
-	res, err := util.Exec(cmd, true, nil)
-	if err != nil {
-		return types.NewExecResultFromError(cmd, "", err)
-	}
-	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
-}
-
 // GetThreadSchedInfo 获取进程内所有线程的优先级与可运行核，pid <= 0 时取包名主进程
 func (a *App) GetThreadSchedInfo(deviceId string, packageName string, pid int) (adb.ThreadSchedResult, error) {
 	adbPath := a.adbPath
@@ -796,74 +821,6 @@ func (a *App) GetThreadSchedInfo(deviceId string, packageName string, pid int) (
 		adbPath = "adb"
 	}
 	return adb.GetThreadSchedInfo(adbPath, deviceId, packageName, pid)
-}
-
-// ReadFileContent 读取设备文件内容
-func (a *App) ReadFileContent(deviceId string, path string) types.ExecResult {
-	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("cat %s", shellQuote(path)))
-	res, err := util.Exec(cmd, true, nil)
-	if err != nil {
-		return types.NewExecResultFromError(cmd, "", err)
-	}
-	return types.NewExecResultSuccess(cmd, res)
-}
-
-// DeleteRemoteFile 删除设备文件
-func (a *App) DeleteRemoteFile(deviceId string, path string) types.ExecResult {
-	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("rm -rf -- %s", shellQuote(path)))
-	res, err := util.Exec(cmd, true, nil)
-	if err != nil {
-		return types.NewExecResultFromError(cmd, "", err)
-	}
-	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
-}
-
-// UploadFile 上传本地文件到设备（adb push）
-func (a *App) UploadFile(deviceId string, remotePath string) types.ExecResult {
-	localPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "选择要上传的文件",
-	})
-	if err != nil {
-		return types.NewExecResultErrorString("upload", fmt.Sprintf("选择文件失败: %v", err))
-	}
-	if localPath == "" {
-		return types.NewExecResultErrorString("upload", "已取消")
-	}
-	param := a.buildParam(deviceId)
-	dest := remotePath
-	if dest == "" {
-		dest = "/sdcard/"
-	}
-	cmd := adb.BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("push %s %s", localPath, dest))
-	res, err2 := util.Exec(cmd, true, nil)
-	if err2 != nil {
-		return types.NewExecResultFromError(cmd, "", err2)
-	}
-	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
-}
-
-// DownloadFile 从设备下载文件到本地（adb pull）
-func (a *App) DownloadFile(deviceId string, remotePath string) types.ExecResult {
-	fileName := filepath.Base(remotePath)
-	localPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		DefaultFilename: fileName,
-		Title:           "保存到本地",
-	})
-	if err != nil {
-		return types.NewExecResultErrorString("download", fmt.Sprintf("选择保存路径失败: %v", err))
-	}
-	if localPath == "" {
-		return types.NewExecResultErrorString("download", "已取消")
-	}
-	param := a.buildParam(deviceId)
-	cmd := adb.BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", remotePath, localPath))
-	res, err2 := util.Exec(cmd, true, nil)
-	if err2 != nil {
-		return types.NewExecResultFromError(cmd, "", err2)
-	}
-	return types.NewExecResultSuccess(cmd, strings.TrimSpace(res))
 }
 
 // GetVersion 返回应用版本号

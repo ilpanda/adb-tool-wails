@@ -1,51 +1,95 @@
-import {QuickAction, quickActions} from '../data/quickActions';
-import {ExecuteAction, GetAdbPath, GetAutoOpenTerminal} from '../../wailsjs/go/main/App';
+import {ACTION_DESC, ACTION_META, QuickAction, quickActions} from '../data/quickActions';
+import {ExecuteAction, GetAdbPath} from '../../wailsjs/go/main/App';
 import {useEffect, useMemo, useRef, useState} from 'react';
+import type {InputRef} from 'antd';
+import {Button, Empty, Input, Select, Tooltip, message} from "antd";
 import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
-import {Empty, Input, message, Select} from "antd";
 import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
 import DeviceInfoCard from './DeviceInfoCard';
 import ThreadSchedModal from './ThreadSchedModal';
+import QuickActionCard from './QuickActionCard';
+import ActivityBar from './ActivityBar';
+import TaskDetailDrawer from './TaskDetailDrawer';
+import PageHeader from './PageHeader';
+import {runQuickAction} from '../actions/runQuickAction';
+import {ActionTask, useActionTaskStore} from '../store/actionTaskStore';
 
-interface CommandLog {
-    id: number;
-    action: string;
-    status: 'success' | 'error' | 'loading';
-    label: string
-    message: string;
-    timestamp: Date;
+const KEY_SECTION = '按键';
+const RECENT_STORAGE_KEY = 'quick_action_recent';
+const PACKAGE_STORAGE_KEY = 'selectedPackage';
+const MAX_RECENT = 6;
+const FALLBACK_PACKAGE = 'com.baidu.input_oppo';
+
+const ALL_ACTIONS = quickActions.flatMap(section => section.items);
+
+function readRecent(): string[] {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(RECENT_STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : [];
+    } catch {
+        return [];
+    }
 }
 
-interface TerminalLog {
-    id: number;
-    type: 'command' | 'output';
-    content: string;
-    timestamp: string;
-    action?: string;
-    icon?: string;
-    success?: boolean;
-    duration?: string;
+function writeRecent(list: string[]) {
+    try {
+        localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(list));
+    } catch {
+        // 存储不可用时只保留在内存中
+    }
+}
+
+function readStoredPackage(deviceId: string): string | null {
+    try {
+        const data = JSON.parse(localStorage.getItem(PACKAGE_STORAGE_KEY) || 'null');
+        return data && data.selectedDevice === deviceId ? data.selectedPackage : null;
+    } catch {
+        return null;
+    }
+}
+
+// 按设备缓存页面数据：切换到其他页面再回来时直接显示，后台静默刷新，避免内容先清空再出现导致跳动
+interface DeviceCache {
+    info: string | null;
+    packages: string[];
+    selectedPackage: string;
+}
+
+const deviceCache = new Map<string, DeviceCache>();
+
+function getCache(deviceId: string | undefined): DeviceCache {
+    return (deviceId && deviceCache.get(deviceId)) || {info: null, packages: [], selectedPackage: ''};
+}
+
+function updateCache(deviceId: string, patch: Partial<DeviceCache>) {
+    deviceCache.set(deviceId, {...getCache(deviceId), ...patch});
 }
 
 function RightContainer() {
-    const selectRef = useRef(null);
-    const [logs, setLogs] = useState<CommandLog[]>([]);
-    const [terminalLogs, setTerminalLogs] = useState<TerminalLog[]>([]);
-    const [showTerminal, setShowTerminal] = useState(false);
+    const searchRef = useRef<InputRef>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [properties, setProperties] = useState<SystemProperty[]>([]);
     const [searchText, setSearchText] = useState('');
-    const [autoOpenTerminal, setAutoOpenTerminal] = useState(true);
     const [threadSchedVisible, setThreadSchedVisible] = useState(false);
-
-    const [selectedPackage, setSelectedPackage] = useState<string>('');
-    const [packageList, setPackageList] = useState<string[]>([]);
-
-    // 新增：设备信息状态
-    const [deviceInfoString, setDeviceInfoString] = useState<string | null>(null);
+    const initialCache = getCache(useDeviceStore.getState().selectedDevice?.id);
+    const [selectedPackage, setSelectedPackage] = useState<string>(initialCache.selectedPackage);
+    const [packageList, setPackageList] = useState<string[]>(initialCache.packages);
+    const [pickingForeground, setPickingForeground] = useState(false);
+    const [deviceInfoString, setDeviceInfoString] = useState<string | null>(initialCache.info);
+    const [recent, setRecent] = useState<string[]>(readRecent);
 
     const {devices, selectedDevice} = useDeviceStore();
+    const tasks = useActionTaskStore(state => state.tasks);
+    // 单设备时后端不需要序列号，沿用原有约定
+    const deviceId = devices.length > 1 && selectedDevice ? selectedDevice.id.toString() : "";
+
+    // 每个功能最近一次执行的任务，用于卡片状态
+    const latestTaskByAction = useMemo(() => {
+        const map = new Map<string, ActionTask>();
+        tasks.forEach(task => map.set(task.action, task));
+        return map;
+    }, [tasks]);
 
     const filteredQuickActions = useMemo(() => {
         const keyword = searchText.trim().toLowerCase();
@@ -62,267 +106,177 @@ function RightContainer() {
                         ? section.items
                         : section.items.filter(item =>
                             item.label.toLowerCase().includes(keyword) ||
-                            item.action.toLowerCase().includes(keyword)
+                            item.action.toLowerCase().includes(keyword) ||
+                            (ACTION_DESC[item.action] ?? '').toLowerCase().includes(keyword)
                         )
                 };
             })
             .filter(section => section.items.length > 0);
     }, [searchText]);
 
-    // 新增：获取设备信息的函数
+    const recentActions = useMemo(
+        () => recent.map(action => ALL_ACTIONS.find(item => item.action === action)).filter((item): item is QuickAction => Boolean(item)),
+        [recent],
+    );
+
+    // ⌘K / Ctrl+K 聚焦搜索
+    useEffect(() => {
+        const handleKey = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                searchRef.current?.focus({cursor: 'all'});
+            }
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, []);
+
     const fetchDeviceInfo = async () => {
         if (!selectedDevice) {
             setDeviceInfoString(null);
-            console.log('selectedDevice null ');
             return;
         }
         try {
-            const result = await ExecuteAction({
-                action: "get-system-info", // 你需要在后端实现这个 action
-                targetPackageName: "",
-                deviceId: devices.length > 1 ? selectedDevice.id.toString() : "",
-            });
-
+            const result = await ExecuteAction({action: "get-system-info", targetPackageName: "", deviceId});
+            // 读取失败时保留已有信息，不清空
             if (!result.error && result.res) {
+                updateCache(selectedDevice.id, {info: result.res});
                 setDeviceInfoString(result.res);
-            } else {
-                setDeviceInfoString(null);
             }
         } catch (error) {
             console.error('Failed to fetch device info:', error);
-            setDeviceInfoString(null);
-        } finally {
-
         }
     };
 
-    async function handleClick(action: QuickAction) {
-
-        let adbPath = await GetAdbPath();
-        if (adbPath.error) {
-            message.error("请在设置项配置 adb 路径。")
-            return
-        }
-
-        if (action.action === 'thread-sched') {
-            if (!selectedPackage) {
-                message.warning("请先选择应用包名");
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!selectedDevice) {
+                setSelectedPackage('');
+                setPackageList([]);
+                setDeviceInfoString(null);
                 return;
             }
+
+            // 先用缓存填充（切换设备时立即显示该设备上次的数据），再后台刷新
+            const cached = getCache(selectedDevice.id);
+            setDeviceInfoString(cached.info);
+            setPackageList(cached.packages);
+            if (cached.selectedPackage) setSelectedPackage(cached.selectedPackage);
+            void fetchDeviceInfo();
+
+            const result = await ExecuteAction({action: "get-all-packages", targetPackageName: "", deviceId});
+            const packages = (result.res || '').split("\n").map(line => line.trim()).filter(Boolean);
+            if (packages.length === 0 && cached.packages.length > 0) return;
+            setPackageList(packages);
+
+            // 优先保留当前选择，其次恢复该设备上次选择的包名，最后使用常用的默认包名
+            const stored = readStoredPackage(selectedDevice.id);
+            const preferred = [cached.selectedPackage, stored, FALLBACK_PACKAGE].find(pkg => pkg && packages.includes(pkg));
+            const nextPackage = preferred || cached.selectedPackage || stored || '';
+            setSelectedPackage(nextPackage);
+            updateCache(selectedDevice.id, {packages, selectedPackage: nextPackage});
+        };
+        void fetchData();
+    }, [selectedDevice]);
+
+    const handlePackageChange = (value: string) => {
+        setSelectedPackage(value);
+        if (selectedDevice) updateCache(selectedDevice.id, {selectedPackage: value});
+        if (selectedDevice && value) {
+            try {
+                localStorage.setItem(PACKAGE_STORAGE_KEY, JSON.stringify({selectedDevice: selectedDevice.id, selectedPackage: value}));
+            } catch {
+                // 存储不可用时只保留在内存中
+            }
+        }
+    };
+
+    const pickForegroundPackage = async () => {
+        setPickingForeground(true);
+        try {
+            const result = await ExecuteAction({action: 'view-package', targetPackageName: '', deviceId});
+            const pkg = (result.res || '').trim();
+            if (result.error || !pkg) {
+                message.error(`无法获取前台应用：${result.error || '没有输出'}`);
+                return;
+            }
+            handlePackageChange(pkg);
+            message.success(`已切换到前台应用 ${pkg}`);
+        } finally {
+            setPickingForeground(false);
+        }
+    };
+
+    const rememberRecent = (action: string) => {
+        setRecent(prev => {
+            const next = [action, ...prev.filter(item => item !== action)].slice(0, MAX_RECENT);
+            writeRecent(next);
+            return next;
+        });
+    };
+
+    async function handleClick(action: QuickAction) {
+        const adbPath = await GetAdbPath();
+        if (adbPath.error) {
+            message.error("请在设置项配置 adb 路径。");
+            return;
+        }
+        rememberRecent(action.action);
+
+        if (action.action === 'thread-sched') {
             setThreadSchedVisible(true);
             return;
         }
 
-        if (autoOpenTerminal && !showTerminal) {
-            setShowTerminal(true);
-        }
-
-        const logId = Date.now();
-        const timestamp = new Date().toLocaleTimeString('zh-CN', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+        const outcome = await runQuickAction(action, {
+            packageName: selectedPackage,
+            deviceId,
+            deviceName: selectedDevice?.name ?? '',
         });
-        const startTime = Date.now();
 
-        var hideLog = action.action === "get-system-property";
-
-        if (!hideLog) {
-            setLogs(prev => [{
-                id: logId,
-                action: action.action,
-                status: 'loading',
-                message: '执行中...',
-                label: action.label,
-                timestamp: new Date()
-            }, ...prev]);
-        }
-        try {
-            const result = await ExecuteAction({
-                action: action.action,
-                targetPackageName: selectedPackage ? selectedPackage : "",
-                deviceId: devices.length > 1 ? selectedDevice ? selectedDevice.id.toString() : "" : "",
-            });
-
-            // 添加命令日志到 Terminal
-            const commandLog: TerminalLog = {
-                id: logId,
-                type: 'command',
-                content: result.cmd,
-                timestamp,
-                action: action.label,
-                icon: action.icon
-            };
-
-            setTerminalLogs(prev => [...prev, commandLog]);
-
-            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-
-            if (!result.error && hideLog) {
-                const parsedProperties: SystemProperty[] = result.res
-                    .split("\n")
-                    .filter((line: string) => line.trim() && line.includes(":"))
-                    .map((line: string) => {
-                        const colonIndex = line.indexOf(":");
-                        return {
-                            key: line.substring(0, colonIndex).trim(),
-                            value: line.substring(colonIndex + 1).trim()
-                        };
-                    });
-                setProperties(parsedProperties);
-                setModalVisible(true);
-
-                // 添加输出日志到 Terminal
-                const outputLog: TerminalLog = {
-                    id: Date.now(),
-                    type: 'output',
-                    content: `已获取 ${parsedProperties.length} 条系统属性`,
-                    timestamp: new Date().toLocaleTimeString('zh-CN', {
-                        hour12: false,
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                    }),
-                    success: true,
-                    duration
-                };
-                setTerminalLogs(prev => [...prev, outputLog]);
-                return;
-            }
-
-            // 添加输出日志到 Terminal
-            const outputLog: TerminalLog = {
-                id: Date.now(),
-                type: 'output',
-                content: result.error || result.res || '操作成功',
-                timestamp: new Date().toLocaleTimeString('zh-CN', {
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                }),
-                success: !result.error,
-                duration
-            };
-            setTerminalLogs(prev => [...prev, outputLog]);
-
-            if (result.error) {
-                setLogs(prev => prev.map(log =>
-                    log.id === logId
-                        ? {...log, status: 'error', message: result.error || '未知错误'}
-                        : log
-                ));
-            } else {
-                setLogs(prev => prev.map(log =>
-                    log.id === logId
-                        ? {...log, status: 'success', message: result.res || '操作成功'}
-                        : log
-                ));
-            }
-        } catch (error: any) {
-            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-            // 添加错误输出日志到 Terminal
-            const errorLog: TerminalLog = {
-                id: Date.now(),
-                type: 'output',
-                content: error?.toString() || '操作失败',
-                timestamp: new Date().toLocaleTimeString('zh-CN', {
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                }),
-                success: false,
-                duration
-            };
-            setTerminalLogs(prev => [...prev, errorLog]);
-
-            setLogs(prev => prev.map(log =>
-                log.id === logId
-                    ? {...log, status: 'error', message: error?.toString() || '操作失败'}
-                    : log
-            ));
+        if (outcome && action.action === 'get-system-property' && outcome.task.status === 'success') {
+            const parsedProperties: SystemProperty[] = (outcome.result.res ?? '')
+                .split("\n")
+                .filter((line: string) => line.trim() && line.includes(":"))
+                .map((line: string) => {
+                    const colonIndex = line.indexOf(":");
+                    return {
+                        key: line.substring(0, colonIndex).trim(),
+                        value: line.substring(colonIndex + 1).trim()
+                    };
+                });
+            setProperties(parsedProperties);
+            setModalVisible(true);
         }
     }
 
+    const renderCard = (item: QuickAction, variant: 'tile' | 'key' | 'chip' = 'tile') => (
+        <QuickActionCard
+            key={item.action}
+            item={item}
+            variant={variant}
+            task={latestTaskByAction.get(item.action)}
+            disabledReason={ACTION_META[item.action].needsPackage && !selectedPackage ? '请先在上方选择目标应用' : undefined}
+            onClick={() => void handleClick(item)}
+        />
+    );
 
-    // 清空 Terminal 日志
-    const clearTerminalLogs = () => {
-        setTerminalLogs([]);
+    // 一个分组一张卡片：网格 1px 间隙露出底色形成分隔线，末行空位用白色补齐
+    const renderGroupCard = (items: QuickAction[], columns: number, variant: 'tile' | 'key') => {
+        const fillers = (columns - (items.length % columns)) % columns;
+        return (
+            <div
+                className="grid gap-px overflow-hidden rounded-xl border border-hairline bg-hairline-soft shadow-whisper"
+                style={{gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`}}
+            >
+                {items.map(item => renderCard(item, variant))}
+                {Array.from({length: fillers}, (_, index) => <div key={`filler-${index}`} className="bg-elevated"/>)}
+            </div>
+        );
     };
-
-    useEffect(() => {
-        const loadAutoOpenTerminal = async () => {
-            try {
-                const enabled = await GetAutoOpenTerminal();
-                setAutoOpenTerminal(enabled);
-            } catch (error) {
-                console.error('Failed to load auto open terminal setting:', error);
-            }
-        };
-
-        loadAutoOpenTerminal();
-    }, []);
-
-    useEffect(() => {
-        const fetchData = async () => {
-            const result = await ExecuteAction({
-                action: "get-all-packages",
-                targetPackageName: "",
-                deviceId: devices.length > 1 ? selectedDevice ? selectedDevice.id.toString() : "" : "",
-            });
-
-            const stored = localStorage.getItem('selectedPackage');
-            let defaultPackage = "com.baidu.input_oppo";
-            if (stored && selectedDevice) {
-                try {
-                    const data = JSON.parse(stored);
-                    if (selectedDevice?.id === data.selectedDevice) {
-                        defaultPackage = data.selectedPackage
-                    }
-                } catch (error) {
-                    localStorage.removeItem('selectedPackage'); // 清除损坏的数据
-                }
-            }
-            if (result.res != "" && selectedDevice != null) {
-                let packages = result.res.split("\n").map(line => line.trim());
-                if (packages.filter((line: string) => line.trim() && line.includes(defaultPackage))) {
-                    setSelectedPackage(defaultPackage)
-                }
-                setPackageList(packages);
-            } else {
-                setSelectedPackage("")
-                setPackageList([]);
-            }
-            fetchDeviceInfo();
-        };
-        fetchData();
-    }, [selectedDevice])
-
-    const handlePackageChange = (value: string) => {
-        setSelectedPackage(value);
-        if (selectedDevice != null && value) {
-            localStorage.setItem("selectedPackage",
-                JSON.stringify({
-                    selectedDevice: selectedDevice.id,
-                    selectedPackage: value
-                }));
-        }
-    };
-
-    useEffect(() => {
-        const input = document.querySelector('.package-select-wrapper .ant-select input')
-        if (input) {
-            input.setAttribute('autocomplete', 'off');
-            input.setAttribute('autocapitalize', 'off');
-            input.setAttribute('autocorrect', 'off');
-        }
-    }, []);
 
     return (
-        <div className="flex flex-1 h-full overflow-hidden flex-col">
-
+        <div className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-canvas text-left text-ink">
             <SystemPropertiesModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
@@ -333,109 +287,108 @@ function RightContainer() {
                 visible={threadSchedVisible}
                 onClose={() => setThreadSchedVisible(false)}
                 packageName={selectedPackage}
-                deviceId={devices.length > 1 && selectedDevice ? selectedDevice.id.toString() : ""}
+                deviceId={deviceId}
             />
 
-            {/* 主内容区域 */}
-            <div className="flex-1 flex flex-col p-6 bg-gray-50 gap-6 overflow-y-auto overflow-x-hidden">
-
-                {/* 新增：设备信息卡片 */}
-                <DeviceInfoCard
-                    infoString={deviceInfoString}
-                />
-
-                <div className="flex items-center justify-between gap-4">
-                    <h1 className="text-xl font-semibold text-gray-800">快捷功能</h1>
-                    <Input
-                        value={searchText}
-                        onChange={(event) => setSearchText(event.target.value)}
-                        placeholder="搜索子功能..."
-                        allowClear
-                        prefix={<i className="fa-solid fa-search text-gray-400"/>}
-                        className="max-w-[320px]"
+            <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
+                <div className="mx-auto flex max-w-6xl flex-col gap-5">
+                    <PageHeader
+                        eyebrow="Quick actions · adb"
+                        title="快捷功能"
+                        description="常用的 adb 操作，「应用」分组会作用于下方选择的目标应用"
+                        actions={
+                            <Input
+                                ref={searchRef}
+                                value={searchText}
+                                onChange={(event) => setSearchText(event.target.value)}
+                                placeholder="搜索功能"
+                                allowClear
+                                prefix={<i className="fa-solid fa-magnifying-glass text-[12px] text-faint"/>}
+                                suffix={!searchText && <kbd className="rounded border border-hairline px-1 font-mono text-[10px] text-faint">⌘K</kbd>}
+                                className="!w-64"
+                            />
+                        }
                     />
-                </div>
 
-                {filteredQuickActions.length === 0 ? (
-                    <Empty description="未找到匹配的子功能"/>
-                ) : filteredQuickActions.map((section) => (
-                    <div key={section.title} className="flex flex-col gap-4">
-                        <div className="flex items-center justify-between">
+                    <DeviceInfoCard infoString={deviceInfoString} connected={Boolean(selectedDevice)}/>
 
-                            <div className="flex items-center gap-3">
-                                <h2 className="text-lg font-semibold text-gray-800">
-                                    {section.title}
-                                </h2>
-                            </div>
-
-                            {section.title === '应用' && (
-                                <div className="flex items-center gap-2 package-select-wrapper">
-                                    <span className="text-gray-600">
-                                       连接手机后输入或者选择应用包名：
-                                    </span>
-                                    <Select
-                                        ref={selectRef}
-                                        value={selectedPackage}
-                                        onChange={handlePackageChange}
-                                        className="min-w-[300px]"
-                                        placeholder="请选择包名"
-                                        showSearch
-                                        optionFilterProp="children"
-                                        filterOption={(input, option) =>
-                                            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                                        }
-                                        options={packageList.map(pkg => ({
-                                            value: pkg,
-                                            label: pkg
-                                        }))}
-                                    />
-                                </div>
-                            )}
+                    {/* 目标应用：应用分组的所有操作都作用于它 */}
+                    <div className="flex items-center gap-3 rounded-xl border border-hairline bg-elevated px-4 py-3 shadow-whisper">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-hairline-soft text-[14px] text-body">
+                            <i className="fa-solid fa-cube"/>
+                        </span>
+                        <div className="shrink-0">
+                            <div className="text-[13px] font-medium text-ink">目标应用</div>
+                            <div className="text-[11px] text-mute">共 {packageList.length} 个已安装应用</div>
                         </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {section.items.map((item) => (
-                                <div
-                                    key={item.action}
-                                    onClick={() => handleClick(item)}
-                                    className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
-                                >
-                                    <div className="flex flex-col items-center text-center gap-3">
-                                        <div
-                                            className={`w-14 h-14 ${item.bgColor} rounded-full flex items-center justify-center`}>
-                                            <i className={`fa-solid ${item.icon} text-2xl ${item.color}`}/>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-700">{item.label}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
+                        <Select
+                            value={selectedPackage || undefined}
+                            onChange={handlePackageChange}
+                            placeholder={selectedDevice ? '输入或选择包名' : '请先连接设备'}
+                            disabled={!selectedDevice}
+                            showSearch
+                            optionFilterProp="label"
+                            options={packageList.map(pkg => ({value: pkg, label: pkg}))}
+                            className="min-w-0 flex-1 [&_.ant-select-selection-item]:font-mono [&_.ant-select-selection-item]:text-[13px]"
+                        />
+                        <Tooltip title="把手机前台正在运行的应用设为目标应用">
+                            <Button
+                                icon={<i className="fa-solid fa-location-crosshairs text-[12px]"/>}
+                                loading={pickingForeground}
+                                disabled={!selectedDevice}
+                                onClick={() => void pickForegroundPackage()}
+                            >
+                                使用前台应用
+                            </Button>
+                        </Tooltip>
                     </div>
-                ))}
+
+                    {!searchText && recentActions.length > 0 && (
+                        <section className="flex flex-wrap items-center gap-2">
+                            <span className="pr-1 font-mono text-[10px] uppercase tracking-[0.08em] text-faint">Recent</span>
+                            {recentActions.map(item => renderCard(item, 'chip'))}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setRecent([]);
+                                    writeRecent([]);
+                                }}
+                                className="ml-auto text-[11px] text-faint hover:text-ink"
+                            >
+                                清空
+                            </button>
+                        </section>
+                    )}
+
+                    {filteredQuickActions.length === 0 ? (
+                        <div className="rounded-xl border border-hairline bg-elevated py-10">
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的功能"/>
+                        </div>
+                    ) : filteredQuickActions.map((section) => {
+                        const appScoped = section.items.some(item => ACTION_META[item.action].needsPackage);
+                        return (
+                            <section key={section.title}>
+                                <div className="mb-2 flex items-baseline gap-2 px-1">
+                                    <h2 className="text-[15px] font-semibold tracking-[-0.2px] text-ink">{section.title}</h2>
+                                    {appScoped && (
+                                        <span className={`truncate font-mono text-[11px] ${selectedPackage ? 'text-link-deep' : 'text-error'}`}>
+                                            → {selectedPackage || '未选择目标应用'}
+                                        </span>
+                                    )}
+                                </div>
+                                {section.title === KEY_SECTION
+                                    ? renderGroupCard(section.items, 4, 'key')
+                                    : renderGroupCard(section.items, 3, 'tile')}
+                            </section>
+                        );
+                    })}
+                </div>
             </div>
 
-            {/* Terminal 面板 */}
-            <TerminalPanel
-                isOpen={showTerminal}
-                onClose={() => setShowTerminal(false)}
-                logs={terminalLogs}
-                onClear={clearTerminalLogs}
-            />
-
-            {/* 悬浮打开按钮 */}
-            {!showTerminal && (
-                <button
-                    onClick={() => setShowTerminal(true)}
-                    className="fixed bottom-8 right-8 w-12 h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all flex items-center justify-center group"
-                    title="显示终端"
-                >
-                    <i className="fa-solid fa-terminal"></i>
-                    {logs.some(log => log.status === 'loading') && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                    )}
-                </button>
-            )}
+            {/* 执行记录与状态条 */}
+            <TerminalPanel/>
+            <ActivityBar/>
+            <TaskDetailDrawer/>
         </div>
     );
 }

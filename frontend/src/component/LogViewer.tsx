@@ -1,26 +1,12 @@
-import {useEffect, useMemo, useState} from 'react';
-import {
-    Alert,
-    Button,
-    Card,
-    Empty,
-    Input,
-    List,
-    Segmented,
-    Space,
-    Spin,
-    Tag,
-    Tooltip,
-    Typography,
-    message
-} from 'antd';
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {Button, Empty, Input, Popconfirm, Segmented, Select, Spin, Tooltip, message} from 'antd';
 import {
     CopyOutlined,
+    DeleteOutlined,
     DownloadOutlined,
     FolderOpenOutlined,
     ReloadOutlined,
     SearchOutlined,
-    UpOutlined
 } from '@ant-design/icons';
 import {
     ClearLogFile,
@@ -31,21 +17,41 @@ import {
     ReadLogChunk
 } from "../../wailsjs/go/main/App";
 import {applog, types} from "../../wailsjs/go/models";
-
-const {Paragraph, Text, Title} = Typography;
+import PageHeader from "./PageHeader";
 
 const CHUNK_BYTES = 256 * 1024;
 const MAX_RENDER_LINES = 3000;
 
-type LevelFilter = 'all' | 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+type Level = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+type LevelFilter = 'all' | Level;
 
 const LEVEL_OPTIONS: Array<{value: LevelFilter; label: string}> = [
-    {value: 'all', label: '全部级别'},
-    {value: 'ERROR', label: 'ERROR'},
-    {value: 'WARN', label: 'WARN'},
-    {value: 'INFO', label: 'INFO'},
-    {value: 'DEBUG', label: 'DEBUG'},
+    {value: 'all', label: '全部'},
+    {value: 'ERROR', label: 'Error'},
+    {value: 'WARN', label: 'Warn'},
+    {value: 'INFO', label: 'Info'},
+    {value: 'DEBUG', label: 'Debug'},
 ];
+
+interface ParsedLine {
+    raw: string;
+    time?: string;
+    level?: Level;
+    category?: string;
+    message: string;
+}
+
+// 匹配 applog 输出：2026/10/19 12:22:55.782153 [INFO] [pid=42437] [ACTION] message
+const LINE_PATTERN = /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})(?:\.\d+)?\s+\[(ERROR|WARN|INFO|DEBUG)]\s+(?:\[pid=\d+]\s+)?(?:\[([A-Z_]+)]\s?)?(.*)$/;
+
+function parseLine(raw: string): ParsedLine {
+    const match = raw.match(LINE_PATTERN);
+    if (!match) {
+        return {raw, message: raw};
+    }
+    const [, time, level, category, rest] = match;
+    return {raw, time: time.slice(5), level: level as Level, category, message: rest};
+}
 
 function LogViewer() {
     const [status, setStatus] = useState<applog.StatusDTO | null>(null);
@@ -59,6 +65,9 @@ function LogViewer() {
     const [searchTerm, setSearchTerm] = useState('');
     const [levelFilter, setLevelFilter] = useState<LevelFilter>('all');
     const [errorText, setErrorText] = useState('');
+    const scrollRef = useRef<HTMLDivElement>(null);
+    // 读取最新内容后滚到底部；加载更早内容后保持当前阅读位置
+    const scrollIntent = useRef<{type: 'bottom'} | {type: 'keep'; height: number} | null>(null);
 
     useEffect(() => {
         void initialize();
@@ -76,7 +85,10 @@ function LogViewer() {
             setStatus(nextStatus);
             setFiles(nextFiles);
 
-            const defaultFile = nextFiles.find(file => file.isCurrent)?.name ?? nextFiles[0]?.name ?? '';
+            const defaultFile = nextFiles.find(file => file.name === selectedFile)?.name
+                ?? nextFiles.find(file => file.isCurrent)?.name
+                ?? nextFiles[0]?.name
+                ?? '';
             setSelectedFile(defaultFile);
 
             if (defaultFile) {
@@ -103,6 +115,7 @@ function LogViewer() {
         setErrorText('');
         try {
             const chunk = await ReadLogChunk(fileName, 0, CHUNK_BYTES);
+            scrollIntent.current = {type: 'bottom'};
             applyChunk(chunk, false);
             setSelectedFile(fileName);
         } catch (error) {
@@ -122,6 +135,7 @@ function LogViewer() {
         setErrorText('');
         try {
             const chunk = await ReadLogChunk(selectedFile, nextCursor, CHUNK_BYTES);
+            scrollIntent.current = {type: 'keep', height: scrollRef.current?.scrollHeight ?? 0};
             applyChunk(chunk, true);
         } catch (error) {
             console.error(error);
@@ -154,19 +168,28 @@ function LogViewer() {
         }
         return content
             .split(/\r?\n/)
-            .filter((line, index, arr) => !(index === arr.length - 1 && line === ''));
+            .filter((line, index, arr) => !(index === arr.length - 1 && line === ''))
+            .map(parseLine);
     }, [content]);
+
+    const levelCounts = useMemo(() => {
+        const counts: Record<Level, number> = {ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0};
+        allLines.forEach(line => {
+            if (line.level) counts[line.level] += 1;
+        });
+        return counts;
+    }, [allLines]);
 
     const filteredLines = useMemo(() => {
         const keyword = searchTerm.trim().toLowerCase();
         return allLines.filter(line => {
-            if (levelFilter !== 'all' && !line.includes(levelFilter)) {
+            if (levelFilter !== 'all' && line.level !== levelFilter) {
                 return false;
             }
             if (!keyword) {
                 return true;
             }
-            return line.toLowerCase().includes(keyword);
+            return line.raw.toLowerCase().includes(keyword);
         });
     }, [allLines, levelFilter, searchTerm]);
 
@@ -176,6 +199,14 @@ function LogViewer() {
         }
         return filteredLines.slice(filteredLines.length - MAX_RENDER_LINES);
     }, [filteredLines]);
+
+    useLayoutEffect(() => {
+        const el = scrollRef.current;
+        const intent = scrollIntent.current;
+        if (!el || !intent || loading) return;
+        el.scrollTop = intent.type === 'bottom' ? el.scrollHeight : el.scrollTop + el.scrollHeight - intent.height;
+        scrollIntent.current = null;
+    }, [visibleLines, loading]);
 
     const handleExport = async () => {
         const result = await ExportLogs();
@@ -214,8 +245,14 @@ function LogViewer() {
     };
 
     const handleCopy = async () => {
-        await navigator.clipboard.writeText(visibleLines.join('\n'));
-        message.success('已复制当前可见日志');
+        await navigator.clipboard.writeText(visibleLines.map(line => line.raw).join('\n'));
+        message.success(`已复制 ${visibleLines.length} 行`);
+    };
+
+    const handleCopyDir = async () => {
+        if (!status?.directory) return;
+        await navigator.clipboard.writeText(status.directory);
+        message.success('已复制日志目录');
     };
 
     const showExecResult = (result: types.ExecResult, successText: string) => {
@@ -226,192 +263,215 @@ function LogViewer() {
         message.success(successText);
     };
 
+    const selectedMeta = files.find(file => file.name === selectedFile);
+    const truncated = filteredLines.length > MAX_RENDER_LINES;
+
     return (
-        <div className="flex-1 h-full overflow-hidden bg-slate-100/70 p-6">
-            <div className="mx-auto grid h-full max-w-7xl grid-cols-[320px_minmax(0,1fr)] gap-6">
-                <Card
-                    className="h-full overflow-hidden"
-                    bodyStyle={{padding: 0, height: '100%', display: 'flex', flexDirection: 'column'}}
-                >
-                    <div className="border-b border-slate-200 px-5 py-4">
-                        <Title level={4} className="!mb-1">诊断日志</Title>
-                        <Text type="secondary">应用自身的本地滚动日志，默认只读取文件尾部。</Text>
-                    </div>
+        <div className="flex h-full min-w-0 flex-1 flex-col gap-5 overflow-hidden bg-canvas px-8 py-7 text-left text-ink">
+            <PageHeader
+                eyebrow="Diagnostics · app log"
+                title="诊断日志"
+                description="ADB Tool 自身的运行日志，反馈问题时可导出附上"
+                actions={<>
+                    <Button icon={<FolderOpenOutlined/>} onClick={handleOpenDir}>打开目录</Button>
+                    <Button type="primary" icon={<DownloadOutlined/>} onClick={handleExport}>导出 ZIP</Button>
+                </>}
+            />
 
-                    <div className="border-b border-slate-200 px-5 py-4">
-                        <Space direction="vertical" size={12} className="w-full">
-                            <div className="flex items-center justify-between gap-3">
-                                <Text type="secondary">日志目录</Text>
-                                <Button type="link" icon={<FolderOpenOutlined/>} onClick={handleOpenDir} className="!px-0">
-                                    打开目录
-                                </Button>
+                <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-hairline bg-elevated shadow-whisper">
+                    <div className="flex flex-col gap-2.5 border-b border-hairline-soft px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <Select
+                                value={selectedFile || undefined}
+                                placeholder={loading ? '正在加载...' : '还没有日志文件'}
+                                onChange={(name: string) => void loadLatest(name)}
+                                popupMatchSelectWidth={false}
+                                className="w-60 [&_.ant-select-selection-item]:font-mono [&_.ant-select-selection-item]:text-[13px]"
+                                options={files.map(file => ({
+                                    value: file.name,
+                                    label: file.name,
+                                    file,
+                                }))}
+                                optionRender={option => {
+                                    const file = option.data.file as applog.FileDTO;
+                                    return (
+                                        <div className="flex min-w-[280px] items-center gap-3 py-0.5">
+                                            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">{file.name}</span>
+                                            {file.isCurrent && <CurrentBadge/>}
+                                            <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">
+                                                {formatBytes(file.size)} · {formatTime(file.modifiedAt)}
+                                            </span>
+                                        </div>
+                                    );
+                                }}
+                            />
+                            <div className="mr-auto flex min-w-0 items-center gap-2 font-mono text-[11px] tabular-nums text-faint">
+                                {selectedMeta?.isCurrent && <CurrentBadge/>}
+                                <span className="truncate">
+                                    {selectedMeta ? `${formatBytes(selectedMeta.size)} · 更新于 ${formatTime(selectedMeta.modifiedAt)}` : ''}
+                                </span>
                             </div>
-                            <Paragraph copyable className="!mb-0 text-xs !text-slate-600">
-                                {status?.directory || '-'}
-                            </Paragraph>
-                            <Button type="primary" icon={<DownloadOutlined/>} block onClick={handleExport}>
-                                导出日志 ZIP
-                            </Button>
-                        </Space>
-                    </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                        <List
-                            dataSource={files}
-                            locale={{emptyText: loading ? '正在加载...' : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有日志文件"/>}}
-                            renderItem={(file) => (
-                                <List.Item
-                                    className={`!cursor-pointer !px-5 !py-4 transition-colors ${
-                                        selectedFile === file.name ? 'bg-blue-50' : 'hover:bg-slate-50'
-                                    }`}
-                                    onClick={() => void loadLatest(file.name)}
+                            <div className="flex items-center gap-1">
+                                <Tooltip title="刷新文件列表与最新内容">
+                                    <Button type="text" icon={<ReloadOutlined spin={loading}/>} onClick={() => void initialize()} disabled={loading}/>
+                                </Tooltip>
+                                <Tooltip title="复制当前显示的行">
+                                    <Button type="text" icon={<CopyOutlined/>} onClick={handleCopy} disabled={visibleLines.length === 0}/>
+                                </Tooltip>
+                                <Popconfirm
+                                    title="清空当前日志文件？"
+                                    description="清空后无法恢复。"
+                                    okText="清空"
+                                    cancelText="取消"
+                                    okButtonProps={{danger: true}}
+                                    onConfirm={() => void handleClear()}
+                                    disabled={!selectedFile || loading}
                                 >
-                                    <div className="w-full min-w-0">
-                                        <div className="mb-1 flex items-center justify-between gap-2">
-                                            <Text strong ellipsis={{tooltip: file.name}} className="max-w-[180px]">
-                                                {file.name}
-                                            </Text>
-                                            {file.isCurrent && <Tag color="blue" className="!mr-0">当前</Tag>}
-                                        </div>
-                                        <div className="flex items-center justify-between gap-3 text-xs">
-                                            <Text type="secondary">{formatBytes(file.size)}</Text>
-                                            <Text type="secondary">{formatTime(file.modifiedAt)}</Text>
-                                        </div>
-                                    </div>
-                                </List.Item>
-                            )}
-                        />
-                    </div>
-                </Card>
-
-                <Card
-                    className="h-full overflow-hidden"
-                    bodyStyle={{padding: 0, height: '100%', display: 'flex', flexDirection: 'column'}}
-                >
-                    <div className="border-b border-slate-200 px-6 py-5">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div>
-                                <Title level={4} className="!mb-1">{selectedFile || '未选择日志文件'}</Title>
-                                <Text type="secondary">搜索仅作用于已加载内容，避免在大文件上做全量扫描。</Text>
+                                    <Tooltip title="清空日志">
+                                        <Button type="text" danger icon={<DeleteOutlined/>} disabled={!selectedFile || loading}/>
+                                    </Tooltip>
+                                </Popconfirm>
                             </div>
-                            <Space wrap>
-                                <Button icon={<ReloadOutlined/>} onClick={() => void loadLatest(selectedFile)} disabled={!selectedFile || loading}>
-                                    刷新
-                                </Button>
-                                <Button danger disabled={!selectedFile || loading} onClick={() => void handleClear()}>
-                                    清空日志
-                                </Button>
-                                <Button icon={<CopyOutlined/>} onClick={handleCopy} disabled={visibleLines.length === 0}>
-                                    复制可见内容
-                                </Button>
-                            </Space>
                         </div>
-
-                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-3">
                             <Input
                                 allowClear
-                                prefix={<SearchOutlined className="text-slate-400"/>}
-                                placeholder="搜索已加载日志"
+                                prefix={<SearchOutlined className="text-faint"/>}
+                                placeholder="搜索已加载内容"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="max-w-sm"
+                                className="min-w-[140px] flex-1"
                             />
                             <Segmented
-                                options={LEVEL_OPTIONS.map(option => ({label: option.label, value: option.value}))}
+                                size="small"
+                                className="shrink-0"
+                                options={LEVEL_OPTIONS.map(option => ({
+                                    value: option.value,
+                                    label: (
+                                        <span className="flex items-center gap-1.5 px-0.5">
+                                            {option.value !== 'all' && <span className={`h-1.5 w-1.5 rounded-full ${LEVEL_STYLE[option.value].dot}`}/>}
+                                            {option.label}
+                                            {option.value !== 'all' && levelCounts[option.value] > 0 && (
+                                                <span className="font-mono text-[11px] tabular-nums text-faint">{levelCounts[option.value]}</span>
+                                            )}
+                                        </span>
+                                    ),
+                                }))}
                                 value={levelFilter}
                                 onChange={(value) => setLevelFilter(value as LevelFilter)}
                             />
-                            <Tag bordered={false} color="default" className="!m-0 !px-3 !py-1 text-sm">
-                                已加载 {allLines.length} 行，匹配 {filteredLines.length} 行
-                            </Tag>
                         </div>
                     </div>
 
-                    <div className="border-b border-slate-200 bg-slate-50 px-6 py-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <Text type="secondary">单次读取 {formatBytes(CHUNK_BYTES)}，按需向前翻页。</Text>
-                            <Button
-                                icon={<UpOutlined/>}
-                                onClick={() => void loadOlder()}
-                                disabled={!hasMore || loadingOlder}
-                                loading={loadingOlder}
-                            >
-                                {hasMore ? '加载更早内容' : '没有更早内容'}
-                            </Button>
+                    {(errorText || truncated) && (
+                        <div className={`border-b px-4 py-2 text-[12px] ${errorText ? 'border-error-soft bg-error-soft text-error' : 'border-warning-soft bg-warning-soft text-warning-deep'}`}>
+                            {errorText || `匹配结果较多，仅显示最后 ${MAX_RENDER_LINES} 行`}
                         </div>
-                    </div>
+                    )}
 
-                    <div className="min-h-0 flex-1 overflow-hidden p-5">
-                        {errorText && (
-                            <Alert
-                                type="error"
-                                message={errorText}
-                                showIcon
-                                className="mb-4"
-                            />
-                        )}
-
-                        {filteredLines.length > MAX_RENDER_LINES && (
-                            <Alert
-                                type="warning"
-                                showIcon
-                                className="mb-4"
-                                message={`为保证渲染性能，当前仅显示最后 ${MAX_RENDER_LINES} 行匹配结果。`}
-                            />
-                        )}
-
-                        <div className="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-[#0f172a]">
-                            <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-                                <Space size={8}>
-                                    <Tag color="processing" className="!mr-0">日志输出</Tag>
-                                    <Text className="!text-slate-400">按级别着色，保留原始行顺序</Text>
-                                </Space>
-                                <Tooltip title="当前视图只渲染可见结果，避免一次性绘制过多文本">
-                                    <Text className="!text-slate-500">性能模式</Text>
-                                </Tooltip>
+                    <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-5">
+                        {loading ? (
+                            <div className="flex h-full items-center justify-center">
+                                <Spin/>
                             </div>
-
-                            <div className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-6">
-                                {loading ? (
-                                    <div className="flex h-full items-center justify-center">
-                                        <Spin tip="正在读取日志..."/>
-                                    </div>
-                                ) : visibleLines.length === 0 ? (
-                                    <div className="flex h-full items-center justify-center">
-                                        <Empty
-                                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                            description={<span className="text-slate-400">没有可显示的日志内容</span>}
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="space-y-0.5">
-                                        {visibleLines.map((line, index) => (
-                                            <div key={`${index}-${line.slice(0, 32)}`} className="break-all whitespace-pre-wrap">
-                                                {highlightLine(line)}
-                                            </div>
-                                        ))}
+                        ) : visibleLines.length === 0 ? (
+                            <div className="flex h-full items-center justify-center">
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={allLines.length > 0 ? '没有匹配的日志' : '日志为空'}/>
+                            </div>
+                        ) : (
+                            <div className="py-1">
+                                {hasMore && !truncated && (
+                                    <div className="flex justify-center py-2">
+                                        <Button size="small" type="text" loading={loadingOlder} onClick={() => void loadOlder()} className="!text-mute">
+                                            加载更早的 {formatBytes(CHUNK_BYTES)}
+                                        </Button>
                                     </div>
                                 )}
+                                {visibleLines.map((line, index) => (
+                                    <LogRow key={`${index}-${line.raw.slice(0, 40)}`} line={line}/>
+                                ))}
                             </div>
-                        </div>
+                        )}
                     </div>
-                </Card>
-            </div>
+
+                    <div className="flex items-center gap-4 border-t border-hairline-soft px-4 py-2 font-mono text-[11px] tabular-nums text-faint">
+                        <button
+                            type="button"
+                            onClick={() => void handleCopyDir()}
+                            title={status?.directory ? `${status.directory}\n点击复制` : undefined}
+                            className="group flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                        >
+                            <span className="truncate group-hover:text-ink">{status?.directory || '-'}</span>
+                            <CopyOutlined className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"/>
+                        </button>
+                        <span className="shrink-0">
+                            已加载 {allLines.length} 行 · 匹配 {filteredLines.length} 行{hasMore ? '' : ' · 已到文件开头'}
+                        </span>
+                    </div>
+                </section>
         </div>
     );
 }
 
-function highlightLine(line: string) {
-    const tone = line.includes('ERROR')
-        ? 'text-red-300'
-        : line.includes('WARN')
-            ? 'text-amber-300'
-            : line.includes('INFO')
-                ? 'text-emerald-300'
-                : line.includes('DEBUG')
-                    ? 'text-cyan-300'
-                    : 'text-slate-100';
-    return <span className={tone}>{line}</span>;
+const LEVEL_STYLE: Record<Level, {dot: string; badge: string; row: string}> = {
+    ERROR: {dot: 'bg-error', badge: 'text-error', row: 'bg-error-soft/50 hover:bg-error-soft'},
+    WARN: {dot: 'bg-warning', badge: 'text-warning-deep', row: 'bg-warning-soft/50 hover:bg-warning-soft'},
+    INFO: {dot: 'bg-link', badge: 'text-link', row: 'hover:bg-canvas'},
+    DEBUG: {dot: 'bg-faint', badge: 'text-mute', row: 'hover:bg-canvas'},
+};
+
+function CurrentBadge() {
+    return (
+        <span className="shrink-0 rounded-full bg-link-soft px-1.5 py-px font-sans text-[10px] font-medium text-link-deep">
+            当前
+        </span>
+    );
+}
+
+function LogRow({line}: { line: ParsedLine }) {
+    if (!line.level) {
+        return <div className="whitespace-pre-wrap break-all px-4 py-px text-body hover:bg-canvas">{line.raw}</div>;
+    }
+
+    const style = LEVEL_STYLE[line.level];
+    return (
+        <div className={`grid grid-cols-[108px_40px_minmax(0,1fr)] gap-2 px-4 py-px ${style.row}`}>
+            <span className="whitespace-nowrap tabular-nums text-faint">{line.time}</span>
+            <span className={`font-medium ${style.badge}`}>{line.level}</span>
+            <span className="whitespace-pre-wrap break-all">
+                {line.category && <span className="mr-1.5 text-mute">{line.category}</span>}
+                {renderMessage(line.message)}
+            </span>
+        </div>
+    );
+}
+
+// 消息格式为 "event key=value key=value"，事件名高亮，键名弱化
+function renderMessage(text: string) {
+    const [event, ...rest] = text.split(' ');
+    if (!event || event.includes('=')) {
+        return <span className="text-body">{renderPairs(text)}</span>;
+    }
+    return (
+        <>
+            <span className="text-ink">{event}</span>
+            {rest.length > 0 && <span className="text-body"> {renderPairs(rest.join(' '))}</span>}
+        </>
+    );
+}
+
+function renderPairs(text: string) {
+    return text.split(/(\s+)/).map((token, index) => {
+        const eq = token.indexOf('=');
+        if (eq <= 0) return token;
+        return (
+            <span key={index}>
+                <span className="text-faint">{token.slice(0, eq + 1)}</span>
+                {token.slice(eq + 1)}
+            </span>
+        );
+    });
 }
 
 function formatBytes(size: number) {
@@ -428,7 +488,9 @@ function formatTime(value: string) {
     if (!value) {
         return '-';
     }
-    return new Date(value).toLocaleString();
+    const date = new Date(value);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export default LogViewer;
