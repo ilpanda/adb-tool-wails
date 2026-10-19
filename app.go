@@ -105,6 +105,10 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	if a.deviceTracker != nil {
+		a.deviceTracker.Stop(time.Second)
+	}
+
 	a.deviceUpdateMutex.Lock()
 	if a.deviceUpdateTimer != nil {
 		a.deviceUpdateTimer.Stop()

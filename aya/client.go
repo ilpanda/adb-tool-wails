@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -249,11 +250,29 @@ func (c *Client) startServer() error {
 
 	applog.Infof(applog.CategoryAya, "server_start_requested device=%s", c.param.DeviceId)
 
-	cmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "CLASSPATH=/data/local/tmp/aya/aya.dex app_process /system/bin io.liriliri.aya.Server &")
+	// 直接调用 adb 而不经过本机 shell：服务在设备端用 nohup 并重定向输出后台运行，
+	// adb shell 下发命令后立即返回，不会在本机留下一直挂着的 adb 进程
+	remote := "CLASSPATH=/data/local/tmp/aya/aya.dex nohup app_process /system/bin io.liriliri.aya.Server >/dev/null 2>&1 &"
+	args := []string{"shell", remote}
+	if c.param.DeviceId != "" {
+		args = append([]string{"-s", c.param.DeviceId}, args...)
+	}
+	adbPath := c.param.AdbPath
+	if adbPath == "" {
+		adbPath = "adb"
+	}
 
-	applog.Infof(applog.CategoryAya, "server_start_cmd device=%s cmd=%q", c.param.DeviceId, cmd)
-	if err := util.ExecBackground(cmd); err != nil {
-		return fmt.Errorf("start server failed: %w", err)
+	applog.Infof(applog.CategoryAya, "server_start_cmd device=%s cmd=%q", c.param.DeviceId, adbPath+" "+strings.Join(args, " "))
+	parent := c.param.Ctxt
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, adbPath, args...)
+	util.ConfigureCommand(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("start server failed: %w %s", err, strings.TrimSpace(string(out)))
 	}
 
 	applog.Infof(applog.CategoryAya, "server_start_dispatched device=%s", c.param.DeviceId)

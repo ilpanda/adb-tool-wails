@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,12 @@ type DeviceTracker struct {
 	knownStates  map[string]string
 	callback     DeviceUpdateCallback
 	AdbPath      string
+
+	// Wails 退出时不会取消应用 context，需要自己持有可取消的 context，
+	// 否则 adb track-devices 子进程会在应用退出后残留在后台
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 func NewDeviceTracker(adbPath string, callback DeviceUpdateCallback) *DeviceTracker {
@@ -36,7 +43,15 @@ func NewDeviceTracker(adbPath string, callback DeviceUpdateCallback) *DeviceTrac
 	}
 }
 
-func (dt *DeviceTracker) Start(ctx context.Context) {
+func (dt *DeviceTracker) Start(parent context.Context) {
+	ctx, cancel := context.WithCancel(parent)
+	done := make(chan struct{})
+	dt.mu.Lock()
+	dt.cancel = cancel
+	dt.done = done
+	dt.mu.Unlock()
+	defer close(done)
+
 	applog.Infof(applog.CategoryADB, "device_tracker_loop_started adb_path=%s", dt.AdbPath)
 
 	for {
@@ -60,6 +75,22 @@ func (dt *DeviceTracker) Start(ctx context.Context) {
 			return
 		case <-time.After(3 * time.Second):
 		}
+	}
+}
+
+// Stop 结束跟踪循环并杀掉 adb track-devices 子进程，最多等待 timeout
+func (dt *DeviceTracker) Stop(timeout time.Duration) {
+	dt.mu.Lock()
+	cancel, done := dt.cancel, dt.done
+	dt.mu.Unlock()
+	if cancel == nil {
+		return
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		applog.Warnf(applog.CategoryADB, "device_tracker_stop_timeout timeout_ms=%d", timeout.Milliseconds())
 	}
 }
 
