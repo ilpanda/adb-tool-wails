@@ -1,7 +1,7 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Button, Input, Modal, Select, Table, Tag, Tooltip} from 'antd';
 import type {ColumnsType} from 'antd/es/table';
-import {ReloadOutlined, SearchOutlined} from '@ant-design/icons';
+import {PauseCircleOutlined, PlayCircleOutlined, SearchOutlined} from '@ant-design/icons';
 import {GetThreadSchedInfo} from '../../wailsjs/go/main/App';
 import {adb} from '../../wailsjs/go/models';
 
@@ -11,6 +11,8 @@ interface ThreadSchedModalProps {
     packageName: string;
     deviceId: string;
 }
+
+const AUTO_REFRESH_INTERVAL = 5000;
 
 // 按簇性能从低到高取色
 const CLUSTER_COLORS: Record<string, string> = {
@@ -62,36 +64,66 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
     const [data, setData] = useState<adb.ThreadSchedResult | null>(null);
     const [pid, setPid] = useState(0);
     const [keyword, setKeyword] = useState('');
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    // 每次加载成功后更新，用于在其后 5s 安排下一次自动刷新
+    const [loadedAt, setLoadedAt] = useState(0);
+    // 请求序号，丢弃过期响应（如自动刷新途中切换了进程）
+    const requestSeq = useRef(0);
 
-    const load = useCallback(async (targetPid: number) => {
+    // silent：自动刷新时不显示 loading，失败时保留已有数据
+    const load = useCallback(async (targetPid: number, silent = false) => {
         if (!packageName) {
             setError('请先选择应用包名');
             return;
         }
-        setLoading(true);
-        setError('');
+        const seq = ++requestSeq.current;
+        if (!silent) setLoading(true);
         try {
             const result = await GetThreadSchedInfo(deviceId, packageName, targetPid);
+            if (seq !== requestSeq.current) return;
             setData(result);
             setPid(result.pid);
+            setError('');
+            setLoadedAt(Date.now());
         } catch (e: any) {
+            if (seq !== requestSeq.current) return;
             setError(e?.toString() || '获取线程信息失败');
-            setData(null);
+            setAutoRefresh(false);
+            if (!silent) setData(null);
         } finally {
-            setLoading(false);
+            if (!silent && seq === requestSeq.current) setLoading(false);
         }
     }, [packageName, deviceId]);
 
     useEffect(() => {
         if (visible) {
             setPid(0);
+            setAutoRefresh(true);
             load(0);
         } else {
+            requestSeq.current++;
             setKeyword('');
             setData(null);
             setError('');
+            setLoadedAt(0);
+            setLoading(false);
         }
     }, [visible, load]);
+
+    useEffect(() => {
+        if (!visible || !autoRefresh || loadedAt === 0) return;
+        const timer = setTimeout(() => load(pid, true), AUTO_REFRESH_INTERVAL);
+        return () => clearTimeout(timer);
+    }, [visible, autoRefresh, loadedAt, pid, load]);
+
+    const toggleAutoRefresh = () => {
+        if (autoRefresh) {
+            setAutoRefresh(false);
+        } else {
+            setAutoRefresh(true);
+            load(pid);
+        }
+    };
 
     const clusters = data?.clusters ?? [];
 
@@ -136,7 +168,8 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                     {prio}
                     {(record.policy === 'FIFO' || record.policy === 'RR') && (
                         <Tooltip title={`实时调度 SCHED_${record.policy}，rtprio=${record.rtPriority}`}>
-                            <Tag color="magenta" className="ml-2">RT</Tag>
+                            {/* antd Tag 自带 margin 重置会覆盖 Tailwind 的 ml-*，这里用内联样式 */}
+                            <Tag color="magenta" style={{marginInlineStart: 8}}>RT</Tag>
                         </Tooltip>
                     )}
                 </span>
@@ -162,7 +195,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             render: (_, record) => <AllowedCpus thread={record} clusters={clusters}/>,
         },
         {
-            title: 'cpuset',
+            title: <Tooltip title="线程所属的 cpuset 分组（/proc/<tid>/cpuset），由 Android 按进程状态分配：/top-app 前台应用、/foreground 前台服务、/background 后台、/system-background 系统后台、/restricted 受限。分组决定可运行的 CPU 核范围">cpuset</Tooltip>,
             dataIndex: 'cpuset',
             width: 140,
             filters: Array.from(new Set((data?.threads ?? []).map(t => t.cpuset))).map(c => ({text: c, value: c})),
@@ -175,15 +208,18 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             title={
                 <div className="flex items-center justify-between">
                     <span>线程调度信息</span>
-                    <Button
-                        type="link"
-                        icon={<ReloadOutlined/>}
-                        onClick={() => load(pid)}
-                        loading={loading}
-                        className="mr-8"
-                    >
-                        刷新
-                    </Button>
+                    <Tooltip title={autoRefresh ? '每 5 秒自动刷新，点击停止' : '立即刷新并每 5 秒自动刷新'}>
+                        <Button
+                            type="link"
+                            danger={autoRefresh}
+                            icon={autoRefresh ? <PauseCircleOutlined/> : <PlayCircleOutlined/>}
+                            onClick={toggleAutoRefresh}
+                            disabled={loading}
+                            className="mr-8"
+                        >
+                            {autoRefresh ? '停止自动刷新' : '自动刷新'}
+                        </Button>
+                    </Tooltip>
                 </div>
             }
             open={visible}
@@ -239,6 +275,8 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                     dataSource={filteredThreads}
                     pagination={false}
                     scroll={{x: 1150, y: '60vh'}}
+                    // 表体固定高度：过滤后行数变少时弹窗不随之缩放、重新居中而跳动
+                    className="[&_.ant-table-body]:h-[60vh]"
                 />
             </div>
         </Modal>
