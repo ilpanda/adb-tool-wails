@@ -231,7 +231,10 @@ function ApplicationList() {
             <div className="min-h-0 flex-1 overflow-auto">
                 {showLoading ? (
                     <div className="flex h-full items-center justify-center">
-                        <Spin size="large" tip="正在加载应用列表..."/>
+                        <div className="flex flex-col items-center gap-3 text-[13px] text-mute">
+                            <Spin size="large"/>
+                            正在加载应用列表…
+                        </div>
                     </div>
                 ) : showEmpty ? (
                     <div className="flex h-full items-center justify-center">

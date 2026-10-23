@@ -50,7 +50,7 @@ func InstallApkFile(param adb.ExecuteParams, filePath string) types.ExecResult {
 		return types.NewExecResultErrorString("installApp", "不是 APK 文件: "+filepath.Base(filePath))
 	}
 
-	// 单设备时前端不传序列号；先固定设备，避免确认期间连接变化后操作其他设备。
+	// 未指定序列号时先固定设备，避免确认期间连接变化后操作其他设备。
 	if param.DeviceId == "" {
 		device := runAPKCommand(param, "get-serialno")
 		if device.Error != "" {

@@ -23,8 +23,8 @@ type MemInfo struct {
 	RawMemInfo   string `json:"rawMemInfo"`
 }
 
-// ParseMemInfo 解析 dumpsys meminfo 输出
-func ParseMemInfo(output string) MemInfo {
+// parseMemInfo 解析 dumpsys meminfo 输出
+func parseMemInfo(output string) MemInfo {
 	memInfo := MemInfo{}
 	lines := strings.Split(output, "\n")
 

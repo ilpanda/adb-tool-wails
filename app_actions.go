@@ -131,8 +131,6 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		result = actions.UninstallApp(param)
 	case "get-system-info":
 		result = actions.GetDeviceInfo(param)
-	case "format-sys-info":
-		result = actions.FormatSysMemInfo(param)
 	case "get-system-property":
 		result = actions.GetAllSystemProperties(param)
 	case "export-app":

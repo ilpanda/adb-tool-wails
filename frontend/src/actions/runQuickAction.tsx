@@ -5,7 +5,7 @@ import {ActionTask, TaskResult, useActionTaskStore} from '../store/actionTaskSto
 
 interface RunContext {
     packageName: string;
-    // 单设备时传空字符串，与后端原有约定一致
+    // 设备序列号，未连接设备时为空
     deviceId: string;
     deviceName: string;
     // 本地文件路径，例如拖入窗口的 APK

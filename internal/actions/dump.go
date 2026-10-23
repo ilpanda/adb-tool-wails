@@ -2,32 +2,13 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
-	"adb-tool-wails/internal/perf"
 	"adb-tool-wails/internal/types"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 )
 
 // 调试导出：meminfo、smaps、showmap、线程信息与 hprof
-
-func FormatSysMemInfo(param adb.ExecuteParams) types.ExecResult {
-	result := DumpSysMemInfo(param)
-	if result.Error != "" || result.Res == "" {
-		return result
-	}
-
-	memInfo := perf.ParseMemInfo(result.Res)
-	memInfo.Timestamp = time.Now().UnixMilli() // 添加毫秒级时间戳
-	memInfo.RawMemInfo = result.Res
-
-	jsonBytes, err := json.Marshal(memInfo)
-	if err != nil {
-		return types.NewExecResultError(result.Cmd, err)
-	}
-	return types.NewExecResultSuccess(result.Cmd, string(jsonBytes))
-}
 
 func DumpSysMemInfo(param adb.ExecuteParams) types.ExecResult {
 	packageIdResult := PackagePid(param)

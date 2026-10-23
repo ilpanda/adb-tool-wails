@@ -227,7 +227,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             footer={null}
             width={1200}
             centered
-            destroyOnClose
+            destroyOnHidden
         >
             <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">

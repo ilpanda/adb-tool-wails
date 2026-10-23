@@ -33,11 +33,7 @@ type App struct {
 	ayaClient         *aya.Client
 	ayaDexPath        string
 	perfMonitor       *perf.Monitor
-
-	// 用于取消应用列表加载任务
-	appListCancel context.CancelFunc
-	appListMutex  sync.Mutex
-	appListDone   chan struct{} // 新增：用于等待任务完成
+	appLoader         aya.Loader
 }
 
 // NewApp creates a new App application struct
@@ -59,9 +55,10 @@ func (a *App) startup(ctx context.Context) {
 		applog.Infof(applog.CategoryStartup, "storage_ready namespace=config")
 	}
 
-	if err := a.extractAyaDex(); err != nil {
+	if path, err := aya.ExtractDex(ayaDexData); err != nil {
 		applog.Errorf(applog.CategoryStartup, "aya_dex_extract_failed err=%q", err.Error())
 	} else {
+		a.ayaDexPath = path
 		applog.Infof(applog.CategoryStartup, "aya_dex_ready path=%s", a.ayaDexPath)
 	}
 
@@ -109,12 +106,7 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	a.deviceUpdateMutex.Unlock()
 
-	a.appListMutex.Lock()
-	if a.appListCancel != nil {
-		a.appListCancel()
-		a.appListCancel = nil
-	}
-	a.appListMutex.Unlock()
+	a.appLoader.Cancel()
 
 	if a.ayaClient != nil {
 		if err := a.ayaClient.Close(); err != nil {

@@ -68,14 +68,14 @@ function RightContainer() {
     const [deviceInfoString, setDeviceInfoString] = useState<string | null>(initialCache.info);
     const [recent, setRecent] = useState<string[]>(readRecent);
 
-    const {devices, selectedDevice} = useDeviceStore();
+    const {selectedDevice} = useDeviceStore();
     const packageList = usePackageListStore(state =>
         selectedDevice ? state.packagesByDevice[selectedDevice.id] ?? EMPTY_PACKAGES : EMPTY_PACKAGES);
     const selectedPackage = usePackageListStore(state =>
         selectedDevice ? state.targetByDevice[selectedDevice.id] ?? '' : '');
     const tasks = useActionTaskStore(state => state.tasks);
-    // 单设备时后端不需要序列号，沿用原有约定
-    const deviceId = devices.length > 1 && selectedDevice ? selectedDevice.id.toString() : "";
+    // 始终传序列号：执行过程中再插入一台设备时，adb 不会因为 "more than one device" 失败
+    const deviceId = selectedDevice?.id ?? '';
 
     // 每个功能最近一次执行的任务，用于卡片状态
     const latestTaskByAction = useMemo(() => {

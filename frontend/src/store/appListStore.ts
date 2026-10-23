@@ -67,7 +67,7 @@ interface AppListStore {
     clearAll: () => void;
 }
 
-// 生成缓存 key（空字符串表示单设备模式）
+// 生成缓存 key（按设备序列号区分）
 const getCacheKey = (deviceId: string) => deviceId || '_default_';
 
 // 加载由 store 持有，离开应用列表页面后继续在后台完成

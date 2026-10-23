@@ -282,7 +282,7 @@ func parsePerfMemInfo(pid int, output string) (ProcessMemInfo, bool) {
 	if header == nil {
 		return ProcessMemInfo{}, false
 	}
-	info := ProcessMemInfo{MemInfo: ParseMemInfo(output), Pid: pid, Process: header[2], Objects: map[string]int64{}}
+	info := ProcessMemInfo{MemInfo: parseMemInfo(output), Pid: pid, Process: header[2], Objects: map[string]int64{}}
 	if info.TotalPSS == 0 {
 		return ProcessMemInfo{}, false
 	}

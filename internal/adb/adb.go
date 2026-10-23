@@ -72,7 +72,7 @@ func ValidPackageName(name string) bool {
 	return rePackageName.MatchString(name)
 }
 
-// Args 在参数前加上 -s <序列号>（单设备时不加），用于直接以参数列表执行 adb、不经过本机 shell
+// Args 在参数前加上 -s <序列号>（未指定序列号时不加），用于直接以参数列表执行 adb、不经过本机 shell
 func (p ExecuteParams) Args(args ...string) []string {
 	if p.DeviceId != "" {
 		return append([]string{"-s", p.DeviceId}, args...)
