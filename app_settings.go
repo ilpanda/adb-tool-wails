@@ -4,13 +4,12 @@ import (
 	"adb-tool-wails/internal/applog"
 	"adb-tool-wails/internal/storage"
 	"adb-tool-wails/internal/types"
-	"adb-tool-wails/internal/update"
 	"adb-tool-wails/internal/util"
 	"fmt"
 	"os/exec"
 )
 
-// 设置：adb 路径、偏好、收藏目录、版本与更新检查
+// 设置：adb 路径、偏好、收藏目录、版本
 
 func (a *App) GetAdbPath() types.ExecResult {
 	adbPath := "adb"
@@ -93,9 +92,4 @@ func (a *App) SetBookmarkPaths(paths []string) error {
 		return fmt.Errorf("storage is not initialized")
 	}
 	return a.store.Set(storage.KeyBookmarkPaths, paths)
-}
-
-// CheckUpdate 查询 GitHub Releases 是否有新版本
-func (a *App) CheckUpdate() update.Info {
-	return update.Check(Version, IsDebugBuild())
 }

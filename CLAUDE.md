@@ -37,11 +37,11 @@ Go `App` struct methods are bound to the frontend via Wails auto-generated bindi
 
 **Action dispatch:** The frontend sends an `Action` struct (action name, target package, device serial) to `App.ExecuteAction()` in `app_actions.go`, which routes via a switch statement to functions in `internal/actions`. Results are returned as `ExecResult{cmd, res, error}`.
 
-**Events (backend→frontend push):** `runtime.EventsEmit()` pushes device list updates (`adb_update`), app-list progress (`app-list-progress`), action stages (`action-stage`) and performance monitor data (`perf-sample`, `perf-memory`, `perf-event`, `perf-status`) to the frontend.
+**Events (backend→frontend push):** `runtime.EventsEmit()` pushes device list updates (`adb_update`), app-list progress (`app-list-progress`), action stages (`action-stage`), update download status (`update-status`) and performance monitor data (`perf-sample`, `perf-memory`, `perf-event`, `perf-status`) to the frontend.
 
 ### Project Layout
 
-The repository root holds only the Wails `main` package: `main.go` (entry point), `version.go`, and `app*.go`, which define the `App` methods bound to the frontend. These methods are thin forwarders grouped by feature (`app_actions.go`, `app_apps.go`, `app_files.go`, `app_perf.go`, `app_wireless.go`, `app_settings.go`, `app_logs.go`); the implementation lives in `internal/`.
+The repository root holds only the Wails `main` package: `main.go` (entry point), `version.go`, and `app*.go`, which define the `App` methods bound to the frontend. These methods are thin forwarders grouped by feature (`app_actions.go`, `app_apps.go`, `app_files.go`, `app_perf.go`, `app_wireless.go`, `app_settings.go`, `app_update.go`, `app_logs.go`); the implementation lives in `internal/`.
 
 ### Key Backend Packages (`internal/`)
 
@@ -50,7 +50,7 @@ The repository root holds only the Wails `main` package: `main.go` (entry point)
 - `perf/` — Performance monitor (`monitor.go` sampling loops, `events.go` process start/death/restart via pid + start time, logcat events and exit-info, `parse.go` /proc parsing), thread scheduling (`threadsched.go`) and `dumpsys meminfo` parsing (`meminfo.go`).
 - `wireless/` — Wireless debugging: QR / pairing-code pairing, connect, USB to wireless (`adb tcpip`), mDNS discovery.
 - `files/` — Device file manager (list, preview, upload, download, delete).
-- `update/` — Checks GitHub Releases for a newer version.
+- `update/` — In-app update: checks GitHub Releases (falls back to the `/releases/latest` redirect when the API is rate-limited), downloads the platform asset in the background (system proxy, retry with resume, sha256 check), then replaces the app and relaunches (`.app` via `ditto` on macOS, the binary on Linux, runs the NSIS installer on Windows). Asset names must match those packaged in `release.yml`.
 - `aya/` — Client for the on-device Aya server. Pushes DEX, starts via `app_process`, communicates over forwarded TCP sockets using protobuf (`internal/aya/proto/wire.proto`).
 - `storage/` — BadgerDB key-value store for persistent config (ADB path, bookmarks). Data stored at `~/$UserConfigDir/config/badger`.
 - `applog/` — Rotating app log files shown in the diagnostic log page.

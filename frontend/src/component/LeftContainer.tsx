@@ -4,8 +4,9 @@ import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
 import {GetDeviceNameArray, GetVersion} from "../../wailsjs/go/main/App";
 import {Eyebrow} from "./PageHeader";
 import WirelessModal from "./WirelessModal";
-import {useUpdateStore} from "../store/updateStore";
+import {downloadPercent, useUpdateStore} from "../store/updateStore";
 import {BrowserOpenURL} from "../../wailsjs/runtime";
+import {installUpdate} from "../hooks/useUpdateCheck";
 
 const MENU_GROUPS: Array<{title: string; items: Array<{key: string; label: string; icon: string}>}> = [
     {
@@ -47,6 +48,7 @@ function LeftContainer({selectedView, onViewChange}: {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [wirelessOpen, setWirelessOpen] = useState(false);
     const update = useUpdateStore(state => state.info);
+    const updateStatus = useUpdateStore(state => state.status);
     const [version, setVersion] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -185,21 +187,42 @@ function LeftContainer({selectedView, onViewChange}: {
             </nav>
 
             {version && (
-                <div className="flex items-center justify-between border-t border-hairline px-5 py-3 font-mono text-[11px] text-faint">
-                    <span>Version</span>
-                    {update?.hasUpdate ? (
+                <div className="border-t border-hairline px-3 py-3">
+                    {updateStatus.state === 'ready' && (
                         <button
                             type="button"
-                            onClick={() => BrowserOpenURL(update.url)}
-                            title={`新版本 ${update.latest}，点击前往下载`}
-                            className="flex items-center gap-1.5 text-link transition-colors hover:text-link-deep"
+                            onClick={() => void installUpdate()}
+                            title="新版本已下载，重启应用完成更新"
+                            className="mb-2.5 flex w-full items-center justify-center gap-2 rounded-md bg-link px-3 py-2 text-[12px] font-medium text-white transition-colors hover:bg-link-deep"
                         >
-                            <span className="h-1.5 w-1.5 rounded-full bg-link"/>
-                            {version} → {update.latest}
+                            <i className="fa-solid fa-arrow-rotate-right text-[11px]"/>
+                            重启以更新到 {updateStatus.version}
                         </button>
-                    ) : (
-                        <span>{version}</span>
                     )}
+                    <div className="flex items-center justify-between px-2 font-mono text-[11px] text-faint">
+                        <span>Version</span>
+                        {!update?.hasUpdate || updateStatus.state === 'ready' ? (
+                            <span>{version}</span>
+                        ) : updateStatus.state === 'downloading' ? (
+                            <span title="正在下载新版本" className="text-link">
+                                {update.latest} · {downloadPercent(updateStatus)}%
+                            </span>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => update.canInstall
+                                    ? void useUpdateStore.getState().download()
+                                    : BrowserOpenURL(update.url)}
+                                title={updateStatus.state === 'error'
+                                    ? `下载失败：${updateStatus.error}，点击重试`
+                                    : `新版本 ${update.latest}，点击下载`}
+                                className="flex items-center gap-1.5 text-link transition-colors hover:text-link-deep"
+                            >
+                                <span className={`h-1.5 w-1.5 rounded-full ${updateStatus.state === 'error' ? 'bg-error' : 'bg-link'}`}/>
+                                {version} → {update.latest}
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

@@ -6,6 +6,7 @@ import (
 	"adb-tool-wails/internal/aya"
 	"adb-tool-wails/internal/perf"
 	"adb-tool-wails/internal/storage"
+	"adb-tool-wails/internal/update"
 	"context"
 	"os"
 	"os/exec"
@@ -34,6 +35,7 @@ type App struct {
 	ayaDexPath        string
 	perfMonitor       *perf.Monitor
 	appLoader         aya.Loader
+	updater           *update.Updater
 }
 
 // NewApp creates a new App application struct
@@ -85,6 +87,10 @@ func (a *App) startup(ctx context.Context) {
 	a.perfMonitor = perf.NewMonitor(func(event string, data any) {
 		runtime.EventsEmit(a.ctx, event, data)
 	})
+	a.updater = update.NewUpdater(Version, IsDebugBuild(), func(status update.Status) {
+		runtime.EventsEmit(a.ctx, "update-status", status)
+	})
+	go update.CleanStaged(Version)
 
 	// 启动跟踪
 	go a.deviceTracker.Start(ctx)

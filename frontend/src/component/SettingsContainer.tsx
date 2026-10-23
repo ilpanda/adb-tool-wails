@@ -11,7 +11,8 @@ import {
     UpdateAdbPath
 } from "../../wailsjs/go/main/App";
 import PageHeader, {Eyebrow} from "./PageHeader";
-import {useUpdateStore} from '../store/updateStore';
+import {downloadPercent, useUpdateStore} from '../store/updateStore';
+import {installUpdate} from '../hooks/useUpdateCheck';
 import {ThemeMode, useThemeStore} from '../store/themeStore';
 import {BrowserOpenURL} from '../../wailsjs/runtime/runtime';
 
@@ -161,6 +162,7 @@ function SettingsContainer() {
     const setThemeMode = useThemeStore(state => state.setMode);
     const update = useUpdateStore(state => state.info);
     const checkingUpdate = useUpdateStore(state => state.checking);
+    const updateStatus = useUpdateStore(state => state.status);
     const [updateChecked, setUpdateChecked] = useState(false);
     const checkUpdate = async () => {
         await useUpdateStore.getState().check();
@@ -169,7 +171,12 @@ function SettingsContainer() {
     const updateDescription = () => {
         if (!update) return undefined;
         if (update.error) return updateChecked ? `检查失败：${update.error}` : undefined;
-        if (update.hasUpdate) return `发现新版本 ${update.latest}`;
+        if (update.hasUpdate) {
+            if (updateStatus.state === 'ready') return `${update.latest} 已下载，重启应用即可完成更新`;
+            if (updateStatus.state === 'downloading') return `正在下载 ${update.latest}（${downloadPercent(updateStatus)}%）`;
+            if (updateStatus.state === 'error') return `下载 ${update.latest} 失败：${updateStatus.error}`;
+            return `发现新版本 ${update.latest}`;
+        }
         if (version === 'dev') return update.latest ? `开发版本，最新发布为 ${update.latest}` : undefined;
         return updateChecked ? '已是最新版本' : undefined;
     };
@@ -290,9 +297,17 @@ function SettingsContainer() {
                         description={updateDescription()}
                         control={<>
                             <span className="font-mono text-[13px] text-body">{version || '-'}</span>
-                            {update?.hasUpdate
-                                ? <Button type="primary" onClick={() => BrowserOpenURL(update.url)}>下载 {update.latest}</Button>
-                                : <Button onClick={() => void checkUpdate()} loading={checkingUpdate}>检查更新</Button>}
+                            {!update?.hasUpdate
+                                ? <Button onClick={() => void checkUpdate()} loading={checkingUpdate}>检查更新</Button>
+                                : updateStatus.state === 'ready'
+                                    ? <Button type="primary" onClick={() => void installUpdate()}>重启并更新</Button>
+                                    : updateStatus.state === 'downloading'
+                                        ? <Button loading>下载中 {downloadPercent(updateStatus)}%</Button>
+                                        : <Button type="primary" onClick={() => update.canInstall
+                                            ? void useUpdateStore.getState().download()
+                                            : BrowserOpenURL(update.url)}>
+                                            {updateStatus.state === 'error' ? '重新下载' : `下载 ${update.latest}`}
+                                        </Button>}
                         </>}
                     />
                     <SettingsRow
