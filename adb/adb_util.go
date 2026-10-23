@@ -49,18 +49,16 @@ var (
 	reFragmentRow = regexp.MustCompile(`^\s*#\d+`)
 )
 
+// BuildAdbCmd 拼出交给本机 shell 执行的 adb 命令；adb 路径与序列号会加引号，路径含空格时也能执行
 func BuildAdbCmd(adbPath string, deviceId string, shellCmd string) string {
 	if deviceId != "" {
-		return fmt.Sprintf("%s -s %s %s", adbPath, deviceId, shellCmd)
+		return fmt.Sprintf("%s -s %s %s", util.QuoteHostArg(adbPath), util.QuoteHostArg(deviceId), shellCmd)
 	}
-	return fmt.Sprintf("%s %s", adbPath, shellCmd)
+	return fmt.Sprintf("%s %s", util.QuoteHostArg(adbPath), shellCmd)
 }
 
 func BuildAdbShellCmd(adbPath string, deviceId string, shellCmd string) string {
-	if deviceId != "" {
-		return fmt.Sprintf("%s -s %s shell %s", adbPath, deviceId, shellCmd)
-	}
-	return fmt.Sprintf("%s shell %s", adbPath, shellCmd)
+	return BuildAdbCmd(adbPath, deviceId, "shell "+shellCmd)
 }
 
 func GetCurrentPackageAndActivityName(param ExecuteParams) types.ExecResult {
@@ -347,9 +345,19 @@ func listInputMethodService(param ExecuteParams) types.ExecResult {
 	return result
 }
 
+// StartActivity 打开应用的启动页；monkey 的原始输出很长，这里只返回结论
 func StartActivity(param ExecuteParams) types.ExecResult {
 	cmd := BuildAdbShellCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("monkey -p %s -c android.intent.category.LAUNCHER 1", param.PackageName))
-	return execCmd(cmd)
+	result := execCmd(cmd)
+	switch {
+	case result.Error != "":
+		return result
+	case strings.Contains(result.Res, "No activities found"):
+		result.Error = "该应用没有可启动的页面（没有声明 LAUNCHER Activity）"
+	case strings.Contains(result.Res, "Events injected"):
+		result.Res = "已启动"
+	}
+	return result
 }
 
 func Shutdown(param ExecuteParams) types.ExecResult {
@@ -547,7 +555,7 @@ func Screenshot(param ExecuteParams) types.ExecResult {
 
 	// 步骤2: 拉取到本地
 	param.Stage(StagePulling)
-	cmdPull := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s \"%s\"", devicePath, savePath))
+	cmdPull := BuildAdbCmd(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", devicePath, util.QuoteHostArg(savePath)))
 	res, err = util.Exec(cmdPull, false, nil)
 	if err != nil {
 		return types.NewExecResultErrorString(cmdPull, fmt.Sprintf("拉取文件失败: %v, 输出: %s", err, res))

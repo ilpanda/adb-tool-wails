@@ -8,19 +8,19 @@ import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
 import DeviceInfoCard from './DeviceInfoCard';
 import ThreadSchedModal from './ThreadSchedModal';
+import DeepLinkModal from './DeepLinkModal';
 import QuickActionCard from './QuickActionCard';
 import ActivityBar from './ActivityBar';
 import TaskDetailDrawer from './TaskDetailDrawer';
 import PageHeader from './PageHeader';
 import {runQuickAction} from '../actions/runQuickAction';
 import {ActionTask, useActionTaskStore} from '../store/actionTaskStore';
-import {EMPTY_PACKAGES, readStoredPackage, usePackageListStore, writeStoredPackage} from '../store/packageListStore';
+import {EMPTY_PACKAGES, usePackageListStore} from '../store/packageListStore';
 import PackagePicker from './PackagePicker';
 
 const KEY_SECTION = '按键';
 const RECENT_STORAGE_KEY = 'quick_action_recent';
 const MAX_RECENT = 6;
-const FALLBACK_PACKAGE = 'com.baidu.input_oppo';
 
 const ALL_ACTIONS = quickActions.flatMap(section => section.items);
 
@@ -45,13 +45,12 @@ function writeRecent(list: string[]) {
 // 包名列表缓存在 packageListStore 中
 interface DeviceCache {
     info: string | null;
-    selectedPackage: string;
 }
 
 const deviceCache = new Map<string, DeviceCache>();
 
 function getCache(deviceId: string | undefined): DeviceCache {
-    return (deviceId && deviceCache.get(deviceId)) || {info: null, selectedPackage: ''};
+    return (deviceId && deviceCache.get(deviceId)) || {info: null};
 }
 
 function updateCache(deviceId: string, patch: Partial<DeviceCache>) {
@@ -64,14 +63,16 @@ function RightContainer() {
     const [properties, setProperties] = useState<SystemProperty[]>([]);
     const [searchText, setSearchText] = useState('');
     const [threadSchedVisible, setThreadSchedVisible] = useState(false);
+    const [deepLinkVisible, setDeepLinkVisible] = useState(false);
     const initialCache = getCache(useDeviceStore.getState().selectedDevice?.id);
-    const [selectedPackage, setSelectedPackage] = useState<string>(initialCache.selectedPackage);
     const [deviceInfoString, setDeviceInfoString] = useState<string | null>(initialCache.info);
     const [recent, setRecent] = useState<string[]>(readRecent);
 
     const {devices, selectedDevice} = useDeviceStore();
     const packageList = usePackageListStore(state =>
         selectedDevice ? state.packagesByDevice[selectedDevice.id] ?? EMPTY_PACKAGES : EMPTY_PACKAGES);
+    const selectedPackage = usePackageListStore(state =>
+        selectedDevice ? state.targetByDevice[selectedDevice.id] ?? '' : '');
     const tasks = useActionTaskStore(state => state.tasks);
     // 单设备时后端不需要序列号，沿用原有约定
     const deviceId = devices.length > 1 && selectedDevice ? selectedDevice.id.toString() : "";
@@ -143,36 +144,22 @@ function RightContainer() {
     useEffect(() => {
         const fetchData = async () => {
             if (!selectedDevice) {
-                setSelectedPackage('');
                 setDeviceInfoString(null);
                 return;
             }
 
             // 先用缓存填充（切换设备时立即显示该设备上次的数据），再后台刷新
-            const cached = getCache(selectedDevice.id);
-            setDeviceInfoString(cached.info);
-            if (cached.selectedPackage) setSelectedPackage(cached.selectedPackage);
+            setDeviceInfoString(getCache(selectedDevice.id).info);
+            // 目标应用：保留当前选择，没有时恢复该设备上次的选择；都没有时留空，由用户选择或使用前台应用
+            usePackageListStore.getState().restoreTarget(selectedDevice.id);
             void fetchDeviceInfo();
-
-            const packages = await usePackageListStore.getState().fetchPackages(selectedDevice.id);
-            if (packages.length === 0) return;
-
-            // 优先保留当前选择，其次恢复该设备上次选择的包名，最后使用常用的默认包名
-            const stored = readStoredPackage(selectedDevice.id);
-            const preferred = [cached.selectedPackage, stored, FALLBACK_PACKAGE].find(pkg => pkg && packages.includes(pkg));
-            const nextPackage = preferred || cached.selectedPackage || stored || '';
-            setSelectedPackage(nextPackage);
-            updateCache(selectedDevice.id, {selectedPackage: nextPackage});
+            void usePackageListStore.getState().fetchPackages(selectedDevice.id);
         };
         void fetchData();
     }, [selectedDevice]);
 
     const handlePackageChange = (value: string) => {
-        setSelectedPackage(value);
-        if (selectedDevice) updateCache(selectedDevice.id, {selectedPackage: value});
-        if (selectedDevice && value) {
-            writeStoredPackage(selectedDevice.id, value);
-        }
+        if (selectedDevice) usePackageListStore.getState().setTarget(selectedDevice.id, value);
     };
 
     const rememberRecent = (action: string) => {
@@ -193,6 +180,10 @@ function RightContainer() {
 
         if (action.action === 'thread-sched') {
             setThreadSchedVisible(true);
+            return;
+        }
+        if (action.action === 'deep-link') {
+            setDeepLinkVisible(true);
             return;
         }
 
@@ -256,6 +247,13 @@ function RightContainer() {
                 onClose={() => setThreadSchedVisible(false)}
                 packageName={selectedPackage}
                 deviceId={deviceId}
+            />
+
+            <DeepLinkModal
+                visible={deepLinkVisible}
+                onClose={() => setDeepLinkVisible(false)}
+                deviceId={selectedDevice?.id ?? ''}
+                targetPackage={selectedPackage}
             />
 
             <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">

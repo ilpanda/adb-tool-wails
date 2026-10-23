@@ -27,8 +27,10 @@ import {
     ListDirectory,
     SetBookmarkPaths,
     UploadFile,
+    UploadLocalFiles,
 } from "../../wailsjs/go/main/App";
 import {useDeviceStore} from "../store/deviceStore";
+import {useDropTargetStore} from "../hooks/useFileDrop";
 import PageHeader from "./PageHeader";
 import FilePreviewModal from "./FilePreviewModal";
 
@@ -353,6 +355,30 @@ function FileManager() {
             setUploading(false);
         }
     };
+
+    // 在文件管理页拖入文件时上传到当前目录
+    useEffect(() => {
+        const setTarget = useDropTargetStore.getState().setTarget;
+        setTarget({
+            hint: `松开上传到 ${currentPath}`,
+            upload: async (paths) => {
+                if (!selectedDevice) return;
+                const hide = message.loading(`正在上传 ${paths.length} 个文件到 ${currentPath}…`, 0);
+                try {
+                    const result = await UploadLocalFiles(selectedDevice.id, currentPath, paths);
+                    if (result.error) {
+                        message.error(`上传失败: ${result.error}`);
+                        return;
+                    }
+                    message.success(`已上传 ${paths.length} 个文件`);
+                    await refreshCurrentPath();
+                } finally {
+                    hide();
+                }
+            },
+        });
+        return () => setTarget(null);
+    }, [currentPath, selectedDevice, refreshCurrentPath]);
 
     const filteredEntries = useMemo(() => {
         if (!deferredFilterText.trim()) return entries;

@@ -228,6 +228,30 @@ func (a *App) UploadFile(deviceId string, remoteDir string) types.ExecResult {
 	return types.NewExecResultSuccess(cmdLine, strings.TrimSpace(string(stdout)))
 }
 
+// UploadLocalFiles 把本地文件或目录上传到设备目录（拖入文件管理时使用）
+func (a *App) UploadLocalFiles(deviceId string, remoteDir string, localPaths []string) types.ExecResult {
+	if len(localPaths) == 0 {
+		return types.NewExecResultErrorString("upload", "没有要上传的文件")
+	}
+	dest := remoteDir
+	if dest == "" {
+		dest = "/sdcard/"
+	}
+	if !strings.HasSuffix(dest, "/") {
+		dest += "/"
+	}
+
+	args := append(append([]string{"push"}, localPaths...), dest)
+	cmdLine := a.adbCmdLine(deviceId, args...)
+	stdout, stderr, err := a.runAdb(deviceId, args...)
+	if err != nil {
+		applog.Warnf(applog.CategoryADB, "file_upload_failed device=%s count=%d dest=%s err=%q", deviceId, len(localPaths), dest, adbError(stdout, stderr, err).Error())
+		return types.NewExecResultFromError(cmdLine, "", adbError(stdout, stderr, err))
+	}
+	applog.Infof(applog.CategoryADB, "files_uploaded device=%s count=%d dest=%s", deviceId, len(localPaths), dest)
+	return types.NewExecResultSuccess(cmdLine, strings.TrimSpace(string(stdout)))
+}
+
 // DownloadFile 从设备下载文件或目录到本地（adb pull）
 func (a *App) DownloadFile(deviceId string, remotePath string) types.ExecResult {
 	localPath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{

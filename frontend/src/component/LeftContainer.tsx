@@ -3,6 +3,9 @@ import {EventsOn} from "../../wailsjs/runtime";
 import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
 import {GetDeviceNameArray, GetVersion} from "../../wailsjs/go/main/App";
 import {Eyebrow} from "./PageHeader";
+import WirelessModal from "./WirelessModal";
+import {useUpdateStore} from "../store/updateStore";
+import {BrowserOpenURL} from "../../wailsjs/runtime";
 
 const MENU_GROUPS: Array<{title: string; items: Array<{key: string; label: string; icon: string}>}> = [
     {
@@ -42,6 +45,8 @@ function LeftContainer({selectedView, onViewChange}: {
 }) {
     const {devices, selectedDevice, setSelectedDevices} = useDeviceStore();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [wirelessOpen, setWirelessOpen] = useState(false);
+    const update = useUpdateStore(state => state.info);
     const [version, setVersion] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -73,7 +78,7 @@ function LeftContainer({selectedView, onViewChange}: {
             {/* 品牌 */}
             <div className="flex items-center gap-2.5 px-5 pb-4 pt-5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-md bg-ink">
-                    <i className="fa-brands fa-android text-[15px] text-white"/>
+                    <i className="fa-brands fa-android text-[15px] text-elevated"/>
                 </div>
                 <span className="text-[15px] font-semibold tracking-[-0.3px] text-ink">ADB Tool</span>
             </div>
@@ -85,8 +90,8 @@ function LeftContainer({selectedView, onViewChange}: {
                     onClick={() => connected && setIsDropdownOpen(open => !open)}
                     disabled={!connected}
                     className={`flex w-full items-center gap-2.5 rounded-lg border border-hairline bg-elevated px-3 py-2.5 text-left shadow-whisper transition-colors ${
-                        connected ? 'cursor-pointer hover:border-[#d9d9d9]' : 'cursor-default'
-                    } ${isDropdownOpen ? 'border-[#d9d9d9]' : ''}`}
+                        connected ? 'cursor-pointer hover:border-hairline-strong' : 'cursor-default'
+                    } ${isDropdownOpen ? 'border-hairline-strong' : ''}`}
                 >
                     <span className="relative flex h-2 w-2 shrink-0">
                         {connected && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-link opacity-30"/>}
@@ -136,7 +141,17 @@ function LeftContainer({selectedView, onViewChange}: {
                         </div>
                     </div>
                 )}
+
+                <button
+                    type="button"
+                    onClick={() => setWirelessOpen(true)}
+                    className="mt-1.5 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] text-mute transition-colors hover:bg-hairline-soft hover:text-ink"
+                >
+                    <i className="fa-solid fa-wifi w-3.5 text-center text-[11px]"/>
+                    无线连接
+                </button>
             </div>
+            <WirelessModal open={wirelessOpen} onClose={() => setWirelessOpen(false)}/>
 
             {/* 导航 */}
             <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-5">
@@ -172,7 +187,19 @@ function LeftContainer({selectedView, onViewChange}: {
             {version && (
                 <div className="flex items-center justify-between border-t border-hairline px-5 py-3 font-mono text-[11px] text-faint">
                     <span>Version</span>
-                    <span>{version}</span>
+                    {update?.hasUpdate ? (
+                        <button
+                            type="button"
+                            onClick={() => BrowserOpenURL(update.url)}
+                            title={`新版本 ${update.latest}，点击前往下载`}
+                            className="flex items-center gap-1.5 text-link transition-colors hover:text-link-deep"
+                        >
+                            <span className="h-1.5 w-1.5 rounded-full bg-link"/>
+                            {version} → {update.latest}
+                        </button>
+                    ) : (
+                        <span>{version}</span>
+                    )}
                 </div>
             )}
         </div>

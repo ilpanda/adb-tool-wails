@@ -40,6 +40,14 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 	if filePath == "" {
 		return types.NewExecResultCanceled("installApp", "用户取消安装")
 	}
+	return InstallApkFile(param, filePath)
+}
+
+// InstallApkFile 安装本地 APK（选择文件或拖入窗口）；版本降级时弹窗确认后卸载重装
+func InstallApkFile(param ExecuteParams, filePath string) types.ExecResult {
+	if !strings.EqualFold(filepath.Ext(filePath), ".apk") {
+		return types.NewExecResultErrorString("installApp", "不是 APK 文件: "+filepath.Base(filePath))
+	}
 
 	// 单设备时前端不传序列号；先固定设备，避免确认期间连接变化后操作其他设备。
 	if param.DeviceId == "" {

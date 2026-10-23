@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -77,11 +77,19 @@ func ExecBackground(command string) error {
 	return nil
 }
 
-func shellCommand(command string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		return exec.Command("cmd", "/C", command)
+var reSafeHostArg = regexp.MustCompile(`^[A-Za-z0-9_./:@%+=,-]+$`)
+
+// QuoteHostArg 给拼进本机命令行的参数（adb 路径、设备序列号、本地文件路径）加引号，
+// 路径含空格时（如 C:\Program Files、~/Library/Application Support）不会被拆开。
+// macOS / Linux 由 /bin/sh 解析，用单引号；Windows 由 cmd.exe 解析，用双引号（Windows 路径不能包含双引号）
+func QuoteHostArg(value string) string {
+	if reSafeHostArg.MatchString(value) {
+		return value
 	}
-	return exec.Command("/bin/sh", "-c", command)
+	if runtime.GOOS == "windows" {
+		return `"` + value + `"`
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 func Log(msg string) {

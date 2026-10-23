@@ -51,7 +51,7 @@ function formatCpus(cpus: number[]) {
 function AllowedCpus({thread, clusters}: { thread: adb.ThreadSched; clusters: adb.CpuCluster[] }) {
     const allowed = thread.allowedCpus ?? [];
     if (allowed.length === 0) {
-        return <span className="text-gray-500">{thread.cpusAllowed || '-'}</span>;
+        return <span className="text-mute">{thread.cpusAllowed || '-'}</span>;
     }
     const cluster = clusters.find(c => allowed.every(cpu => c.cpus.includes(cpu)));
     const isAll = clusters.flatMap(c => c.cpus).every(cpu => allowed.includes(cpu));
@@ -153,7 +153,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             dataIndex: 'state',
             width: 90,
             render: (state: string) => (
-                <span className={state === 'R' ? 'text-green-600 font-medium' : 'text-gray-600'}>
+                <span className={state === 'R' ? 'text-green-600 font-medium' : 'text-body'}>
                     {state} {STATE_NAMES[state] ?? ''}
                 </span>
             ),
@@ -183,7 +183,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             render: (nice: number, record) => (
                 <span>
                     {nice}
-                    {record.niceName && <span className="text-gray-400 ml-2">{record.niceName}</span>}
+                    {record.niceName && <span className="text-faint ml-2">{record.niceName}</span>}
                 </span>
             ),
         },
@@ -244,18 +244,18 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                         onChange={e => setKeyword(e.target.value)}
                         placeholder="按线程名或 TID 过滤"
                         allowClear
-                        prefix={<SearchOutlined className="text-gray-400"/>}
+                        prefix={<SearchOutlined className="text-faint"/>}
                         className="max-w-[320px]"
                     />
                     {data && (
-                        <span className="text-gray-500 text-sm">
+                        <span className="text-mute text-sm">
                             {filteredThreads.length} / {data.threads?.length ?? 0} 个线程
                         </span>
                     )}
                 </div>
 
                 {clusters.length > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 text-sm text-body">
                         <Tooltip title="同一簇内的核共享频率，最高频率越高性能越强（左小右大）"><span>CPU 簇：</span></Tooltip>
                         {clusters.map(c => (
                             <Tag key={c.label} color={clusterColor(c.label)}>

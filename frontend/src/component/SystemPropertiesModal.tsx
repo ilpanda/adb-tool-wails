@@ -115,7 +115,7 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
                             <List
                                 dataSource={currentData}
                                 renderItem={(item) => (
-                                    <List.Item className="border-b border-gray-200 py-3">
+                                    <List.Item className="border-b border-hairline py-3">
                                         <div className="w-full">
                                             <Text strong>
                                                 {item.key}:

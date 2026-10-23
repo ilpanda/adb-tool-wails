@@ -8,6 +8,10 @@ export type ActionType =
     | 'reset-permissions'
     | 'force-stop'
     | 'restart-app'
+    | 'launch-app'
+    | 'screenshot-clipboard'
+    | 'deep-link'
+    | 'install-apk-file'
     | 'reboot-device'
     | 'shutdown-device'
     | 'key-home'
@@ -68,6 +72,8 @@ export const quickActions: QuickActionSection[] = [
         items: [
             { icon: 'fa-box-open', label: '安装应用', action: 'install-app' },
             { icon: 'fa-camera', label: '截图保存到电脑', action: 'screenshot' },
+            { icon: 'fa-clipboard', label: '截图复制到剪贴板', action: 'screenshot-clipboard' },
+            { icon: 'fa-link', label: 'Deep Link 测试', action: 'deep-link' },
             { icon: 'fa-tag', label: '查看当前应用包名', action: 'view-package' },
             { icon: 'fa-eye', label: '查看当前 Activity', action: 'view-current-activity' },
             { icon: 'fa-list', label: '查看所有 Activity', action: 'view-all-activities' },
@@ -90,6 +96,7 @@ export const quickActions: QuickActionSection[] = [
             { icon: 'fa-chart-pie', label: '导出 hprof', action: 'dump-hprof' },
             { icon: 'fa-layer-group', label: '导出线程信息', action: 'dump-thread' },
             { icon: 'fa-microchip', label: '线程优先级与核绑定', action: 'thread-sched' },
+            { icon: 'fa-play', label: '启动应用', action: 'launch-app' },
             { icon: 'fa-skull-crossbones', label: '杀死应用', action: 'force-stop' },
             { icon: 'fa-trash-alt', label: '清除数据', action: 'clear-data' },
             { icon: 'fa-broom', label: '清除数据并重启应用', action: 'clear-restart-app' },
@@ -155,7 +162,11 @@ const APP_FILE: ActionMeta = {kind: 'file', needsPackage: true};
 
 export const ACTION_META: Record<ActionType, ActionMeta> = {
     'install-app': {kind: 'file'},
+    // 拖入窗口的 APK，不在快捷功能列表中展示
+    'install-apk-file': {kind: 'instant'},
     'screenshot': {kind: 'file'},
+    'screenshot-clipboard': {kind: 'instant'},
+    'deep-link': {kind: 'modal'},
     'view-package': {kind: 'query'},
     'view-current-activity': {kind: 'query'},
     'view-all-activities': {kind: 'query'},
@@ -179,6 +190,7 @@ export const ACTION_META: Record<ActionType, ActionMeta> = {
     'clear-data': {...APP_INSTANT, danger: '将清除 {pkg} 的全部数据，包括账号、缓存和本地文件，无法恢复。'},
     'clear-restart-app': {...APP_INSTANT, danger: '将清除 {pkg} 的全部数据并重新启动，数据无法恢复。'},
     'restart-app': APP_INSTANT,
+    'launch-app': APP_INSTANT,
     'uninstall-app': {...APP_INSTANT, danger: '将从设备上卸载 {pkg}，应用数据会一并删除。'},
 
     'key-home': {kind: 'instant'},
@@ -212,6 +224,8 @@ export const ACTION_META: Record<ActionType, ActionMeta> = {
 export const ACTION_DESC: Partial<Record<ActionType, string>> = {
     'install-app': '选择本地 APK 安装到设备',
     'screenshot': '截取当前屏幕并保存为 PNG',
+    'screenshot-clipboard': '截图后直接粘贴到聊天或文档',
+    'deep-link': '用 VIEW Intent 打开链接',
     'view-package': '前台应用的包名',
     'view-current-activity': '前台界面的 Activity',
     'view-all-activities': 'Activity 任务栈',
@@ -234,6 +248,7 @@ export const ACTION_DESC: Partial<Record<ActionType, string>> = {
     'clear-data': 'pm clear 清除全部数据',
     'clear-restart-app': '清除数据后重新启动',
     'restart-app': '结束进程后重新启动',
+    'launch-app': '打开应用的启动页',
     'uninstall-app': '从设备卸载应用',
 
     'jump-developer': '打开开发者选项',
@@ -275,6 +290,9 @@ export const TONE_CLASS: Record<ActionTone, {box: string; icon: string}> = {
 export const ACTION_TONE: Record<ActionType, ActionTone> = {
     'install-app': 'teal',
     'screenshot': 'blue',
+    'screenshot-clipboard': 'blue',
+    'deep-link': 'violet',
+    'install-apk-file': 'teal',
     'view-package': 'blue',
     'view-current-activity': 'blue',
     'view-all-activities': 'blue',
@@ -298,6 +316,7 @@ export const ACTION_TONE: Record<ActionType, ActionTone> = {
     'clear-data': 'rose',
     'clear-restart-app': 'rose',
     'restart-app': 'amber',
+    'launch-app': 'teal',
     'uninstall-app': 'rose',
 
     'key-home': 'blue',

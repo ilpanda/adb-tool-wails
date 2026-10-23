@@ -47,6 +47,8 @@ type Action struct {
 	DeviceId          string `json:"deviceId"`
 	// TaskId 由前端生成，执行阶段通过 action-stage 事件按此 id 推送
 	TaskId string `json:"taskId,omitempty"`
+	// Files 本地文件路径，例如拖入窗口的 APK
+	Files []string `json:"files,omitempty"`
 }
 
 // ActionStage action-stage 事件的数据
@@ -253,6 +255,8 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		result = adb.GetAllActivity(param)
 	case "screenshot":
 		result = adb.Screenshot(param)
+	case "screenshot-clipboard":
+		result = adb.ScreenshotToClipboard(param)
 	case "reset-permissions":
 		result = adb.RevokePermission(param)
 	case "grant-permissions":
@@ -263,6 +267,8 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		result = adb.ClearApp(param)
 	case "restart-app":
 		result = adb.RestartApp(param)
+	case "launch-app":
+		result = adb.StartActivity(param)
 	case "reboot-device":
 		result = adb.Reboot(param)
 	case "shutdown-device":
@@ -271,6 +277,12 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		result = adb.GetAllPackages(param)
 	case "install-app":
 		result = adb.InstallApp(param)
+	case "install-apk-file":
+		if len(ac.Files) != 1 {
+			result = types.NewExecResultErrorString("install-apk-file", "需要且只能指定一个 APK 文件")
+		} else {
+			result = adb.InstallApkFile(param, ac.Files[0])
+		}
 	case "uninstall-app":
 		result = adb.UninstallApp(param)
 	case "get-system-info":
@@ -833,6 +845,15 @@ func (a *App) GetThreadSchedInfo(deviceId string, packageName string, pid int) (
 		adbPath = "adb"
 	}
 	return adb.GetThreadSchedInfo(adbPath, deviceId, packageName, pid)
+}
+
+// OpenDeepLink 在设备上打开 Deep Link；packageName 非空时只在该应用内解析
+func (a *App) OpenDeepLink(deviceId string, link string, packageName string) adb.DeepLinkResult {
+	param := a.buildParam(deviceId)
+	if param.AdbPath == "" {
+		param.AdbPath = "adb"
+	}
+	return adb.OpenDeepLink(param, link, packageName)
 }
 
 // StartPerfMonitor 开始监控包名下所有进程的 CPU、内存与进程事件，数据通过 perf-* 事件推送

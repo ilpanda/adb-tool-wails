@@ -8,6 +8,8 @@ interface RunContext {
     // 单设备时传空字符串，与后端原有约定一致
     deviceId: string;
     deviceName: string;
+    // 本地文件路径，例如拖入窗口的 APK
+    files?: string[];
 }
 
 function newTaskId(): string {
@@ -121,6 +123,7 @@ export async function runQuickAction(item: QuickAction, ctx: RunContext): Promis
             targetPackageName: ctx.packageName,
             deviceId: ctx.deviceId,
             taskId: id,
+            files: ctx.files,
         });
     } catch (error: any) {
         result = {error: error?.message || String(error) || '执行失败'};

@@ -3,18 +3,14 @@ import type {PerfEventKind, PerfMemInfo, PerfMemorySample, PerfProcEvent, PerfSa
 // 页面局部主题：近黑主色 + 细边框 + 6px 圆角（与其他页面一致）
 export const PAGE_THEME = {
     token: {
-        colorPrimary: '#171717',
-        colorBorder: '#ebebeb',
-        colorText: '#171717',
-        colorTextPlaceholder: '#a1a1a1',
         borderRadius: 6,
         controlHeight: 34,
-        boxShadow: '0 2px 2px rgba(0,0,0,0.04), 0 8px 16px -4px rgba(0,0,0,0.08)',
+        boxShadow: 'var(--shadow-floating)',
     },
 };
 
 export const MONO = 'font-mono tabular-nums';
-export const AXIS_TICK = {fontSize: 11, fill: '#8f8f8f', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'};
+export const AXIS_TICK = {fontSize: 11, fill: 'var(--color-mute)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'};
 
 // 进程按出现顺序取色，主进程固定第一个颜色
 const PROCESS_COLORS = ['#0070f3', '#e5484d', '#12a594', '#f5a623', '#7928ca', '#eb367f', '#46a758', '#3976c5', '#ac751d', '#8f8f8f'];
@@ -66,8 +62,8 @@ export const MEMORY_REGIONS: MemoryRegion[] = [
     {key: 'graphics', name: 'Graphics', color: '#7928ca'},
     {key: 'privateOther', name: 'Private Other', color: '#12a594'},
     {key: 'system', name: 'System', color: '#46a758'},
-    {key: 'unknown', name: 'Unknown', color: '#a1a1a1'},
-    {key: 'totalPss', name: 'Total PSS', color: '#171717'},
+    {key: 'unknown', name: 'Unknown', color: 'var(--color-faint)'},
+    {key: 'totalPss', name: 'Total PSS', color: 'var(--color-ink)'},
 ];
 
 // dumpsys meminfo Objects 中与泄漏判断最相关的计数

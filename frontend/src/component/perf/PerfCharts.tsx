@@ -91,7 +91,7 @@ function timeAxis(ctx: ChartContext) {
             domain={[ctx.from, ctx.to]}
             ticks={timeTicks(ctx.from, ctx.to)}
             allowDataOverflow
-            stroke="#ebebeb"
+            stroke="var(--color-hairline)"
             tick={AXIS_TICK}
             tickLine={false}
             tickFormatter={formatTime}
@@ -108,7 +108,7 @@ function eventLines(ctx: ChartContext, yAxisId?: string) {
                 key={`ev-${e.id}`}
                 x={e.timestamp}
                 yAxisId={yAxisId}
-                stroke={EVENT_META[e.kind]?.color ?? '#a1a1a1'}
+                stroke={EVENT_META[e.kind]?.color ?? 'var(--color-faint)'}
                 strokeDasharray="4 3"
                 strokeWidth={1.25}
                 ifOverflow="hidden"
@@ -139,12 +139,12 @@ const ChartTooltip: React.FC<ChartTooltipProps> = ({active, payload, label, form
     if (!active || entries.length === 0 || label == null) return null;
     return (
         <div
-            className="pointer-events-none min-w-[220px] max-w-[360px] rounded-xl border border-[#ebebeb] bg-white p-3 text-[12.5px]"
+            className="pointer-events-none min-w-[220px] max-w-[360px] rounded-xl border border-hairline bg-elevated p-3 text-[12.5px]"
             style={{boxShadow: PAGE_THEME.token.boxShadow}}
         >
-            <div className="mb-2 flex items-baseline justify-between gap-4 border-b border-[#f2f2f2] pb-2">
-                <span className={`${MONO} font-medium text-[#171717]`}>{formatTime(label)}</span>
-                {hint && <span className="text-[11px] text-[#a1a1a1]">{hint}</span>}
+            <div className="mb-2 flex items-baseline justify-between gap-4 border-b border-hairline-soft pb-2">
+                <span className={`${MONO} font-medium text-ink`}>{formatTime(label)}</span>
+                {hint && <span className="text-[11px] text-faint">{hint}</span>}
             </div>
             <div className="space-y-1.5">
                 {entries.map(entry => (
@@ -152,9 +152,9 @@ const ChartTooltip: React.FC<ChartTooltipProps> = ({active, payload, label, form
                         <div className="flex items-center justify-between gap-5">
                             <div className="flex min-w-0 items-center gap-2">
                                 <span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor: entry.color}}/>
-                                <span className="truncate text-[#4d4d4d]">{entry.name}</span>
+                                <span className="truncate text-body">{entry.name}</span>
                             </div>
-                            <span className={`${MONO} shrink-0 text-[#171717]`}>{format(entry.value as number, entry)}</span>
+                            <span className={`${MONO} shrink-0 text-ink`}>{format(entry.value as number, entry)}</span>
                         </div>
                         {extra?.(entry)}
                     </div>
@@ -192,10 +192,10 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
         const threads: PerfThread[] | null | undefined = entry.payload?.threads?.[entry.dataKey as string];
         if (!threads || threads.length === 0) return null;
         return (
-            <div className="mb-1 ml-4 mt-0.5 space-y-0.5 border-l border-[#f2f2f2] pl-2">
+            <div className="mb-1 ml-4 mt-0.5 space-y-0.5 border-l border-hairline-soft pl-2">
                 {threads.slice(0, 3).map(t => (
-                    <div key={t.tid} className="flex justify-between gap-4 text-[11.5px] text-[#8f8f8f]">
-                        <span className="truncate font-mono">{t.name} <span className="text-[#c4c4c4]">{t.tid}</span></span>
+                    <div key={t.tid} className="flex justify-between gap-4 text-[11.5px] text-mute">
+                        <span className="truncate font-mono">{t.name} <span className="text-faint">{t.tid}</span></span>
                         <span className={MONO}>{t.cpu.toFixed(1)}%</span>
                     </div>
                 ))}
@@ -206,11 +206,11 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
     return (
         <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows} margin={CHART_MARGIN} syncId={SYNC_ID} syncMethod="value">
-                <CartesianGrid stroke="#f2f2f2" vertical={false}/>
+                <CartesianGrid stroke="var(--color-hairline-soft)" vertical={false}/>
                 {timeAxis(ctx)}
                 <YAxis
                     yAxisId="proc"
-                    stroke="#ebebeb"
+                    stroke="var(--color-hairline)"
                     axisLine={false}
                     tickLine={false}
                     width={52}
@@ -221,7 +221,7 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
                 <YAxis
                     yAxisId="device"
                     orientation="right"
-                    stroke="#ebebeb"
+                    stroke="var(--color-hairline)"
                     axisLine={false}
                     tickLine={false}
                     width={44}
@@ -230,7 +230,7 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
                     tickFormatter={(v: number) => `${v}%`}
                 />
                 <Tooltip
-                    cursor={{stroke: '#d4d4d4', strokeDasharray: '3 3'}}
+                    cursor={{stroke: 'var(--color-hairline-strong)', strokeDasharray: '3 3'}}
                     content={<ChartTooltip format={(v) => formatPercent(v)} extra={threadList} hint="进程为单核口径"/>}
                 />
                 <Area
@@ -238,8 +238,8 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
                     dataKey="device"
                     name="整机 CPU（右轴）"
                     type="linear"
-                    stroke="#c4c4c4"
-                    fill="#f2f2f2"
+                    stroke="var(--color-faint)"
+                    fill="var(--color-hairline-soft)"
                     strokeWidth={1}
                     isAnimationActive={false}
                 />
@@ -353,7 +353,7 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
                 cy={cy}
                 r={pickable ? 5.5 : 4}
                 fill={color}
-                stroke="#fff"
+                stroke="var(--color-elevated)"
                 strokeWidth={2}
                 style={{cursor: pickable ? 'pointer' : 'default'}}
                 onClick={(e) => {
@@ -370,10 +370,10 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
     return (
         <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={CHART_MARGIN} syncId={SYNC_ID} syncMethod="value">
-                <CartesianGrid stroke="#f2f2f2" vertical={false}/>
+                <CartesianGrid stroke="var(--color-hairline-soft)" vertical={false}/>
                 {timeAxis(ctx)}
                 <YAxis
-                    stroke="#ebebeb"
+                    stroke="var(--color-hairline)"
                     axisLine={false}
                     tickLine={false}
                     width={72}
@@ -381,7 +381,7 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
                     tickFormatter={(v: number) => formatMemory(v)}
                 />
                 <Tooltip
-                    cursor={{stroke: '#d4d4d4', strokeDasharray: '3 3'}}
+                    cursor={{stroke: 'var(--color-hairline-strong)', strokeDasharray: '3 3'}}
                     content={<ChartTooltip format={(v) => formatMemory(v)} hint={pickable ? '点击圆点查看完整 meminfo' : undefined}/>}
                 />
                 {lines.map(line => (
@@ -427,11 +427,11 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
     return (
         <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={CHART_MARGIN} syncId={SYNC_ID} syncMethod="value">
-                <CartesianGrid stroke="#f2f2f2" vertical={false}/>
+                <CartesianGrid stroke="var(--color-hairline-soft)" vertical={false}/>
                 {timeAxis(ctx)}
                 <YAxis
                     yAxisId="freq"
-                    stroke="#ebebeb"
+                    stroke="var(--color-hairline)"
                     axisLine={false}
                     tickLine={false}
                     width={72}
@@ -442,7 +442,7 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
                 <YAxis
                     yAxisId="temp"
                     orientation="right"
-                    stroke="#ebebeb"
+                    stroke="var(--color-hairline)"
                     axisLine={false}
                     tickLine={false}
                     width={44}
@@ -451,7 +451,7 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
                     tickFormatter={(v: number) => `${v}°`}
                 />
                 <Tooltip
-                    cursor={{stroke: '#d4d4d4', strokeDasharray: '3 3'}}
+                    cursor={{stroke: 'var(--color-hairline-strong)', strokeDasharray: '3 3'}}
                     content={<ChartTooltip format={(v, e) => (e.dataKey === 'temp' ? `${v.toFixed(1)} °C` : `${v} MHz`)} hint="频率为区间平均值"/>}
                 />
                 {clusters.map(c => (
@@ -518,21 +518,21 @@ export const CoreGrid: React.FC<{ samples: PerfSample[]; from: number; to: numbe
 
     const clusterOf = (cpu: number) => latest.clusters.find(c => c.cpus.includes(cpu));
     return (
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#ebebeb] bg-[#ebebeb] sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-hairline bg-hairline sm:grid-cols-4">
             {latest.cores.map(core => {
                 const cluster = clusterOf(core.cpu);
                 const color = cluster ? clusterColor(cluster.label) : '#0070f3';
                 return (
-                    <div key={core.cpu} className="bg-white px-3 pb-1 pt-2.5">
+                    <div key={core.cpu} className="bg-elevated px-3 pb-1 pt-2.5">
                         <div className="flex items-baseline justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-1.5">
                                 <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{backgroundColor: color}}/>
-                                <span className="font-mono text-[12px] font-medium text-[#171717]">CPU{core.cpu}</span>
-                                {cluster && <span className="truncate text-[11px] text-[#a1a1a1]">{cluster.label}</span>}
+                                <span className="font-mono text-[12px] font-medium text-ink">CPU{core.cpu}</span>
+                                {cluster && <span className="truncate text-[11px] text-faint">{cluster.label}</span>}
                             </div>
-                            <span className={`${MONO} text-[12px] text-[#171717]`}>{formatPercent(core.load, 0)}</span>
+                            <span className={`${MONO} text-[12px] text-ink`}>{formatPercent(core.load, 0)}</span>
                         </div>
-                        <div className={`${MONO} mt-0.5 text-[11px] text-[#8f8f8f]`}>{formatMHz(core.freq)}</div>
+                        <div className={`${MONO} mt-0.5 text-[11px] text-mute`}>{formatMHz(core.freq)}</div>
                         <div className="h-12">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={coreRows} margin={{top: 4, right: 0, left: 0, bottom: 0}}>

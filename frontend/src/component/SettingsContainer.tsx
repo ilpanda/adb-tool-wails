@@ -11,6 +11,9 @@ import {
     UpdateAdbPath
 } from "../../wailsjs/go/main/App";
 import PageHeader, {Eyebrow} from "./PageHeader";
+import {useUpdateStore} from '../store/updateStore';
+import {ThemeMode, useThemeStore} from '../store/themeStore';
+import {BrowserOpenURL} from '../../wailsjs/runtime/runtime';
 
 type Feedback = { type: 'success' | 'error'; title: string; detail?: string };
 type TerminalOpenMode = 'always' | 'error' | 'never';
@@ -58,6 +61,8 @@ function SettingsRow({label, description, control, children}: {
 function SettingsContainer() {
     const [adbPath, setAdbPath] = useState('');
     const [adbError, setAdbError] = useState('');
+    // 读取完成前显示「检测中」，避免先闪一下「未找到」
+    const [adbLoaded, setAdbLoaded] = useState(false);
     const [tempPath, setTempPath] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +85,8 @@ function SettingsContainer() {
             if (!result.res) setIsEditing(true);
         } catch (error) {
             console.error('加载 ADB 路径失败:', error);
+        } finally {
+            setAdbLoaded(true);
         }
     };
 
@@ -150,9 +157,28 @@ function SettingsContainer() {
         if (result.error) toast.error(result.error);
     };
 
-    const adbStatus = adbPath
-        ? <StatusPill tone="ok">已找到</StatusPill>
-        : <StatusPill tone="error">未找到</StatusPill>;
+    const themeMode = useThemeStore(state => state.mode);
+    const setThemeMode = useThemeStore(state => state.setMode);
+    const update = useUpdateStore(state => state.info);
+    const checkingUpdate = useUpdateStore(state => state.checking);
+    const [updateChecked, setUpdateChecked] = useState(false);
+    const checkUpdate = async () => {
+        await useUpdateStore.getState().check();
+        setUpdateChecked(true);
+    };
+    const updateDescription = () => {
+        if (!update) return undefined;
+        if (update.error) return updateChecked ? `检查失败：${update.error}` : undefined;
+        if (update.hasUpdate) return `发现新版本 ${update.latest}`;
+        if (version === 'dev') return update.latest ? `开发版本，最新发布为 ${update.latest}` : undefined;
+        return updateChecked ? '已是最新版本' : undefined;
+    };
+
+    const adbStatus = !adbLoaded
+        ? <StatusPill tone="pending">检测中</StatusPill>
+        : adbPath
+            ? <StatusPill tone="ok">已找到</StatusPill>
+            : <StatusPill tone="error">未找到</StatusPill>;
 
     return (
         <div className="h-full min-w-0 flex-1 overflow-y-auto bg-canvas px-8 py-7 text-left text-ink">
@@ -167,9 +193,11 @@ function SettingsContainer() {
                     <SettingsRow
                         label="ADB 可执行文件"
                         description={isEditing ? '填写 adb 可执行文件的完整路径' : (
-                            adbPath
-                                ? <span className="break-all font-mono text-[12px] text-body">{adbPath}</span>
-                                : adbError || '未在 PATH 中找到 adb，请手动指定'
+                            !adbLoaded
+                                ? '正在查找 adb…'
+                                : adbPath
+                                    ? <span className="break-all font-mono text-[12px] text-body">{adbPath}</span>
+                                    : adbError || '未在 PATH 中找到 adb，请手动指定'
                         )}
                         control={isEditing ? adbStatus : <>
                             {adbStatus}
@@ -220,6 +248,24 @@ function SettingsContainer() {
                     </SettingsRow>
                 </SettingsSection>
 
+                <SettingsSection eyebrow="Appearance" title="外观">
+                    <SettingsRow
+                        label="主题"
+                        description={themeMode === 'system' ? '跟随系统的浅色 / 深色设置自动切换' : undefined}
+                        control={
+                            <Segmented<ThemeMode>
+                                value={themeMode}
+                                onChange={setThemeMode}
+                                options={[
+                                    {value: 'system', label: '跟随系统'},
+                                    {value: 'light', label: '浅色'},
+                                    {value: 'dark', label: '深色'},
+                                ]}
+                            />
+                        }
+                    />
+                </SettingsSection>
+
                 <SettingsSection eyebrow="Quick actions" title="快捷功能">
                     <SettingsRow
                         label="自动展开执行记录"
@@ -241,7 +287,13 @@ function SettingsContainer() {
                 <SettingsSection eyebrow="About" title="关于">
                     <SettingsRow
                         label="版本"
-                        control={<span className="font-mono text-[13px] text-body">{version || '-'}</span>}
+                        description={updateDescription()}
+                        control={<>
+                            <span className="font-mono text-[13px] text-body">{version || '-'}</span>
+                            {update?.hasUpdate
+                                ? <Button type="primary" onClick={() => BrowserOpenURL(update.url)}>下载 {update.latest}</Button>
+                                : <Button onClick={() => void checkUpdate()} loading={checkingUpdate}>检查更新</Button>}
+                        </>}
                     />
                     <SettingsRow
                         label="运行日志"
@@ -254,12 +306,16 @@ function SettingsContainer() {
     );
 }
 
-function StatusPill({tone, children}: { tone: 'ok' | 'error'; children: ReactNode }) {
+const STATUS_TONES = {
+    ok: {pill: 'bg-link-soft text-link-deep', dot: 'bg-link'},
+    error: {pill: 'bg-error-soft text-error', dot: 'bg-error'},
+    pending: {pill: 'bg-hairline-soft text-mute', dot: 'bg-faint animate-pulse'},
+};
+
+function StatusPill({tone, children}: { tone: keyof typeof STATUS_TONES; children: ReactNode }) {
     return (
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium ${
-            tone === 'ok' ? 'bg-link-soft text-link-deep' : 'bg-error-soft text-error'
-        }`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${tone === 'ok' ? 'bg-link' : 'bg-error'}`}/>
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium ${STATUS_TONES[tone].pill}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${STATUS_TONES[tone].dot}`}/>
             {children}
         </span>
     );

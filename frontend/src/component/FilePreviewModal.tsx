@@ -35,8 +35,8 @@ function formatSize(raw: number): string {
 }
 
 const CHECKERBOARD = {
-    backgroundColor: '#ffffff',
-    backgroundImage: 'linear-gradient(45deg,#f2f2f2 25%,transparent 25%),linear-gradient(-45deg,#f2f2f2 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f2f2f2 75%),linear-gradient(-45deg,transparent 75%,#f2f2f2 75%)',
+    backgroundColor: 'var(--color-elevated)',
+    backgroundImage: 'linear-gradient(45deg,var(--color-hairline-soft) 25%,transparent 25%),linear-gradient(-45deg,var(--color-hairline-soft) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--color-hairline-soft) 75%),linear-gradient(-45deg,transparent 75%,var(--color-hairline-soft) 75%)',
     backgroundSize: '16px 16px',
     backgroundPosition: '0 0,0 8px,8px -8px,-8px 0',
 };

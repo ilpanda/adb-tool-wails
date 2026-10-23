@@ -215,7 +215,7 @@ func (c *Client) pushDex(localDexPath string) error {
 	}
 
 	// 推送文件
-	pushCmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("push %s /data/local/tmp/aya/aya.dex", localDexPath))
+	pushCmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("push %s /data/local/tmp/aya/aya.dex", util.QuoteHostArg(localDexPath)))
 	if _, err := util.Exec(pushCmd, true, nil); err != nil {
 		return fmt.Errorf("push failed: %w", err)
 	}

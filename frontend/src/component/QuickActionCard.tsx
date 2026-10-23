@@ -71,11 +71,11 @@ function QuickActionCard({item, task, disabledReason, variant = 'tile', onClick}
             ? 'border-error/50'
             : succeeded
                 ? 'border-link/40'
-                : 'border-hairline hover:border-[#d9d9d9]';
+                : 'border-hairline hover:border-hairline-strong';
 
     // 分组卡片内的单元格：由外层网格画分隔线，单元格本身只负责背景和状态
     const cellTone = running
-        ? 'bg-[#F5F9FF]'
+        ? 'bg-link-soft/40'
         : disabledReason
             ? 'bg-elevated'
             : 'bg-elevated hover:bg-canvas';

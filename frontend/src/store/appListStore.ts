@@ -58,6 +58,8 @@ interface AppListStore {
     // 取消正在进行的加载
     cancel: () => void;
     setApps: (deviceId: string, apps: PackageInfo[]) => void;
+    // 卸载后从缓存与当前列表中移除
+    removeApp: (deviceId: string, packageName: string) => void;
     getAppsFromCache: (deviceId: string) => PackageInfo[] | null;
     setLoading: (loading: boolean) => void;
     setProgress: (progress: ProgressInfo | null) => void;
@@ -145,6 +147,19 @@ export const useAppListStore = create<AppListStore>((set, get) => ({
                 loadedDeviceId: deviceId,
                 isLoading: false,
                 progress: null,
+            };
+        });
+    },
+
+    removeApp: (deviceId, packageName) => {
+        set((state) => {
+            const cacheKey = getCacheKey(deviceId);
+            const newCache = new Map(state.appListCache);
+            const cached = newCache.get(cacheKey);
+            if (cached) newCache.set(cacheKey, cached.filter(app => app.packageName !== packageName));
+            return {
+                appListCache: newCache,
+                apps: state.loadedDeviceId === deviceId ? state.apps.filter(app => app.packageName !== packageName) : state.apps,
             };
         });
     },

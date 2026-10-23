@@ -42,13 +42,13 @@ const WINDOW_OPTIONS = [
     {value: 0, label: '全部'},
 ];
 
-const CARD = 'rounded-xl border border-[#ebebeb] bg-white';
+const CARD = 'rounded-xl border border-hairline bg-elevated';
 
 const CardHeader: React.FC<{ eyebrow: string; title: string; children?: React.ReactNode }> = ({eyebrow, title, children}) => (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f2f2f2] px-5 py-3.5">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline-soft px-5 py-3.5">
         <div>
             <Eyebrow>{eyebrow}</Eyebrow>
-            <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-[#171717]">{title}</h2>
+            <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-ink">{title}</h2>
         </div>
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
@@ -58,10 +58,10 @@ const StatCard: React.FC<{ label: string; value: React.ReactNode; sub?: React.Re
     <div className={`${CARD} min-w-0 px-4 py-3.5`}>
         <div className="flex items-center gap-2">
             {accent && <span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor: accent}}/>}
-            <span className="truncate text-[12px] text-[#8f8f8f]">{label}</span>
+            <span className="truncate text-[12px] text-mute">{label}</span>
         </div>
-        <div className={`${MONO} mt-1.5 truncate text-[22px] font-semibold leading-7 tracking-[-0.5px] text-[#171717]`}>{value}</div>
-        {sub && <div className="mt-1 truncate text-[12px] text-[#a1a1a1]">{sub}</div>}
+        <div className={`${MONO} mt-1.5 truncate text-[22px] font-semibold leading-7 tracking-[-0.5px] text-ink`}>{value}</div>
+        {sub && <div className="mt-1 truncate text-[12px] text-faint">{sub}</div>}
     </div>
 );
 
@@ -83,12 +83,12 @@ const MemoryDetail: React.FC<{
         if (result.error && !result.canceled) message.error(result.error);
     };
     return (
-        <div className="absolute right-4 top-16 z-50 w-[340px] rounded-xl border border-[#ebebeb] bg-white" style={{boxShadow: PAGE_THEME.token.boxShadow}}>
-            <div className="flex items-start justify-between border-b border-[#f2f2f2] px-4 py-3">
+        <div className="absolute right-4 top-16 z-50 w-[340px] rounded-xl border border-hairline bg-elevated" style={{boxShadow: PAGE_THEME.token.boxShadow}}>
+            <div className="flex items-start justify-between border-b border-hairline-soft px-4 py-3">
                 <div className="min-w-0">
                     <Eyebrow>Snapshot · pid {info.pid}</Eyebrow>
-                    <div className={`${MONO} mt-0.5 text-[15px] font-semibold text-[#171717]`}>{formatTime(sample.timestamp)}</div>
-                    <div className="truncate font-mono text-[12px] text-[#8f8f8f]">{shortProcessName(info.process, packageName)}</div>
+                    <div className={`${MONO} mt-0.5 text-[15px] font-semibold text-ink`}>{formatTime(sample.timestamp)}</div>
+                    <div className="truncate font-mono text-[12px] text-mute">{shortProcessName(info.process, packageName)}</div>
                 </div>
                 <Button type="text" size="small" icon={<CloseOutlined/>} onClick={onClose}/>
             </div>
@@ -98,39 +98,39 @@ const MemoryDetail: React.FC<{
                         <div key={region.key} className="flex items-center justify-between text-[13px]">
                             <div className="flex items-center gap-2">
                                 <span className="h-2 w-2 rounded-full" style={{backgroundColor: region.color}}/>
-                                <span className={region.key === 'totalPss' ? 'font-medium text-[#171717]' : 'text-[#4d4d4d]'}>{region.name}</span>
+                                <span className={region.key === 'totalPss' ? 'font-medium text-ink' : 'text-body'}>{region.name}</span>
                             </div>
-                            <span className={`${MONO} text-[#171717]`}>{formatMemory(info[region.key] as number)}</span>
+                            <span className={`${MONO} text-ink`}>{formatMemory(info[region.key] as number)}</span>
                         </div>
                     ))}
-                    <div className="flex items-center justify-between border-t border-[#f2f2f2] pt-1.5 text-[13px]">
-                        <span className="text-[#4d4d4d]">Swap PSS</span>
-                        <span className={`${MONO} text-[#171717]`}>{formatMemory(info.swapPss)}</span>
+                    <div className="flex items-center justify-between border-t border-hairline-soft pt-1.5 text-[13px]">
+                        <span className="text-body">Swap PSS</span>
+                        <span className={`${MONO} text-ink`}>{formatMemory(info.swapPss)}</span>
                     </div>
                     <div className="flex items-center justify-between text-[13px]">
-                        <span className="text-[#4d4d4d]">Total RSS</span>
-                        <span className={`${MONO} text-[#171717]`}>{formatMemory(info.totalRss)}</span>
+                        <span className="text-body">Total RSS</span>
+                        <span className={`${MONO} text-ink`}>{formatMemory(info.totalRss)}</span>
                     </div>
                 </div>
                 {info.objects && Object.keys(info.objects).length > 0 && (
-                    <div className="mt-3 border-t border-[#f2f2f2] pt-3">
+                    <div className="mt-3 border-t border-hairline-soft pt-3">
                         <Eyebrow>Objects</Eyebrow>
                         <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
                             {KEY_OBJECTS.filter(k => info.objects[k] != null).map(k => (
                                 <div key={k} className="flex justify-between text-[12.5px]">
-                                    <span className="text-[#8f8f8f]">{k}</span>
-                                    <span className={`${MONO} text-[#171717]`}>{info.objects[k]}</span>
+                                    <span className="text-mute">{k}</span>
+                                    <span className={`${MONO} text-ink`}>{info.objects[k]}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
             </div>
-            <div className="flex gap-2 border-t border-[#f2f2f2] px-4 py-3">
+            <div className="flex gap-2 border-t border-hairline-soft px-4 py-3">
                 <Button icon={<CopyOutlined/>} onClick={copy} className="flex-1" disabled={!info.rawMemInfo}>复制原文</Button>
                 <Button type="primary" icon={<DownloadOutlined/>} onClick={save} className="flex-1" disabled={!info.rawMemInfo}>导出原文</Button>
             </div>
-            {!info.rawMemInfo && <div className="px-4 pb-3 text-[11.5px] text-[#a1a1a1]">只保留最近 60 次采样的原文</div>}
+            {!info.rawMemInfo && <div className="px-4 pb-3 text-[11.5px] text-faint">只保留最近 60 次采样的原文</div>}
         </div>
     );
 };
@@ -228,7 +228,7 @@ const PerfMonitor: React.FC = () => {
 
     return (
         <ConfigProvider theme={PAGE_THEME}>
-            <div className="h-full flex-1 overflow-y-auto bg-[#fafafa] px-8 py-7 text-left text-[#171717]">
+            <div className="h-full flex-1 overflow-y-auto bg-canvas px-8 py-7 text-left text-ink">
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
                     <PageHeader
                         eyebrow="Performance · /proc + dumpsys"
@@ -252,21 +252,21 @@ const PerfMonitor: React.FC = () => {
                     <div className={`${CARD} p-5`}>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr_1fr]">
                             <div>
-                                <label className="mb-1.5 block text-[13px] font-medium text-[#4d4d4d]">包名</label>
+                                <label className="mb-1.5 block text-[13px] font-medium text-body">包名</label>
                                 <PackagePicker value={packageName} onChange={setPackageName} disabled={running}/>
-                                <p className="mt-1.5 text-[12px] text-[#a1a1a1]">监控包名下的所有进程，包括 :push 等子进程</p>
+                                <p className="mt-1.5 text-[12px] text-faint">监控包名下的所有进程，包括 :push 等子进程</p>
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-[13px] font-medium text-[#4d4d4d]">CPU 采样间隔</label>
+                                <label className="mb-1.5 block text-[13px] font-medium text-body">CPU 采样间隔</label>
                                 <Select value={intervalMs} onChange={setIntervalMs} className="w-full" disabled={running}
                                         options={[{value: 1000, label: '1 秒'}, {value: 2000, label: '2 秒'}, {value: 5000, label: '5 秒'}]}/>
-                                <p className="mt-1.5 text-[12px] text-[#a1a1a1]">CPU 占用、单核负载、频率、匿名内存 / Swap</p>
+                                <p className="mt-1.5 text-[12px] text-faint">CPU 占用、单核负载、频率、匿名内存 / Swap</p>
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-[13px] font-medium text-[#4d4d4d]">内存采样间隔</label>
+                                <label className="mb-1.5 block text-[13px] font-medium text-body">内存采样间隔</label>
                                 <Select value={memIntervalMs} onChange={setMemIntervalMs} className="w-full" disabled={running}
                                         options={[{value: 5000, label: '5 秒'}, {value: 10000, label: '10 秒'}, {value: 30000, label: '30 秒'}]}/>
-                                <p className="mt-1.5 text-[12px] text-[#a1a1a1]">
+                                <p className="mt-1.5 text-[12px] text-faint">
                                     <Tooltip title="dumpsys meminfo 每个进程约 0.7~1 秒，进程较多时实际间隔会变长">
                                         PSS 分类、Objects 计数、CPU 温度
                                     </Tooltip>
@@ -287,13 +287,13 @@ const PerfMonitor: React.FC = () => {
                         />
                         <StatCard
                             label="整机 CPU"
-                            accent="#c4c4c4"
+                            accent="var(--color-faint)"
                             value={formatPercent(latest?.deviceCpu)}
                             sub={latest ? `整机口径 · ${latest.cpuCount} 核` : '整机口径'}
                         />
                         <StatCard
                             label="内存 PSS"
-                            accent="#171717"
+                            accent="var(--color-ink)"
                             value={formatMemory(totalPss)}
                             sub={totalPss != null ? `另有 Swap PSS ${formatMemory(swapPss)}` : '每次内存采样更新'}
                         />
@@ -317,7 +317,7 @@ const PerfMonitor: React.FC = () => {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
                             {processNames.length === 0 && (
-                                <span className="text-[13px] text-[#a1a1a1]">
+                                <span className="text-[13px] text-faint">
                                     {running ? '等待进程出现…' : '开始后会列出包名下的所有进程，点击可显示 / 隐藏'}
                                 </span>
                             )}
@@ -331,14 +331,14 @@ const PerfMonitor: React.FC = () => {
                                         key={name}
                                         onClick={() => toggleProcess(name)}
                                         title={name}
-                                        className={`flex items-center gap-2 rounded-full border bg-white py-1 pl-2.5 pr-3 text-[12.5px] transition-all hover:border-[#d4d4d4] ${
-                                            hidden ? 'border-dashed border-[#ebebeb] opacity-45' : 'border-[#ebebeb]'
+                                        className={`flex items-center gap-2 rounded-full border bg-elevated py-1 pl-2.5 pr-3 text-[12.5px] transition-all hover:border-hairline-strong ${
+                                            hidden ? 'border-dashed border-hairline opacity-45' : 'border-hairline'
                                         }`}
                                     >
                                         <span className="h-2 w-2 rounded-full" style={{backgroundColor: hidden ? 'transparent' : color, boxShadow: `inset 0 0 0 1.5px ${color}`}}/>
-                                        <span className="font-medium text-[#171717]">{shortProcessName(name, packageName)}</span>
+                                        <span className="font-medium text-ink">{shortProcessName(name, packageName)}</span>
                                         {proc ? (
-                                            <span className={`${MONO} text-[#8f8f8f]`}>
+                                            <span className={`${MONO} text-mute`}>
                                                 {proc.pid} · {formatPercent(proc.cpu)}{mem ? ` · ${formatMemory(mem.totalPss)}` : ''}
                                             </span>
                                         ) : (
@@ -350,8 +350,8 @@ const PerfMonitor: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2">
                             {running && hasData && Number.isFinite(firstTs) && (
-                                <span className="flex items-center gap-1.5 rounded-full border border-[#ebebeb] bg-white px-2.5 py-0.5 text-[12px] text-[#4d4d4d]">
-                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#0070f3]"/>
+                                <span className="flex items-center gap-1.5 rounded-full border border-hairline bg-elevated px-2.5 py-0.5 text-[12px] text-body">
+                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-link"/>
                                     已采集 {formatDuration(lastTs - firstTs)}
                                 </span>
                             )}
@@ -361,12 +361,12 @@ const PerfMonitor: React.FC = () => {
 
                     {!hasData ? (
                         <div className={`${CARD} flex h-80 flex-col items-center justify-center gap-3 text-center`}>
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#ebebeb] text-[#8f8f8f]">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-hairline text-mute">
                                 <PlayCircleOutlined/>
                             </div>
-                            <p className="text-[14px] text-[#4d4d4d]">{running ? '正在采集…' : '点击「开始」监控应用的 CPU、内存与进程事件'}</p>
-                            <code className="rounded-md border border-[#ebebeb] bg-[#fafafa] px-3 py-1.5 font-mono text-[12px] text-[#4d4d4d]">
-                                <span className="text-[#a1a1a1]">$ </span>
+                            <p className="text-[14px] text-body">{running ? '正在采集…' : '点击「开始」监控应用的 CPU、内存与进程事件'}</p>
+                            <code className="rounded-md border border-hairline bg-canvas px-3 py-1.5 font-mono text-[12px] text-body">
+                                <span className="text-faint">$ </span>
                                 cat /proc/stat /proc/&lt;pid&gt;/stat · dumpsys meminfo &lt;pid&gt; · logcat -b events
                             </code>
                         </div>
@@ -403,8 +403,8 @@ const PerfMonitor: React.FC = () => {
                                                 <button
                                                     key={region.key}
                                                     onClick={() => setVisibleRegions(prev => ({...prev, [region.key]: !prev[region.key]}))}
-                                                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] transition-all hover:border-[#d4d4d4] ${
-                                                        on ? 'border-[#ebebeb] text-[#4d4d4d]' : 'border-dashed border-[#ebebeb] text-[#a1a1a1] opacity-60'
+                                                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] transition-all hover:border-hairline-strong ${
+                                                        on ? 'border-hairline text-body' : 'border-dashed border-hairline text-faint opacity-60'
                                                     }`}
                                                 >
                                                     <span className="h-1.5 w-1.5 rounded-full" style={{backgroundColor: on ? region.color : 'transparent', boxShadow: `inset 0 0 0 1.5px ${region.color}`}}/>
@@ -419,7 +419,7 @@ const PerfMonitor: React.FC = () => {
                                 )}
                                 <div className="h-72 px-3 pb-3 pt-3">
                                     {visibleMemory.length === 0 && memoryMode !== 'rss' ? (
-                                        <div className="flex h-full items-center justify-center text-[13px] text-[#a1a1a1]">
+                                        <div className="flex h-full items-center justify-center text-[13px] text-faint">
                                             等待第一次 dumpsys meminfo…
                                         </div>
                                     ) : (
@@ -439,7 +439,7 @@ const PerfMonitor: React.FC = () => {
                             {/* CPU */}
                             <div className={CARD}>
                                 <CardHeader eyebrow="CPU" title="CPU 占用">
-                                    <span className="text-[12px] text-[#8f8f8f]">
+                                    <span className="text-[12px] text-mute">
                                         左轴：进程（单核口径，最高 {(latest?.cpuCount ?? 8) * 100}%）· 右轴：整机（0-100%）
                                     </span>
                                 </CardHeader>
@@ -451,14 +451,14 @@ const PerfMonitor: React.FC = () => {
                             {/* 单核负载 */}
                             <div className={CARD}>
                                 <button
-                                    className="flex w-full items-center justify-between border-b border-[#f2f2f2] px-5 py-3.5 text-left"
+                                    className="flex w-full items-center justify-between border-b border-hairline-soft px-5 py-3.5 text-left"
                                     onClick={() => setCoresExpanded(v => !v)}
                                 >
                                     <div>
                                         <Eyebrow>Per core</Eyebrow>
-                                        <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-[#171717]">单核负载</h2>
+                                        <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-ink">单核负载</h2>
                                     </div>
-                                    <span className="text-[12px] text-[#8f8f8f]">
+                                    <span className="text-[12px] text-mute">
                                         {coresExpanded ? <DownOutlined/> : <RightOutlined/>}
                                     </span>
                                 </button>
@@ -472,7 +472,7 @@ const PerfMonitor: React.FC = () => {
                             <div className={CARD}>
                                 <CardHeader eyebrow="Frequency · Thermal" title="频率与温度">
                                     {latest?.clusters.map(c => (
-                                        <span key={c.label} className={`${MONO} rounded-full border border-[#ebebeb] px-2.5 py-0.5 text-[12px] text-[#4d4d4d]`}>
+                                        <span key={c.label} className={`${MONO} rounded-full border border-hairline px-2.5 py-0.5 text-[12px] text-body`}>
                                             {c.label} {formatMHz(c.avgFreq)} / {formatMHz(c.maxFreq)}
                                         </span>
                                     ))}
@@ -488,17 +488,17 @@ const PerfMonitor: React.FC = () => {
                     {/* 进程事件 */}
                     <div className={CARD}>
                         <CardHeader eyebrow="Process events" title="进程事件">
-                            <span className="text-[12px] text-[#8f8f8f]">来源：轮询 pid + 启动时间、logcat events、exit-info</span>
+                            <span className="text-[12px] text-mute">来源：轮询 pid + 启动时间、logcat events、exit-info</span>
                         </CardHeader>
                         {events.length === 0 ? (
-                            <div className="px-5 py-6 text-center text-[13px] text-[#a1a1a1]">
+                            <div className="px-5 py-6 text-center text-[13px] text-faint">
                                 暂无事件。进程启动、退出、重启和 ANR 会记录在这里，并在图表上标出竖线
                             </div>
                         ) : (
                             <div className="max-h-72 overflow-y-auto">
                                 <table className="w-full text-[13px]">
-                                    <thead className="sticky top-0 bg-white text-[12px] text-[#8f8f8f]">
-                                    <tr className="border-b border-[#f2f2f2]">
+                                    <thead className="sticky top-0 bg-elevated text-[12px] text-mute">
+                                    <tr className="border-b border-hairline-soft">
                                         <th className="px-5 py-2 text-left font-normal">时间</th>
                                         <th className="px-2 py-2 text-left font-normal">类型</th>
                                         <th className="px-2 py-2 text-left font-normal">进程</th>
@@ -509,15 +509,15 @@ const PerfMonitor: React.FC = () => {
                                     </thead>
                                     <tbody>
                                     {[...events].reverse().map(e => (
-                                        <tr key={e.id} className="border-b border-[#f7f7f7] align-top last:border-0">
-                                            <td className={`${MONO} whitespace-nowrap px-5 py-2 text-[#4d4d4d]`}>{formatTime(e.timestamp)}</td>
+                                        <tr key={e.id} className="border-b border-hairline-soft align-top last:border-0">
+                                            <td className={`${MONO} whitespace-nowrap px-5 py-2 text-body`}>{formatTime(e.timestamp)}</td>
                                             <td className="px-2 py-2"><EventTag event={e}/></td>
                                             <td className="whitespace-nowrap px-2 py-2 font-medium" title={e.process}>{shortProcessName(e.process, packageName)}</td>
-                                            <td className={`${MONO} whitespace-nowrap px-2 py-2 text-[#4d4d4d]`}>
+                                            <td className={`${MONO} whitespace-nowrap px-2 py-2 text-body`}>
                                                 {e.oldPid ? `${e.oldPid} → ${e.pid}` : e.pid}
                                             </td>
                                             <td className="whitespace-nowrap px-2 py-2">{e.reason}</td>
-                                            <td className="break-all px-5 py-2 font-mono text-[12px] text-[#8f8f8f]">{e.detail || '-'}</td>
+                                            <td className="break-all px-5 py-2 font-mono text-[12px] text-mute">{e.detail || '-'}</td>
                                         </tr>
                                     ))}
                                     </tbody>
@@ -526,7 +526,7 @@ const PerfMonitor: React.FC = () => {
                         )}
                     </div>
 
-                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#8f8f8f]">
+                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-mute">
                         <span>· 进程 CPU 为单核口径：一个核跑满 = 100%</span>
                         <span>· 匿名内存被换出到 zram 时 RSS 会下降，但并未释放，请结合 Swap 一起看</span>
                         <span>· 进程重启后曲线断开，不代表内存被释放</span>

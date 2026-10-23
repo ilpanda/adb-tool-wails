@@ -7,6 +7,12 @@ export const EMPTY_PACKAGES: string[] = [];
 
 interface PackageListStore {
     packagesByDevice: Record<string, string[]>;
+    // 快捷功能「目标应用」，按设备记录；应用列表的「设为目标应用」也写这里
+    targetByDevice: Record<string, string>;
+    setTarget: (deviceId: string, packageName: string) => void;
+    // 设备第一次用到时从本地存储恢复上次的选择
+    restoreTarget: (deviceId: string) => void;
+    removePackage: (deviceId: string, packageName: string) => void;
     // 读取设备的包名列表；同一设备已在读取时复用同一次请求。读取失败时保留已有列表
     fetchPackages: (deviceId: string) => Promise<string[]>;
 }
@@ -15,6 +21,28 @@ const inflight = new Map<string, Promise<string[]>>();
 
 export const usePackageListStore = create<PackageListStore>((set, get) => ({
     packagesByDevice: {},
+    targetByDevice: {},
+
+    setTarget: (deviceId, packageName) => {
+        set(state => ({targetByDevice: {...state.targetByDevice, [deviceId]: packageName}}));
+        if (packageName) writeStoredPackage(deviceId, packageName);
+    },
+
+    restoreTarget: (deviceId) => {
+        if (get().targetByDevice[deviceId] !== undefined) return;
+        set(state => ({targetByDevice: {...state.targetByDevice, [deviceId]: readStoredPackage(deviceId) || ''}}));
+    },
+
+    // 卸载后从列表中移除；如果正是目标应用则清空选择
+    removePackage: (deviceId, packageName) => set(state => ({
+        packagesByDevice: {
+            ...state.packagesByDevice,
+            [deviceId]: (state.packagesByDevice[deviceId] ?? []).filter(pkg => pkg !== packageName),
+        },
+        targetByDevice: state.targetByDevice[deviceId] === packageName
+            ? {...state.targetByDevice, [deviceId]: ''}
+            : state.targetByDevice,
+    })),
 
     fetchPackages: (deviceId) => {
         const running = inflight.get(deviceId);

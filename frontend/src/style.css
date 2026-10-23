@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* 深色模式由 <html class="dark"> 控制（src/store/themeStore.ts），dark: 变体跟随该 class */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* 设计 token，与 DESIGN.md / src/theme.ts 保持一致 */
 @theme {
     --font-sans: Geist, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
@@ -11,6 +14,7 @@
     --color-faint: #a1a1a1;
     --color-hairline: #ebebeb;
     --color-hairline-soft: #f2f2f2;
+    --color-hairline-strong: #d4d4d4;
     --color-canvas: #fafafa;
     --color-elevated: #ffffff;
     --color-link: #0070f3;
@@ -40,6 +44,45 @@
     --shadow-floating: 0 2px 2px rgba(0, 0, 0, 0.04), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
 }
 
+/* 深色模式：只覆盖 token 的值，组件里的 text-ink、bg-elevated 等工具类自动切换 */
+html.dark {
+    color-scheme: dark;
+
+    --color-ink: #ededed;
+    --color-body: #a1a1a1;
+    --color-mute: #878787;
+    --color-faint: #6b6b6b;
+    --color-hairline: #2e2e2e;
+    --color-hairline-soft: #1f1f1f;
+    --color-hairline-strong: #454545;
+    --color-canvas: #0a0a0a;
+    --color-elevated: #141414;
+    --color-link: #3291ff;
+    --color-link-deep: #52a8ff;
+    --color-link-soft: #10243e;
+    --color-error: #ff5a5f;
+    --color-error-soft: #3b1416;
+    --color-warning: #f5a623;
+    --color-warning-soft: #3a2a0b;
+    --color-warning-deep: #f2b33d;
+
+    --color-tone-teal: #45c2ac;
+    --color-tone-teal-soft: #0f2b27;
+    --color-tone-blue: #6ea6f2;
+    --color-tone-blue-soft: #13243b;
+    --color-tone-violet: #a98ae0;
+    --color-tone-violet-soft: #241b36;
+    --color-tone-amber: #e0a84a;
+    --color-tone-amber-soft: #33260f;
+    --color-tone-rose: #ef7f88;
+    --color-tone-rose-soft: #3a1a1d;
+    --color-tone-slate: #9aaabe;
+    --color-tone-slate-soft: #1c2229;
+
+    --shadow-whisper: 0 1px 1px rgba(0, 0, 0, 0.4);
+    --shadow-floating: 0 2px 2px rgba(0, 0, 0, 0.3), 0 8px 16px -4px rgba(0, 0, 0, 0.6);
+}
+
 html {
     background-color: var(--color-canvas);
 }
@@ -49,4 +92,23 @@ body {
     font-family: var(--font-sans);
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
+}
+
+/* 拖入文件时的提示浮层：根节点设置了 --wails-drop-target，拖拽经过时 Wails 加上 wails-drop-target-active */
+[data-drop-hint].wails-drop-target-active::after {
+    content: attr(data-drop-hint);
+    position: fixed;
+    inset: 12px;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--color-link);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--color-link) 6%, transparent);
+    color: var(--color-link-deep);
+    font-size: 16px;
+    font-weight: 500;
+    pointer-events: none;
+    backdrop-filter: blur(1px);
 }
