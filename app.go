@@ -33,6 +33,7 @@ type App struct {
 	pendingDevices    []adb.DeviceInfo
 	ayaClient         *aya.Client
 	ayaDexPath        string
+	perfMonitor       *adb.PerfMonitor
 
 	// 用于取消应用列表加载任务
 	appListCancel context.CancelFunc
@@ -99,6 +100,10 @@ func (a *App) startup(ctx context.Context) {
 	a.deviceTracker = adb.NewDeviceTracker(a.adbPath, func(devices []adb.DeviceInfo) {
 		a.scheduleDeviceUpdate(devices)
 	})
+	a.perfMonitor = adb.NewPerfMonitor(func(event string, data any) {
+		runtime.EventsEmit(a.ctx, event, data)
+	})
+
 	// 启动跟踪
 	go a.deviceTracker.Start(ctx)
 	applog.Infof(applog.CategoryStartup, "device_tracker_started adb_path=%s", a.adbPath)
@@ -107,6 +112,9 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	if a.deviceTracker != nil {
 		a.deviceTracker.Stop(time.Second)
+	}
+	if a.perfMonitor != nil {
+		a.perfMonitor.Stop(time.Second)
 	}
 
 	a.deviceUpdateMutex.Lock()
@@ -825,6 +833,16 @@ func (a *App) GetThreadSchedInfo(deviceId string, packageName string, pid int) (
 		adbPath = "adb"
 	}
 	return adb.GetThreadSchedInfo(adbPath, deviceId, packageName, pid)
+}
+
+// StartPerfMonitor 开始监控包名下所有进程的 CPU、内存与进程事件，数据通过 perf-* 事件推送
+func (a *App) StartPerfMonitor(opts adb.PerfMonitorOptions) error {
+	return a.perfMonitor.Start(a.ctx, a.adbPath, opts)
+}
+
+// StopPerfMonitor 停止性能监控
+func (a *App) StopPerfMonitor() {
+	a.perfMonitor.Stop(2 * time.Second)
 }
 
 // GetVersion 返回应用版本号

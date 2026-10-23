@@ -1,11 +1,9 @@
 // components/ApplicationList.tsx
-import { useEffect, useState, useMemo, useCallback, useRef, memo } from 'react';
+import { useEffect, useState, useMemo, useRef, memo } from 'react';
 import { Input, Select, message, Space, Button, Progress, Empty, Spin, Pagination, Typography } from 'antd';
 import { SearchOutlined, ReloadOutlined, AppstoreOutlined, ClockCircleOutlined, FolderOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useDeviceStore } from '../store/deviceStore';
-import { useAppListStore, PackageInfo, ProgressInfo } from '../store/appListStore';
-import {GetApplicationListWithProgress, CancelApplicationListLoading, LogMsg} from '../../wailsjs/go/main/App';
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
+import { useAppListStore, PackageInfo } from '../store/appListStore';
 
 const { Paragraph } = Typography;
 
@@ -17,17 +15,8 @@ const formatTime = (timestamp: number) => {
 };
 
 function ApplicationList() {
-    const { devices, selectedDevice } = useDeviceStore();
-    const {
-        apps,
-        isLoading,
-        progress,
-        loadedDeviceId,
-        setApps,
-        getAppsFromCache,
-        setLoading,
-        setProgress,
-    } = useAppListStore();
+    const { selectedDevice } = useDeviceStore();
+    const {apps, isLoading, progress, load} = useAppListStore();
 
     const [searchText, setSearchText] = useState('');
     const [filterType, setFilterType] = useState<FilterType>('all');
@@ -35,117 +24,42 @@ function ApplicationList() {
     const [pageSize, setPageSize] = useState(20);
 
     const mountedRef = useRef(true);
-    const loadIdRef = useRef(0);
-    const isLoadingRef = useRef(false);  // 新增：跟踪是否正在加载
 
-    // 获取当前设备的 deviceId 参数
-    const getDeviceIdParam = useCallback(() => {
-        return devices.length > 1 && selectedDevice ? selectedDevice.id : '';
-    }, [devices.length, selectedDevice]);
-
-    // 组件挂载/卸载处理
+    // 离开页面不取消加载：加载由 store 持有，会在后台继续完成并写入缓存
     useEffect(() => {
         mountedRef.current = true;
         return () => {
             mountedRef.current = false;
-            // 只有在正在加载时才取消
-            if (isLoadingRef.current) {
-                CancelApplicationListLoading().catch(() => {});
-            }
         };
     }, []);
 
-    // 监听进度事件
-    useEffect(() => {
-        const handleProgress = (data: ProgressInfo) => {
-            if (mountedRef.current) {
-                setProgress(data);
-            }
-        };
-
-        EventsOn('app-list-progress', handleProgress);
-        return () => {
-            EventsOff('app-list-progress');
-        };
-    }, [setProgress]);
-
-    // 加载应用列表
-// 直接定义普通函数
-    const doLoadApps = async (forceRefresh = false) => {
+    // 优先使用缓存（含后台预加载的结果）；预加载仍在进行时复用同一次加载
+    const loadApps = async (force = false) => {
         if (!selectedDevice) {
             return;
         }
-
-        const deviceIdParam = getDeviceIdParam();
-
-        if (!forceRefresh) {
-            const cached = getAppsFromCache(deviceIdParam);
-            if (cached && cached.length > 0) {
-                if (loadedDeviceId !== deviceIdParam) {
-                    setApps(deviceIdParam, cached);
-                }
-                setLoading(false);
-                console.log('Using cached app list for device:', deviceIdParam || 'default');
-                return;
-            }
+        if (force) {
+            setCurrentPage(1);
         }
-
-        loadIdRef.current++;
-        const currentLoadId = loadIdRef.current;
-
-        setLoading(true);
-        setProgress(null);
-        setCurrentPage(1);
-        isLoadingRef.current = true;
-
-        try {
-            const result = await GetApplicationListWithProgress(deviceIdParam);
-
-            if (!mountedRef.current || loadIdRef.current !== currentLoadId) {
-                return;
-            }
-
-            if (result && result.length > 0) {
-                setApps(deviceIdParam, result);
-                message.success(`成功加载 ${result.length} 个应用`);
+        const result = await load(selectedDevice.id, {force});
+        if (!mountedRef.current) {
+            return;
+        }
+        if (result.status === 'loaded') {
+            if (result.count > 0) {
+                message.success(`成功加载 ${result.count} 个应用`);
             } else {
-                setApps(deviceIdParam, []);
                 message.info('未找到应用');
             }
-        } catch (error: any) {
-            if (!mountedRef.current || loadIdRef.current !== currentLoadId) {
-                return;
-            }
-
-            const errorStr = error?.toString() || '';
-            if (errorStr.includes('cancel') || errorStr.includes('context')) {
-                return;
-            }
-
-            message.error(`加载失败: ${errorStr}`);
-            setApps(deviceIdParam, []);
-        } finally {
-            isLoadingRef.current = false;
-            setLoading(false);
+        } else if (result.status === 'error') {
+            message.error(`加载失败: ${result.error}`);
         }
     };
 
-    // 设备变化时自动加载（优先使用缓存）
+    // 设备变化时加载（设备断开时的清理由 useAppListPreload 负责）
     useEffect(() => {
         if (selectedDevice) {
-            const deviceIdParam = getDeviceIdParam();
-            const cached = getAppsFromCache(deviceIdParam);
-            // 没有缓存才强制刷新
-            const forceRefresh = !cached || cached.length === 0;
-            doLoadApps(forceRefresh);
-        } else {
-            // 设备断开时，清除缓存
-            useAppListStore.getState().clearCache();  // 清除所有缓存
-            useAppListStore.setState({
-                apps: [],
-                isLoading: false,
-                progress: null,
-            });
+            loadApps(false);
         }
     }, [selectedDevice?.id]);
 
@@ -155,7 +69,7 @@ function ApplicationList() {
             message.warning('请先连接设备');
             return;
         }
-        doLoadApps(true);
+        loadApps(true);
     };
 
     // 过滤应用列表

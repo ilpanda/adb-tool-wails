@@ -2,7 +2,7 @@ import {ACTION_DESC, ACTION_META, QuickAction, quickActions} from '../data/quick
 import {ExecuteAction, GetAdbPath} from '../../wailsjs/go/main/App';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {InputRef} from 'antd';
-import {Button, Empty, Input, Select, Tooltip, message} from "antd";
+import {Empty, Input, message} from "antd";
 import SystemPropertiesModal, {SystemProperty} from "./SystemPropertiesModal";
 import {useDeviceStore} from "../store/deviceStore";
 import TerminalPanel from './TerminalPanel';
@@ -14,10 +14,11 @@ import TaskDetailDrawer from './TaskDetailDrawer';
 import PageHeader from './PageHeader';
 import {runQuickAction} from '../actions/runQuickAction';
 import {ActionTask, useActionTaskStore} from '../store/actionTaskStore';
+import {EMPTY_PACKAGES, readStoredPackage, usePackageListStore, writeStoredPackage} from '../store/packageListStore';
+import PackagePicker from './PackagePicker';
 
 const KEY_SECTION = '按键';
 const RECENT_STORAGE_KEY = 'quick_action_recent';
-const PACKAGE_STORAGE_KEY = 'selectedPackage';
 const MAX_RECENT = 6;
 const FALLBACK_PACKAGE = 'com.baidu.input_oppo';
 
@@ -40,26 +41,17 @@ function writeRecent(list: string[]) {
     }
 }
 
-function readStoredPackage(deviceId: string): string | null {
-    try {
-        const data = JSON.parse(localStorage.getItem(PACKAGE_STORAGE_KEY) || 'null');
-        return data && data.selectedDevice === deviceId ? data.selectedPackage : null;
-    } catch {
-        return null;
-    }
-}
-
 // 按设备缓存页面数据：切换到其他页面再回来时直接显示，后台静默刷新，避免内容先清空再出现导致跳动
+// 包名列表缓存在 packageListStore 中
 interface DeviceCache {
     info: string | null;
-    packages: string[];
     selectedPackage: string;
 }
 
 const deviceCache = new Map<string, DeviceCache>();
 
 function getCache(deviceId: string | undefined): DeviceCache {
-    return (deviceId && deviceCache.get(deviceId)) || {info: null, packages: [], selectedPackage: ''};
+    return (deviceId && deviceCache.get(deviceId)) || {info: null, selectedPackage: ''};
 }
 
 function updateCache(deviceId: string, patch: Partial<DeviceCache>) {
@@ -74,12 +66,12 @@ function RightContainer() {
     const [threadSchedVisible, setThreadSchedVisible] = useState(false);
     const initialCache = getCache(useDeviceStore.getState().selectedDevice?.id);
     const [selectedPackage, setSelectedPackage] = useState<string>(initialCache.selectedPackage);
-    const [packageList, setPackageList] = useState<string[]>(initialCache.packages);
-    const [pickingForeground, setPickingForeground] = useState(false);
     const [deviceInfoString, setDeviceInfoString] = useState<string | null>(initialCache.info);
     const [recent, setRecent] = useState<string[]>(readRecent);
 
     const {devices, selectedDevice} = useDeviceStore();
+    const packageList = usePackageListStore(state =>
+        selectedDevice ? state.packagesByDevice[selectedDevice.id] ?? EMPTY_PACKAGES : EMPTY_PACKAGES);
     const tasks = useActionTaskStore(state => state.tasks);
     // 单设备时后端不需要序列号，沿用原有约定
     const deviceId = devices.length > 1 && selectedDevice ? selectedDevice.id.toString() : "";
@@ -152,7 +144,6 @@ function RightContainer() {
         const fetchData = async () => {
             if (!selectedDevice) {
                 setSelectedPackage('');
-                setPackageList([]);
                 setDeviceInfoString(null);
                 return;
             }
@@ -160,21 +151,18 @@ function RightContainer() {
             // 先用缓存填充（切换设备时立即显示该设备上次的数据），再后台刷新
             const cached = getCache(selectedDevice.id);
             setDeviceInfoString(cached.info);
-            setPackageList(cached.packages);
             if (cached.selectedPackage) setSelectedPackage(cached.selectedPackage);
             void fetchDeviceInfo();
 
-            const result = await ExecuteAction({action: "get-all-packages", targetPackageName: "", deviceId});
-            const packages = (result.res || '').split("\n").map(line => line.trim()).filter(Boolean);
-            if (packages.length === 0 && cached.packages.length > 0) return;
-            setPackageList(packages);
+            const packages = await usePackageListStore.getState().fetchPackages(selectedDevice.id);
+            if (packages.length === 0) return;
 
             // 优先保留当前选择，其次恢复该设备上次选择的包名，最后使用常用的默认包名
             const stored = readStoredPackage(selectedDevice.id);
             const preferred = [cached.selectedPackage, stored, FALLBACK_PACKAGE].find(pkg => pkg && packages.includes(pkg));
             const nextPackage = preferred || cached.selectedPackage || stored || '';
             setSelectedPackage(nextPackage);
-            updateCache(selectedDevice.id, {packages, selectedPackage: nextPackage});
+            updateCache(selectedDevice.id, {selectedPackage: nextPackage});
         };
         void fetchData();
     }, [selectedDevice]);
@@ -183,27 +171,7 @@ function RightContainer() {
         setSelectedPackage(value);
         if (selectedDevice) updateCache(selectedDevice.id, {selectedPackage: value});
         if (selectedDevice && value) {
-            try {
-                localStorage.setItem(PACKAGE_STORAGE_KEY, JSON.stringify({selectedDevice: selectedDevice.id, selectedPackage: value}));
-            } catch {
-                // 存储不可用时只保留在内存中
-            }
-        }
-    };
-
-    const pickForegroundPackage = async () => {
-        setPickingForeground(true);
-        try {
-            const result = await ExecuteAction({action: 'view-package', targetPackageName: '', deviceId});
-            const pkg = (result.res || '').trim();
-            if (result.error || !pkg) {
-                message.error(`无法获取前台应用：${result.error || '没有输出'}`);
-                return;
-            }
-            handlePackageChange(pkg);
-            message.success(`已切换到前台应用 ${pkg}`);
-        } finally {
-            setPickingForeground(false);
+            writeStoredPackage(selectedDevice.id, value);
         }
     };
 
@@ -321,26 +289,7 @@ function RightContainer() {
                             <div className="text-[13px] font-medium text-ink">目标应用</div>
                             <div className="text-[11px] text-mute">共 {packageList.length} 个已安装应用</div>
                         </div>
-                        <Select
-                            value={selectedPackage || undefined}
-                            onChange={handlePackageChange}
-                            placeholder={selectedDevice ? '输入或选择包名' : '请先连接设备'}
-                            disabled={!selectedDevice}
-                            showSearch
-                            optionFilterProp="label"
-                            options={packageList.map(pkg => ({value: pkg, label: pkg}))}
-                            className="min-w-0 flex-1 [&_.ant-select-selection-item]:font-mono [&_.ant-select-selection-item]:text-[13px]"
-                        />
-                        <Tooltip title="把手机前台正在运行的应用设为目标应用">
-                            <Button
-                                icon={<i className="fa-solid fa-location-crosshairs text-[12px]"/>}
-                                loading={pickingForeground}
-                                disabled={!selectedDevice}
-                                onClick={() => void pickForegroundPackage()}
-                            >
-                                使用前台应用
-                            </Button>
-                        </Tooltip>
+                        <PackagePicker value={selectedPackage} onChange={handlePackageChange} className="flex-1"/>
                     </div>
 
                     {!searchText && recentActions.length > 0 && (

@@ -10,7 +10,7 @@ const MENU_GROUPS: Array<{title: string; items: Array<{key: string; label: strin
         items: [
             {key: '1', label: '快捷功能', icon: 'fa-bolt'},
             {key: '4', label: '应用列表', icon: 'fa-table-cells-large'},
-            {key: '5', label: '内存监控', icon: 'fa-chart-line'},
+            {key: '5', label: '性能监控', icon: 'fa-chart-line'},
             {key: '6', label: '文件管理', icon: 'fa-folder'},
         ],
     },
