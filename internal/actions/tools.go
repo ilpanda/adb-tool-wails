@@ -1,8 +1,9 @@
-package adb
+package actions
 
 import (
-	"adb-tool-wails/types"
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/types"
+	"adb-tool-wails/internal/util"
 	"bytes"
 	"fmt"
 	"image/png"
@@ -20,21 +21,10 @@ func deviceQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
-func (param ExecuteParams) adbArgs(args ...string) []string {
-	if param.DeviceId != "" {
-		return append([]string{"-s", param.DeviceId}, args...)
-	}
-	return args
-}
-
-func (param ExecuteParams) cmdLine(args ...string) string {
-	return util.QuoteHostArg(param.AdbPath) + " " + strings.Join(param.adbArgs(args...), " ")
-}
-
 // ScreenshotToClipboard 截取当前屏幕并复制到系统剪贴板，不保存文件
-func ScreenshotToClipboard(param ExecuteParams) types.ExecResult {
-	cmdLine := param.cmdLine("exec-out", "screencap", "-p")
-	cmd := exec.Command(param.AdbPath, param.adbArgs("exec-out", "screencap", "-p")...)
+func ScreenshotToClipboard(param adb.ExecuteParams) types.ExecResult {
+	cmdLine := param.CmdLine("exec-out", "screencap", "-p")
+	cmd := exec.Command(param.AdbPath, param.Args("exec-out", "screencap", "-p")...)
 	util.ConfigureCommand(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -118,21 +108,21 @@ type DeepLinkResult struct {
 }
 
 // OpenDeepLink 用 VIEW Intent 打开链接；packageName 非空时只在该应用内解析
-func OpenDeepLink(param ExecuteParams, link string, packageName string) DeepLinkResult {
+func OpenDeepLink(param adb.ExecuteParams, link string, packageName string) DeepLinkResult {
 	link = strings.TrimSpace(link)
 	if link == "" || !strings.Contains(link, ":") {
 		return DeepLinkResult{Error: "链接格式不正确，需要包含 scheme，例如 myapp://home 或 https://example.com"}
 	}
 	script := "am start -W -a android.intent.action.VIEW -d " + deviceQuote(link)
 	if packageName != "" {
-		if !rePackageName.MatchString(packageName) {
+		if !adb.ValidPackageName(packageName) {
 			return DeepLinkResult{Error: "包名不合法: " + packageName}
 		}
 		script += " " + packageName
 	}
 
-	result := DeepLinkResult{Cmd: param.cmdLine("shell", script)}
-	cmd := exec.Command(param.AdbPath, param.adbArgs("shell", script)...)
+	result := DeepLinkResult{Cmd: param.CmdLine("shell", script)}
+	cmd := exec.Command(param.AdbPath, param.Args("shell", script)...)
 	util.ConfigureCommand(cmd)
 	output, err := cmd.CombinedOutput()
 	result.Output = strings.TrimSpace(string(output))

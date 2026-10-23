@@ -9,7 +9,7 @@ import {
     WirelessPair,
     WirelessPairByQR,
 } from '../../wailsjs/go/main/App';
-import {adb} from '../../wailsjs/go/models';
+import {wireless} from '../../wailsjs/go/models';
 import {useDeviceStore} from '../store/deviceStore';
 
 type Mode = 'qr' | 'code' | 'ip' | 'usb';
@@ -46,7 +46,7 @@ function Steps({children}: { children: React.ReactNode }) {
     return <div className="rounded-lg bg-canvas px-3 py-2.5 text-[12.5px] leading-6 text-body">{children}</div>;
 }
 
-function ResultLine({result}: { result: adb.WirelessResult | null }) {
+function ResultLine({result}: { result: wireless.Result | null }) {
     if (!result) return null;
     if (result.error) {
         return <Alert type="error" showIcon message={result.error}/>;
@@ -94,7 +94,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
     const [mode, setMode] = useState<Mode>('qr');
     const [mdnsSupported, setMdnsSupported] = useState<boolean | null>(null);
     const [busy, setBusy] = useState(false);
-    const [result, setResult] = useState<adb.WirelessResult | null>(null);
+    const [result, setResult] = useState<wireless.Result | null>(null);
     const [recent, setRecent] = useState<string[]>(readRecent);
 
     const [pairAddress, setPairAddress] = useState('');
@@ -146,12 +146,12 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
         };
     }, [open, mode, mdnsSupported, qr]);
 
-    const finish = (res: adb.WirelessResult) => {
+    const finish = (res: wireless.Result) => {
         setResult(res);
         if (res.connected) setRecent(rememberAddress(res.connected));
     };
 
-    const run = async (action: () => Promise<adb.WirelessResult>) => {
+    const run = async (action: () => Promise<wireless.Result>) => {
         setBusy(true);
         setResult(null);
         try {

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package io.liriliri.aya;
 
-option go_package = "adb-tool-wails/aya/proto";
+option go_package = "adb-tool-wails/internal/aya/proto";
 
 message Request {
   string id = 1;

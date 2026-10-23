@@ -1,7 +1,8 @@
-package main
+// Package update 查询 GitHub Releases 判断是否有新版本。
+package update
 
 import (
-	"adb-tool-wails/applog"
+	"adb-tool-wails/internal/applog"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,8 +13,8 @@ import (
 
 const latestReleaseAPI = "https://api.github.com/repos/ilpanda/adb-tool-wails/releases/latest"
 
-// UpdateInfo 版本检查结果
-type UpdateInfo struct {
+// Info 版本检查结果
+type Info struct {
 	Current     string `json:"current"`
 	Latest      string `json:"latest"`
 	HasUpdate   bool   `json:"hasUpdate"`
@@ -23,9 +24,9 @@ type UpdateInfo struct {
 	Error       string `json:"error,omitempty"`
 }
 
-// CheckUpdate 查询 GitHub Releases 的最新版本；开发版本只返回最新版本号，不提示更新
-func (a *App) CheckUpdate() UpdateInfo {
-	info := UpdateInfo{Current: Version}
+// Check 查询 GitHub Releases 的最新版本；开发版本（devBuild）只返回最新版本号，不提示更新
+func Check(current string, devBuild bool) Info {
+	info := Info{Current: current}
 	client := &http.Client{Timeout: 8 * time.Second}
 	req, err := http.NewRequest(http.MethodGet, latestReleaseAPI, nil)
 	if err != nil {
@@ -33,7 +34,7 @@ func (a *App) CheckUpdate() UpdateInfo {
 		return info
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "adb-tool-wails/"+Version)
+	req.Header.Set("User-Agent", "adb-tool-wails/"+current)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -60,8 +61,8 @@ func (a *App) CheckUpdate() UpdateInfo {
 	info.URL = release.HTMLURL
 	info.Notes = release.Body
 	info.PublishedAt = release.PublishedAt
-	info.HasUpdate = !IsDebugBuild() && compareVersions(release.TagName, Version) > 0
-	applog.Infof(applog.CategoryStartup, "update_checked current=%s latest=%s has_update=%t", Version, release.TagName, info.HasUpdate)
+	info.HasUpdate = !devBuild && compareVersions(release.TagName, current) > 0
+	applog.Infof(applog.CategoryStartup, "update_checked current=%s latest=%s has_update=%t", current, release.TagName, info.HasUpdate)
 	return info
 }
 

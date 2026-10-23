@@ -1,8 +1,9 @@
-package adb
+package perf
 
 import (
-	"adb-tool-wails/applog"
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/util"
 	"bytes"
 	"context"
 	"fmt"
@@ -15,10 +16,10 @@ import (
 
 // 推送给前端的事件名
 const (
-	PerfEventSample = "perf-sample" // 高频：CPU、频率、进程 RSS
-	PerfEventMemory = "perf-memory" // 低频：dumpsys meminfo + 温度
-	PerfEventProc   = "perf-event"  // 进程启动、死亡、重启、ANR
-	PerfEventStatus = "perf-status" // 会话开始 / 结束
+	EventSample = "perf-sample" // 高频：CPU、频率、进程 RSS
+	EventMemory = "perf-memory" // 低频：dumpsys meminfo + 温度
+	EventProc   = "perf-event"  // 进程启动、死亡、重启、ANR
+	EventStatus = "perf-status" // 会话开始 / 结束
 )
 
 const (
@@ -28,23 +29,23 @@ const (
 	perfDefaultMemPeriod = 5 * time.Second
 )
 
-// PerfMonitorOptions 前端传入的监控参数
-type PerfMonitorOptions struct {
+// Options 前端传入的监控参数
+type Options struct {
 	DeviceId      string `json:"deviceId"`
 	PackageName   string `json:"packageName"`
 	IntervalMs    int    `json:"intervalMs"`
 	MemIntervalMs int    `json:"memIntervalMs"`
 }
 
-// PerfCore 单个核的负载与频率
-type PerfCore struct {
+// Core 单个核的负载与频率
+type Core struct {
 	Cpu  int      `json:"cpu"`
 	Load *float64 `json:"load"` // 0-100，首次采样没有基线时为空
 	Freq int      `json:"freq"` // 当前频率，kHz
 }
 
-// PerfCluster 一个核簇的频率
-type PerfCluster struct {
+// Cluster 一个核簇的频率
+type Cluster struct {
 	Label   string `json:"label"`
 	Cpus    []int  `json:"cpus"`
 	MaxFreq int    `json:"maxFreq"` // kHz
@@ -52,69 +53,69 @@ type PerfCluster struct {
 	AvgFreq int    `json:"avgFreq"` // 两次采样之间的平均频率（time_in_state 差值），kHz
 }
 
-// PerfThread 线程 CPU 占用
-type PerfThread struct {
+// Thread 线程 CPU 占用
+type Thread struct {
 	Tid  int     `json:"tid"`
 	Name string  `json:"name"`
 	Cpu  float64 `json:"cpu"` // 单核口径，%
 }
 
-// PerfProcess 一个进程的高频采样结果
-type PerfProcess struct {
-	Name       string       `json:"name"`
-	Pid        int          `json:"pid"`
-	Cpu        *float64     `json:"cpu"` // 单核口径，%；进程新出现时没有基线为空
-	RssAnon    int64        `json:"rssAnon"`
-	RssFile    int64        `json:"rssFile"`
-	RssShmem   int64        `json:"rssShmem"`
-	Swap       int64        `json:"swap"`
-	Threads    int64        `json:"threads"`
-	TopThreads []PerfThread `json:"topThreads"`
+// Process 一个进程的高频采样结果
+type Process struct {
+	Name       string   `json:"name"`
+	Pid        int      `json:"pid"`
+	Cpu        *float64 `json:"cpu"` // 单核口径，%；进程新出现时没有基线为空
+	RssAnon    int64    `json:"rssAnon"`
+	RssFile    int64    `json:"rssFile"`
+	RssShmem   int64    `json:"rssShmem"`
+	Swap       int64    `json:"swap"`
+	Threads    int64    `json:"threads"`
+	TopThreads []Thread `json:"topThreads"`
 }
 
-// PerfSample 一次高频采样
-type PerfSample struct {
-	Timestamp int64         `json:"timestamp"` // 本机毫秒时间
-	CpuCount  int           `json:"cpuCount"`
-	DeviceCpu *float64      `json:"deviceCpu"` // 整机口径，0-100
-	Cores     []PerfCore    `json:"cores"`
-	Clusters  []PerfCluster `json:"clusters"`
-	Processes []PerfProcess `json:"processes"`
+// Sample 一次高频采样
+type Sample struct {
+	Timestamp int64     `json:"timestamp"` // 本机毫秒时间
+	CpuCount  int       `json:"cpuCount"`
+	DeviceCpu *float64  `json:"deviceCpu"` // 整机口径，0-100
+	Cores     []Core    `json:"cores"`
+	Clusters  []Cluster `json:"clusters"`
+	Processes []Process `json:"processes"`
 }
 
-// PerfMemorySample 一次低频采样
-type PerfMemorySample struct {
-	Timestamp int64         `json:"timestamp"`
-	Processes []PerfMemInfo `json:"processes"`
-	Thermal   PerfThermal   `json:"thermal"`
+// MemorySample 一次低频采样
+type MemorySample struct {
+	Timestamp int64            `json:"timestamp"`
+	Processes []ProcessMemInfo `json:"processes"`
+	Thermal   Thermal          `json:"thermal"`
 }
 
-// PerfStatus 会话状态
-type PerfStatus struct {
+// Status 会话状态
+type Status struct {
 	Running     bool   `json:"running"`
 	PackageName string `json:"packageName"`
 	DeviceId    string `json:"deviceId"`
 	Error       string `json:"error"`
 }
 
-// PerfEmitter 由 App 注入，向前端推送事件
-type PerfEmitter func(event string, data any)
+// Emitter 由 App 注入，向前端推送事件
+type Emitter func(event string, data any)
 
-// PerfMonitor 同一时间只运行一个监控会话
-type PerfMonitor struct {
-	emit PerfEmitter
+// Monitor 同一时间只运行一个监控会话
+type Monitor struct {
+	emit Emitter
 
 	mu      sync.Mutex
 	session *perfSession
 }
 
-func NewPerfMonitor(emit PerfEmitter) *PerfMonitor {
-	return &PerfMonitor{emit: emit}
+func NewMonitor(emit Emitter) *Monitor {
+	return &Monitor{emit: emit}
 }
 
 // Start 停掉已有会话后开始新的监控
-func (m *PerfMonitor) Start(parent context.Context, adbPath string, opts PerfMonitorOptions) error {
-	if !rePackageName.MatchString(opts.PackageName) {
+func (m *Monitor) Start(parent context.Context, adbPath string, opts Options) error {
+	if !adb.ValidPackageName(opts.PackageName) {
 		return fmt.Errorf("包名不合法: %s", opts.PackageName)
 	}
 	if opts.DeviceId == "" {
@@ -145,13 +146,13 @@ func (m *PerfMonitor) Start(parent context.Context, adbPath string, opts PerfMon
 
 	applog.Infof(applog.CategoryADB, "perf_monitor_start device=%s package=%s interval_ms=%d mem_interval_ms=%d",
 		opts.DeviceId, opts.PackageName, s.interval.Milliseconds(), s.memEvery.Milliseconds())
-	m.emit(PerfEventStatus, PerfStatus{Running: true, PackageName: opts.PackageName, DeviceId: opts.DeviceId})
+	m.emit(EventStatus, Status{Running: true, PackageName: opts.PackageName, DeviceId: opts.DeviceId})
 	go s.run()
 	return nil
 }
 
 // Stop 结束当前会话（如有），最多等待 timeout
-func (m *PerfMonitor) Stop(timeout time.Duration) {
+func (m *Monitor) Stop(timeout time.Duration) {
 	m.mu.Lock()
 	s := m.session
 	m.session = nil
@@ -180,9 +181,9 @@ type procIdentity struct {
 }
 
 type perfSession struct {
-	monitor  *PerfMonitor
+	monitor  *Monitor
 	adbPath  string
-	opts     PerfMonitorOptions
+	opts     Options
 	ctx      context.Context
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -214,7 +215,7 @@ func (s *perfSession) run() {
 	failure := s.failure
 	s.mu.Unlock()
 	applog.Infof(applog.CategoryADB, "perf_monitor_stopped package=%s err=%q", s.opts.PackageName, failure)
-	s.monitor.emit(PerfEventStatus, PerfStatus{PackageName: s.opts.PackageName, DeviceId: s.opts.DeviceId, Error: failure})
+	s.monitor.emit(EventStatus, Status{PackageName: s.opts.PackageName, DeviceId: s.opts.DeviceId, Error: failure})
 }
 
 // fail 连续失败过多时结束整个会话
@@ -295,19 +296,19 @@ func (s *perfSession) handleFast(raw perfFastRaw, hostMs int64) {
 	s.mu.Unlock()
 
 	sample := buildSample(prev, &raw, hostMs)
-	s.monitor.emit(PerfEventSample, sample)
+	s.monitor.emit(EventSample, sample)
 	s.detectProcessChanges(raw, hostMs)
 }
 
 // buildSample 用相邻两次采样的 jiffies 差值计算 CPU 占用；没有上一次采样时只输出瞬时数据
-func buildSample(prev, cur *perfFastRaw, hostMs int64) PerfSample {
+func buildSample(prev, cur *perfFastRaw, hostMs int64) Sample {
 	// 切片初始化为空，避免进程不存在时序列化成 null
-	sample := PerfSample{
+	sample := Sample{
 		Timestamp: hostMs,
 		CpuCount:  len(cur.Cores),
-		Cores:     []PerfCore{},
-		Clusters:  []PerfCluster{},
-		Processes: []PerfProcess{},
+		Cores:     []Core{},
+		Clusters:  []Cluster{},
+		Processes: []Process{},
 	}
 	var elapsed uint64 // 所有核总 jiffies 的差值
 	if prev != nil && cur.CpuAll.Total > prev.CpuAll.Total {
@@ -327,7 +328,7 @@ func buildSample(prev, cur *perfFastRaw, hostMs int64) PerfSample {
 	}
 	sort.Ints(cpus)
 	for _, cpu := range cpus {
-		core := PerfCore{Cpu: cpu, Freq: freqByCpu[cpu]}
+		core := Core{Cpu: cpu, Freq: freqByCpu[cpu]}
 		// 按核编号对应，核下线后 /proc/stat 少一行也不会错位
 		if prev != nil {
 			if before, ok := prev.Cores[cpu]; ok {
@@ -354,7 +355,7 @@ func buildSample(prev, cur *perfFastRaw, hostMs int64) PerfSample {
 		if p.Stat.Pid == 0 {
 			continue
 		}
-		proc := PerfProcess{
+		proc := Process{
 			Name:     p.Name,
 			Pid:      p.Stat.Pid,
 			RssAnon:  p.Status["RssAnon"],
@@ -396,12 +397,12 @@ func cpuPercent(before, after procStat, perCore float64) *float64 {
 	return &value
 }
 
-func topThreads(before, after []procStat, perCore float64) []PerfThread {
+func topThreads(before, after []procStat, perCore float64) []Thread {
 	prev := make(map[int]procStat, len(before))
 	for _, t := range before {
 		prev[t.Pid] = t
 	}
-	var threads []PerfThread
+	var threads []Thread
 	for _, t := range after {
 		old, ok := prev[t.Pid]
 		if !ok || old.StartTime != t.StartTime {
@@ -411,7 +412,7 @@ func topThreads(before, after []procStat, perCore float64) []PerfThread {
 		if cpu == nil || *cpu <= 0 {
 			continue
 		}
-		threads = append(threads, PerfThread{Tid: t.Pid, Name: t.Comm, Cpu: *cpu})
+		threads = append(threads, Thread{Tid: t.Pid, Name: t.Comm, Cpu: *cpu})
 	}
 	sort.Slice(threads, func(i, j int) bool { return threads[i].Cpu > threads[j].Cpu })
 	if len(threads) > perfTopThreads {
@@ -431,7 +432,7 @@ func clampPercent(value, max float64) float64 {
 }
 
 // buildClusters 复用 parseClusters 的分簇与命名，再补上当前频率与区间平均频率
-func buildClusters(prev, cur *perfFastRaw) []PerfCluster {
+func buildClusters(prev, cur *perfFastRaw) []Cluster {
 	policyLines := make([]string, 0, len(cur.Policies))
 	byFirstCpu := map[int]perfPolicy{}
 	for _, p := range cur.Policies {
@@ -449,10 +450,10 @@ func buildClusters(prev, cur *perfFastRaw) []PerfCluster {
 		}
 	}
 
-	clusters := []PerfCluster{}
+	clusters := []Cluster{}
 	for _, c := range parseClusters(policyLines, nil) {
 		p := byFirstCpu[c.Cpus[0]]
-		cluster := PerfCluster{Label: c.Label, Cpus: c.Cpus, MaxFreq: c.MaxFreq, CurFreq: p.CurFreq, AvgFreq: p.CurFreq}
+		cluster := Cluster{Label: c.Label, Cpus: c.Cpus, MaxFreq: c.MaxFreq, CurFreq: p.CurFreq, AvgFreq: p.CurFreq}
 		if before, ok := prevByFirstCpu[c.Cpus[0]]; ok {
 			if avg := averageFreq(before.TimeInState, p.TimeInState); avg > 0 {
 				cluster.AvgFreq = avg
@@ -504,10 +505,10 @@ func (s *perfSession) slowLoop() {
 			applog.Warnf(applog.CategoryADB, "perf_memory_sample_failed err=%q", err.Error())
 		} else {
 			memOutputs, thermalOutput := splitSlowOutput(output)
-			sample := PerfMemorySample{
+			sample := MemorySample{
 				Timestamp: begin.Add(time.Since(begin) / 2).UnixMilli(),
 				Thermal:   parseThermal(thermalOutput),
-				Processes: []PerfMemInfo{},
+				Processes: []ProcessMemInfo{},
 			}
 			for _, pid := range pids {
 				if info, ok := parsePerfMemInfo(pid, memOutputs[pid]); ok {
@@ -515,7 +516,7 @@ func (s *perfSession) slowLoop() {
 					sample.Processes = append(sample.Processes, info)
 				}
 			}
-			s.monitor.emit(PerfEventMemory, sample)
+			s.monitor.emit(EventMemory, sample)
 		}
 
 		select {

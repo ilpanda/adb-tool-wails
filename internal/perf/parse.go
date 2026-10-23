@@ -1,4 +1,4 @@
-package adb
+package perf
 
 import (
 	"math"
@@ -260,8 +260,8 @@ func parseStatusLine(line string) (string, int64, bool) {
 	return line[:idx], value, true
 }
 
-// PerfMemInfo 单个进程一次 dumpsys meminfo 的结果
-type PerfMemInfo struct {
+// ProcessMemInfo 单个进程一次 dumpsys meminfo 的结果
+type ProcessMemInfo struct {
 	MemInfo
 	Pid      int              `json:"pid"`
 	Process  string           `json:"process"`
@@ -277,14 +277,14 @@ var (
 	reObjectPair    = regexp.MustCompile(`([A-Za-z][A-Za-z ]*?):\s+(\d+)`)
 )
 
-func parsePerfMemInfo(pid int, output string) (PerfMemInfo, bool) {
+func parsePerfMemInfo(pid int, output string) (ProcessMemInfo, bool) {
 	header := reMemInfoHeader.FindStringSubmatch(output)
 	if header == nil {
-		return PerfMemInfo{}, false
+		return ProcessMemInfo{}, false
 	}
-	info := PerfMemInfo{MemInfo: parseMemInfo(output), Pid: pid, Process: header[2], Objects: map[string]int64{}}
+	info := ProcessMemInfo{MemInfo: ParseMemInfo(output), Pid: pid, Process: header[2], Objects: map[string]int64{}}
 	if info.TotalPSS == 0 {
-		return PerfMemInfo{}, false
+		return ProcessMemInfo{}, false
 	}
 	info.RawMemInfo = output
 	if m := reTotalRss.FindStringSubmatch(output); m != nil {
@@ -321,16 +321,16 @@ var (
 	reThermalStatus    = regexp.MustCompile(`^Thermal Status:\s*(\d+)`)
 )
 
-// PerfThermal CPU 温度
-type PerfThermal struct {
+// Thermal CPU 温度
+type Thermal struct {
 	CpuTemp       float64 `json:"cpuTemp"`       // 当前 CPU 传感器中的最高温度，0 表示未知
 	ThrottleTemp  float64 `json:"throttleTemp"`  // 最低一级的降频阈值，0 表示未知
 	ThermalStatus int     `json:"thermalStatus"` // PowerManager.THERMAL_STATUS_*，0 为正常
 }
 
 // parseThermal 只取 "Current temperatures from HAL" 一段，"Cached temperatures" 可能是很久之前的值
-func parseThermal(output string) PerfThermal {
-	var thermal PerfThermal
+func parseThermal(output string) Thermal {
+	var thermal Thermal
 	section := ""
 	for _, line := range strings.Split(output, "\n") {
 		trimmed := strings.TrimSpace(line)

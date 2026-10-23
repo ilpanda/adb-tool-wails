@@ -1,8 +1,8 @@
-package adb
+package perf
 
 import (
-	"adb-tool-wails/applog"
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/util"
 	"bufio"
 	"fmt"
 	"os/exec"
@@ -15,14 +15,14 @@ import (
 
 // 进程事件类型
 const (
-	PerfProcStarted   = "started"   // 新进程出现
-	PerfProcDied      = "died"      // 进程消失且未重启
-	PerfProcRestarted = "restarted" // 同名进程身份变化（pid 或启动时间不同）
-	PerfProcAnr       = "anr"
+	ProcStarted   = "started"   // 新进程出现
+	ProcDied      = "died"      // 进程消失且未重启
+	ProcRestarted = "restarted" // 同名进程身份变化（pid 或启动时间不同）
+	ProcAnr       = "anr"
 )
 
-// PerfProcEvent 进程事件
-type PerfProcEvent struct {
+// ProcEvent 进程事件
+type ProcEvent struct {
 	Id        int64  `json:"id"`
 	Timestamp int64  `json:"timestamp"` // 本机毫秒时间
 	Kind      string `json:"kind"`
@@ -84,19 +84,19 @@ func (s *perfSession) detectProcessChanges(raw perfFastRaw, hostMs int64) {
 		return
 	}
 
-	var events []PerfProcEvent
+	var events []ProcEvent
 	for name, old := range previous {
 		now, ok := current[name]
 		switch {
 		case !ok:
-			events = append(events, PerfProcEvent{Kind: PerfProcDied, Process: name, Pid: old.Pid})
+			events = append(events, ProcEvent{Kind: ProcDied, Process: name, Pid: old.Pid})
 		case now != old:
-			events = append(events, PerfProcEvent{Kind: PerfProcRestarted, Process: name, Pid: now.Pid, OldPid: old.Pid})
+			events = append(events, ProcEvent{Kind: ProcRestarted, Process: name, Pid: now.Pid, OldPid: old.Pid})
 		}
 	}
 	for name, now := range current {
 		if _, ok := previous[name]; !ok {
-			events = append(events, PerfProcEvent{Kind: PerfProcStarted, Process: name, Pid: now.Pid})
+			events = append(events, ProcEvent{Kind: ProcStarted, Process: name, Pid: now.Pid})
 		}
 	}
 	for _, ev := range events {
@@ -106,7 +106,7 @@ func (s *perfSession) detectProcessChanges(raw perfFastRaw, hostMs int64) {
 	}
 }
 
-func (s *perfSession) enrichAndEmit(ev PerfProcEvent) {
+func (s *perfSession) enrichAndEmit(ev ProcEvent) {
 	select {
 	case <-s.ctx.Done():
 		return
@@ -115,9 +115,9 @@ func (s *perfSession) enrichAndEmit(ev PerfProcEvent) {
 
 	deadPid := 0
 	switch ev.Kind {
-	case PerfProcDied:
+	case ProcDied:
 		deadPid = ev.Pid
-	case PerfProcRestarted:
+	case ProcRestarted:
 		deadPid = ev.OldPid
 	}
 
@@ -126,7 +126,7 @@ func (s *perfSession) enrichAndEmit(ev PerfProcEvent) {
 	if log := s.logs[deadPid]; deadPid > 0 && log != nil {
 		dead = *log
 	}
-	if log := s.logs[ev.Pid]; ev.Kind != PerfProcDied && log != nil {
+	if log := s.logs[ev.Pid]; ev.Kind != ProcDied && log != nil {
 		started = *log
 	}
 	s.mu.Unlock()
@@ -165,15 +165,15 @@ func (s *perfSession) enrichAndEmit(ev PerfProcEvent) {
 	}
 	if ev.Reason == "" {
 		switch ev.Kind {
-		case PerfProcStarted:
+		case ProcStarted:
 			ev.Reason = "进程启动"
-		case PerfProcDied:
+		case ProcDied:
 			ev.Reason = "进程退出"
-		case PerfProcRestarted:
+		case ProcRestarted:
 			ev.Reason = "进程重启"
 		}
 	}
-	s.monitor.emit(PerfEventProc, ev)
+	s.monitor.emit(EventProc, ev)
 }
 
 var (
@@ -402,8 +402,8 @@ func (s *perfSession) handleLogcatLine(cursor *logcatCursor, line string) {
 		if len(fields) >= 5 {
 			detail = strings.TrimSpace(strings.Join(fields[4:], ","))
 		}
-		s.monitor.emit(PerfEventProc, PerfProcEvent{
-			Id: s.nextEventId(), Timestamp: at, Kind: PerfProcAnr, Process: strings.TrimSpace(fields[2]),
+		s.monitor.emit(EventProc, ProcEvent{
+			Id: s.nextEventId(), Timestamp: at, Kind: ProcAnr, Process: strings.TrimSpace(fields[2]),
 			Pid: pid, Reason: "ANR", Detail: detail, Source: "logcat",
 		})
 	}

@@ -1,8 +1,8 @@
 package adb
 
 import (
-	"adb-tool-wails/applog"
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/util"
 	"bufio"
 	"context"
 	"fmt"

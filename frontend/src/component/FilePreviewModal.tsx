@@ -10,7 +10,7 @@ import {
     RightOutlined,
 } from '@ant-design/icons';
 import {PreviewFile} from "../../wailsjs/go/main/App";
-import {main} from "../../wailsjs/go/models";
+import {files} from "../../wailsjs/go/models";
 
 export interface PreviewTarget {
     name: string;
@@ -42,7 +42,7 @@ const CHECKERBOARD = {
 };
 
 function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownload, onClose}: FilePreviewModalProps) {
-    const [preview, setPreview] = useState<main.FilePreview | null>(null);
+    const [preview, setPreview] = useState<files.FilePreview | null>(null);
     const [loading, setLoading] = useState(false);
     const [fitToWindow, setFitToWindow] = useState(true);
     const [dimensions, setDimensions] = useState<{w: number; h: number} | null>(null);
@@ -59,7 +59,7 @@ function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownl
         setDimensions(null);
         PreviewFile(deviceId, target.fullPath)
             .then(result => !cancelled && setPreview(result))
-            .catch(e => !cancelled && setPreview(main.FilePreview.createFrom({kind: '', size: 0, error: String(e?.message || e)})))
+            .catch(e => !cancelled && setPreview(files.FilePreview.createFrom({kind: '', size: 0, error: String(e?.message || e)})))
             .finally(() => !cancelled && setLoading(false));
         return () => {
             cancelled = true;

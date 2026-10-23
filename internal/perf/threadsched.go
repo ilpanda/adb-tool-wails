@@ -1,15 +1,15 @@
-package adb
+package perf
 
 import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/util"
 )
 
 // ProcessBrief 包名对应的一个进程（主进程或 :xxx 子进程）
@@ -49,8 +49,6 @@ type ThreadSchedResult struct {
 	Threads   []ThreadSched  `json:"threads"`
 }
 
-var rePackageName = regexp.MustCompile(`^[A-Za-z0-9._]+$`)
-
 const (
 	secProcs    = "##PROCS"
 	secPid      = "##PID"
@@ -65,7 +63,7 @@ const (
 // pid <= 0 时取包名对应的主进程。所有数据通过一次 adb shell 获取，无需 root。
 func GetThreadSchedInfo(adbPath, deviceId, packageName string, pid int) (ThreadSchedResult, error) {
 	var result ThreadSchedResult
-	if !rePackageName.MatchString(packageName) {
+	if !adb.ValidPackageName(packageName) {
 		return result, fmt.Errorf("包名不合法: %s", packageName)
 	}
 

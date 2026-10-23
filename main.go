@@ -1,7 +1,7 @@
 package main
 
 import (
-	"adb-tool-wails/applog"
+	"adb-tool-wails/internal/applog"
 	"embed"
 	goruntime "runtime"
 

@@ -1,9 +1,9 @@
 package aya
 
 import (
-	"adb-tool-wails/adb"
-	"adb-tool-wails/applog"
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/util"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	pb "adb-tool-wails/aya/proto"
+	pb "adb-tool-wails/internal/aya/proto"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
@@ -188,7 +188,7 @@ func (c *Client) isRunning() bool {
 		return false
 	}
 
-	cmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "cat /proc/net/unix")
+	cmd := adb.ShellCommand(c.param.AdbPath, c.param.DeviceId, "cat /proc/net/unix")
 	output, err := util.Exec(cmd, true, nil)
 	if err != nil {
 		return false
@@ -205,7 +205,7 @@ func (c *Client) pushDex(localDexPath string) error {
 	applog.Infof(applog.CategoryAya, "dex_push_started device=%s path=%s", c.param.DeviceId, localDexPath)
 
 	// 创建目录
-	mkdirCmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "mkdir -p /data/local/tmp/aya")
+	mkdirCmd := adb.ShellCommand(c.param.AdbPath, c.param.DeviceId, "mkdir -p /data/local/tmp/aya")
 	if _, err := util.Exec(mkdirCmd, true, nil); err != nil {
 		applog.Warnf(applog.CategoryAya, "dex_remote_dir_prepare_failed device=%s err=%q", c.param.DeviceId, err.Error())
 	}
@@ -215,7 +215,7 @@ func (c *Client) pushDex(localDexPath string) error {
 	}
 
 	// 推送文件
-	pushCmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("push %s /data/local/tmp/aya/aya.dex", util.QuoteHostArg(localDexPath)))
+	pushCmd := adb.Command(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("push %s /data/local/tmp/aya/aya.dex", util.QuoteHostArg(localDexPath)))
 	if _, err := util.Exec(pushCmd, true, nil); err != nil {
 		return fmt.Errorf("push failed: %w", err)
 	}
@@ -229,7 +229,7 @@ func (c *Client) killServer() {
 	applog.Infof(applog.CategoryAya, "server_kill_requested device=%s", c.param.DeviceId)
 
 	// 方法1：通过 pkill 杀进程
-	cmd := adb.BuildAdbShellCmd(c.param.AdbPath, c.param.DeviceId, "pkill -f io.liriliri.aya.Server")
+	cmd := adb.ShellCommand(c.param.AdbPath, c.param.DeviceId, "pkill -f io.liriliri.aya.Server")
 	util.Exec(cmd, true, nil) // 忽略错误，可能本来就没有进程
 
 	// 等待进程退出
@@ -312,7 +312,7 @@ func (c *Client) connectSocket() error {
 	applog.Infof(applog.CategoryAya, "socket_connect_started device=%s", c.param.DeviceId)
 
 	// 1. 建立端口转发
-	forwardCmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, "forward tcp:0 localabstract:aya")
+	forwardCmd := adb.Command(c.param.AdbPath, c.param.DeviceId, "forward tcp:0 localabstract:aya")
 	output, err := util.Exec(forwardCmd, true, nil)
 	if err != nil {
 		return fmt.Errorf("adb forward failed: %w", err)
@@ -357,7 +357,7 @@ func (c *Client) connectSocket() error {
 // removeForward 移除端口转发
 func (c *Client) removeForward() {
 	if c.localPort != "" {
-		cmd := adb.BuildAdbCmd(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("forward --remove tcp:%s", c.localPort))
+		cmd := adb.Command(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("forward --remove tcp:%s", c.localPort))
 		if _, err := util.Exec(cmd, true, nil); err != nil {
 			applog.Warnf(applog.CategoryAya, "adb_forward_remove_failed device=%s local_port=%s err=%q", c.param.DeviceId, c.localPort, err.Error())
 		}

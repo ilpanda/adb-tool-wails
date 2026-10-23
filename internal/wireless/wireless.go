@@ -1,7 +1,7 @@
-package adb
+package wireless
 
 import (
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/util"
 	"context"
 	"fmt"
 	"os/exec"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// 无线调试：配对（Android 11+）、连接、USB 转无线（adb tcpip）、断开。
+// Package wireless 无线调试：配对（Android 11+）、连接、USB 转无线（adb tcpip）、断开。
 // 参考 aya 的实现，另外在配对后通过 mDNS 自动找到连接端口，并支持 Android Studio 同款的二维码配对
 
 // MdnsService adb mdns services 中的一项
@@ -21,8 +21,8 @@ type MdnsService struct {
 	Address string `json:"address"` // ip:port
 }
 
-// WirelessResult 无线调试操作结果
-type WirelessResult struct {
+// Result 无线调试操作结果
+type Result struct {
 	Cmd       string `json:"cmd"`
 	Output    string `json:"output"`
 	Connected string `json:"connected"` // 已连接的地址（ip:port），未连接为空
@@ -52,16 +52,16 @@ func runAdbArgs(ctx context.Context, adbPath string, args ...string) (string, st
 	return strings.TrimSpace(string(output)), cmdLine, err
 }
 
-// WirelessConnect adb connect host[:port]；未写端口时 adb 默认 5555
-func WirelessConnect(adbPath, address string) WirelessResult {
+// Connect adb connect host[:port]；未写端口时 adb 默认 5555
+func Connect(adbPath, address string) Result {
 	address = strings.TrimSpace(address)
 	if address == "" || !reHostPort.MatchString(address) {
-		return WirelessResult{Error: "地址格式不正确，例如 192.168.1.5:5555"}
+		return Result{Error: "地址格式不正确，例如 192.168.1.5:5555"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	output, cmdLine, err := runAdbArgs(ctx, adbPath, "connect", address)
-	result := WirelessResult{Cmd: cmdLine, Output: output}
+	result := Result{Cmd: cmdLine, Output: output}
 	// adb connect 失败时退出码也可能是 0，以输出判断
 	lower := strings.ToLower(output)
 	switch {
@@ -79,20 +79,20 @@ func WirelessConnect(adbPath, address string) WirelessResult {
 	return result
 }
 
-// WirelessPair adb pair host:port code；配对成功后尝试通过 mDNS 找到该设备的连接端口并自动连接
-func WirelessPair(adbPath, address, code string) WirelessResult {
+// Pair adb pair host:port code；配对成功后尝试通过 mDNS 找到该设备的连接端口并自动连接
+func Pair(adbPath, address, code string) Result {
 	address = strings.TrimSpace(address)
 	code = strings.TrimSpace(code)
 	if !reHostPort.MatchString(address) || !strings.Contains(address, ":") {
-		return WirelessResult{Error: "请填写配对地址，格式为 IP:端口，例如 192.168.1.5:37123"}
+		return Result{Error: "请填写配对地址，格式为 IP:端口，例如 192.168.1.5:37123"}
 	}
 	if !rePairCode.MatchString(code) {
-		return WirelessResult{Error: "配对码为 6 位数字"}
+		return Result{Error: "配对码为 6 位数字"}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	output, cmdLine, err := runAdbArgs(ctx, adbPath, "pair", address, code)
-	result := WirelessResult{Cmd: cmdLine, Output: output}
+	result := Result{Cmd: cmdLine, Output: output}
 	if !strings.Contains(output, "Successfully paired") {
 		switch {
 		case ctx.Err() != nil:
@@ -120,7 +120,7 @@ func WirelessPair(adbPath, address, code string) WirelessResult {
 		candidates = append([]string{connectAddr}, candidates...)
 	}
 	for _, candidate := range candidates {
-		connected := WirelessConnect(adbPath, candidate)
+		connected := Connect(adbPath, candidate)
 		result.Output += "\n" + connected.Output
 		if connected.Connected != "" {
 			result.Connected = connected.Connected
@@ -202,8 +202,8 @@ func adbdPortCandidates(info string) []string {
 	return ports
 }
 
-// WirelessPairByQR 等待手机扫码：手机扫码后会以二维码中的服务名广播配对服务，找到后用二维码中的密码配对
-func WirelessPairByQR(ctx context.Context, adbPath, serviceName, password string) WirelessResult {
+// PairByQR 等待手机扫码：手机扫码后会以二维码中的服务名广播配对服务，找到后用二维码中的密码配对
+func PairByQR(ctx context.Context, adbPath, serviceName, password string) Result {
 	var pairAddr string
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -219,21 +219,21 @@ func WirelessPairByQR(ctx context.Context, adbPath, serviceName, password string
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				return WirelessResult{Error: "等待扫码超时，请重新生成二维码"}
+				return Result{Error: "等待扫码超时，请重新生成二维码"}
 			}
-			return WirelessResult{Error: "已取消"}
+			return Result{Error: "已取消"}
 		case <-ticker.C:
 		}
 	}
-	return WirelessPair(adbPath, pairAddr, password)
+	return Pair(adbPath, pairAddr, password)
 }
 
-// WirelessDisconnect adb disconnect serial
-func WirelessDisconnect(adbPath, serial string) WirelessResult {
+// Disconnect adb disconnect serial
+func Disconnect(adbPath, serial string) Result {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	output, cmdLine, err := runAdbArgs(ctx, adbPath, "disconnect", serial)
-	result := WirelessResult{Cmd: cmdLine, Output: output}
+	result := Result{Cmd: cmdLine, Output: output}
 	if err != nil || strings.Contains(strings.ToLower(output), "error") {
 		result.Error = output
 		if result.Error == "" {
@@ -243,27 +243,27 @@ func WirelessDisconnect(adbPath, serial string) WirelessResult {
 	return result
 }
 
-// WirelessFromUSB 让 USB 连接的设备监听 5555 端口并通过 WLAN 连接（适用于 Android 10 及以下，或未开启无线调试）
-func WirelessFromUSB(adbPath, deviceId string) WirelessResult {
+// FromUSB 让 USB 连接的设备监听 5555 端口并通过 WLAN 连接（适用于 Android 10 及以下，或未开启无线调试）
+func FromUSB(adbPath, deviceId string) Result {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	ipOutput, _, _ := runAdbArgs(ctx, adbPath, "-s", deviceId, "shell", "ip -f inet addr show wlan0")
 	match := reWlanIP.FindStringSubmatch(ipOutput)
 	if match == nil {
-		return WirelessResult{Error: "未获取到手机的 WLAN IP，请确认手机已连接 Wi-Fi"}
+		return Result{Error: "未获取到手机的 WLAN IP，请确认手机已连接 Wi-Fi"}
 	}
 	ip := match[1]
 
 	output, cmdLine, err := runAdbArgs(ctx, adbPath, "-s", deviceId, "tcpip", tcpipPort)
 	if err != nil {
-		return WirelessResult{Cmd: cmdLine, Output: output, Error: "切换到无线模式失败：" + output}
+		return Result{Cmd: cmdLine, Output: output, Error: "切换到无线模式失败：" + output}
 	}
 	// adbd 重启需要时间；部分 adb 版本（如 macOS 上的 34.0.5）在设备 USB 重新枚举时 server 会崩溃重启，
 	// 连接可能失败一两次，多试几次
-	var result WirelessResult
+	var result Result
 	for attempt := 0; attempt < 4; attempt++ {
 		time.Sleep(2 * time.Second)
-		result = WirelessConnect(adbPath, ip+":"+tcpipPort)
+		result = Connect(adbPath, ip+":"+tcpipPort)
 		if result.Connected != "" {
 			break
 		}

@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from 'react';
 import {Button, Checkbox, Input, Modal} from 'antd';
 import type {InputRef} from 'antd';
 import {OpenDeepLink} from '../../wailsjs/go/main/App';
-import {adb} from '../../wailsjs/go/models';
+import {actions} from '../../wailsjs/go/models';
 
 const RECENT_KEY = 'deep_link_recent';
 const MAX_RECENT = 10;
@@ -36,7 +36,7 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
     const [link, setLink] = useState('');
     const [limitToTarget, setLimitToTarget] = useState(false);
     const [running, setRunning] = useState(false);
-    const [result, setResult] = useState<adb.DeepLinkResult | null>(null);
+    const [result, setResult] = useState<actions.DeepLinkResult | null>(null);
     const [recent, setRecent] = useState<string[]>(readRecent);
     const inputRef = useRef<InputRef>(null);
 

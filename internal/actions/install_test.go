@@ -1,7 +1,8 @@
-package adb
+package actions
 
 import (
-	"adb-tool-wails/types"
+	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/types"
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
@@ -100,7 +101,7 @@ func TestRunAPKCommand(t *testing.T) {
 				t.Fatal(err)
 			}
 			path := filepath.Join(dir, "app $(touch unwanted); file.apk")
-			result := runAPKCommand(ExecuteParams{AdbPath: adbPath, DeviceId: "serial-123"}, "install", "-d", "-t", path)
+			result := runAPKCommand(adb.ExecuteParams{AdbPath: adbPath, DeviceId: "serial-123"}, "install", "-d", "-t", path)
 			if tc.wantError == "" {
 				want := strings.Join([]string{"-s", "serial-123", "install", "-d", "-t", path}, "\n")
 				if result.Error != "" || result.Res != want {

@@ -3,7 +3,7 @@ import {Alert, Button, Input, Modal, Select, Table, Tag, Tooltip} from 'antd';
 import type {ColumnsType} from 'antd/es/table';
 import {PauseCircleOutlined, PlayCircleOutlined, SearchOutlined} from '@ant-design/icons';
 import {GetThreadSchedInfo} from '../../wailsjs/go/main/App';
-import {adb} from '../../wailsjs/go/models';
+import {perf} from '../../wailsjs/go/models';
 
 interface ThreadSchedModalProps {
     visible: boolean;
@@ -48,7 +48,7 @@ function formatCpus(cpus: number[]) {
 }
 
 // 直接显示 Cpus_allowed_list；若只落在某一个簇内，则使用该簇颜色
-function AllowedCpus({thread, clusters}: { thread: adb.ThreadSched; clusters: adb.CpuCluster[] }) {
+function AllowedCpus({thread, clusters}: { thread: perf.ThreadSched; clusters: perf.CpuCluster[] }) {
     const allowed = thread.allowedCpus ?? [];
     if (allowed.length === 0) {
         return <span className="text-mute">{thread.cpusAllowed || '-'}</span>;
@@ -61,7 +61,7 @@ function AllowedCpus({thread, clusters}: { thread: adb.ThreadSched; clusters: ad
 const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, packageName, deviceId}) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [data, setData] = useState<adb.ThreadSchedResult | null>(null);
+    const [data, setData] = useState<perf.ThreadSchedResult | null>(null);
     const [pid, setPid] = useState(0);
     const [keyword, setKeyword] = useState('');
     const [autoRefresh, setAutoRefresh] = useState(true);
@@ -134,7 +134,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
         return threads.filter(t => t.name.toLowerCase().includes(lower) || String(t.tid) === lower);
     }, [data, keyword]);
 
-    const columns: ColumnsType<adb.ThreadSched> = [
+    const columns: ColumnsType<perf.ThreadSched> = [
         {
             title: 'TID',
             dataIndex: 'tid',
@@ -267,7 +267,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
 
                 {error && <Alert type="error" message={error} showIcon/>}
 
-                <Table<adb.ThreadSched>
+                <Table<perf.ThreadSched>
                     rowKey="tid"
                     size="small"
                     loading={loading}

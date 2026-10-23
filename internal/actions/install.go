@@ -1,8 +1,9 @@
-package adb
+package actions
 
 import (
-	"adb-tool-wails/types"
-	"adb-tool-wails/util"
+	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/types"
+	"adb-tool-wails/internal/util"
 	"archive/zip"
 	"bytes"
 	"encoding/xml"
@@ -24,8 +25,8 @@ const versionDowngradeError = "INSTALL_FAILED_VERSION_DOWNGRADE"
 
 var apkPackagePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$`)
 
-func InstallApp(param ExecuteParams) types.ExecResult {
-	param.Stage(StageDialog)
+func InstallApp(param adb.ExecuteParams) types.ExecResult {
+	param.Stage(adb.StageDialog)
 	filePath, err := runtime.OpenFileDialog(param.Ctxt, runtime.OpenDialogOptions{
 		Title: "选择 APK 文件",
 		Filters: []runtime.FileFilter{
@@ -33,7 +34,7 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
 		},
 	})
-	param.Stage(StageRunning)
+	param.Stage(adb.StageRunning)
 	if err != nil {
 		return types.NewExecResultError("installApp", err)
 	}
@@ -44,7 +45,7 @@ func InstallApp(param ExecuteParams) types.ExecResult {
 }
 
 // InstallApkFile 安装本地 APK（选择文件或拖入窗口）；版本降级时弹窗确认后卸载重装
-func InstallApkFile(param ExecuteParams, filePath string) types.ExecResult {
+func InstallApkFile(param adb.ExecuteParams, filePath string) types.ExecResult {
 	if !strings.EqualFold(filepath.Ext(filePath), ".apk") {
 		return types.NewExecResultErrorString("installApp", "不是 APK 文件: "+filepath.Base(filePath))
 	}
@@ -77,8 +78,8 @@ func InstallApkFile(param ExecuteParams, filePath string) types.ExecResult {
 			defer cancel()
 			defer runtime.EventsEmit(param.Ctxt, "apk-downgrade-confirm-closed", requestID)
 			// 等待用户确认期间不计入执行耗时
-			param.Stage(StageDialog)
-			defer param.Stage(StageRunning)
+			param.Stage(adb.StageDialog)
+			defer param.Stage(adb.StageRunning)
 			runtime.EventsEmit(param.Ctxt, "apk-downgrade-confirm", map[string]string{
 				"requestId": requestID, "packageName": packageName,
 				"fileName": filepath.Base(filePath),
@@ -149,7 +150,7 @@ func (i apkInstaller) install(filePath string) types.ExecResult {
 
 // 使用参数列表执行，避免 APK 路径中的空格或特殊字符被 shell 解释。
 // 安装和卸载独立检查退出码与输出，不改变其他快捷操作的执行行为。
-func runAPKCommand(param ExecuteParams, args ...string) types.ExecResult {
+func runAPKCommand(param adb.ExecuteParams, args ...string) types.ExecResult {
 	if param.DeviceId != "" {
 		args = append([]string{"-s", param.DeviceId}, args...)
 	}
