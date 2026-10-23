@@ -4,7 +4,6 @@ import (
 	"adb-tool-wails/internal/adb"
 	"adb-tool-wails/internal/types"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -123,9 +122,6 @@ func GetAppDesc(param adb.ExecuteParams) types.ExecResult {
 
 	// 4. 解析应用描述
 	appDesc := parseAppDesc(packageRes.Res, param.PackageName, installPath, size)
-	file, _ := os.Create("/Users/apple/Desktop/output.txt")
-	defer file.Close()
-	file.WriteString(packageRes.Res)
 
 	return types.NewExecResultSuccess(finalCmd, appDesc.String())
 }
