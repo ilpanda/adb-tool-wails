@@ -161,7 +161,7 @@ func (u *Updater) download(ctx context.Context, info Info) (string, error) {
 	pkg := filepath.Join(dir, "pkg")
 	var err error
 	if strings.HasSuffix(info.asset.Name, ".zip") {
-		err = extractZip(archive, pkg)
+		err = ExtractZip(archive, pkg)
 	} else {
 		err = extractTarGz(archive, pkg)
 	}
@@ -236,7 +236,7 @@ func (u *Updater) fetchOnce(ctx context.Context, info Info, dst string) error {
 	if offset > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
 	}
-	resp, err := newHTTPClient().Do(req)
+	resp, err := NewHTTPClient().Do(req)
 	if err != nil {
 		return wrap(err)
 	}
@@ -370,7 +370,8 @@ func extractTarGz(src, dst string) error {
 	}
 }
 
-func extractZip(src, dst string) error {
+// ExtractZip 解压 zip 到 dst，保留条目的可执行权限
+func ExtractZip(src, dst string) error {
 	reader, err := zip.OpenReader(src)
 	if err != nil {
 		return err

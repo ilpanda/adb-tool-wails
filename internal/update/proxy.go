@@ -26,8 +26,8 @@ func proxyFor(req *http.Request) (*url.URL, error) {
 	return sysProxy, nil
 }
 
-// newHTTPClient 访问 GitHub 用的客户端。不设整体超时：下载大小与网速不定，卡住由下载侧的无数据超时判断
-func newHTTPClient() *http.Client {
+// NewHTTPClient 下载用的客户端（应用更新、内置 adb）。不设整体超时：下载大小与网速不定，卡住由下载侧的无数据超时判断
+func NewHTTPClient() *http.Client {
 	return &http.Client{Transport: &http.Transport{
 		Proxy:                 proxyFor,
 		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,

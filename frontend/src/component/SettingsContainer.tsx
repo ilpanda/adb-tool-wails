@@ -14,7 +14,7 @@ import PageHeader, {Eyebrow} from "./PageHeader";
 import {downloadPercent, useUpdateStore} from '../store/updateStore';
 import {installUpdate} from '../hooks/useUpdateCheck';
 import {ThemeMode, useThemeStore} from '../store/themeStore';
-import {BrowserOpenURL} from '../../wailsjs/runtime/runtime';
+import {BrowserOpenURL, EventsOn} from '../../wailsjs/runtime/runtime';
 
 type Feedback = { type: 'success' | 'error'; title: string; detail?: string };
 type TerminalOpenMode = 'always' | 'error' | 'never';
@@ -76,6 +76,11 @@ function SettingsContainer() {
         void loadAdbPath();
         GetTerminalOpenMode().then(mode => setTerminalMode(mode as TerminalOpenMode)).catch(error => console.error('加载执行记录打开方式失败:', error));
         GetVersion().then(setVersion);
+        // 后台下载的内置 adb 配置完成
+        return EventsOn('adb-path-changed', () => {
+            setIsEditing(false);
+            void loadAdbPath();
+        });
     }, []);
 
     const loadAdbPath = async () => {

@@ -5,6 +5,7 @@ import (
 	"adb-tool-wails/internal/storage"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
+	"errors"
 	"fmt"
 	"os/exec"
 )
@@ -20,11 +21,19 @@ func (a *App) GetAdbPath() types.ExecResult {
 	if err == nil {
 		return types.NewExecResultSuccess("adb", path)
 	}
+	if a.adbDownloading.Load() {
+		return types.NewExecResultError("adb", errors.New("本机未找到 adb，正在后台下载，完成后自动配置"))
+	}
 	return types.NewExecResultError("adb", err)
 }
 
+// IsAdbDownloading 是否正在后台下载内置 adb
+func (a *App) IsAdbDownloading() bool {
+	return a.adbDownloading.Load()
+}
+
 func (a *App) CheckAdbPath(path string) types.ExecResult {
-	adbCmd := fmt.Sprintf("%s version", path)
+	adbCmd := util.QuoteHostArg(path) + " version"
 	res, err := util.Exec(adbCmd, true, nil)
 	if err == nil {
 		return types.NewExecResultSuccess(adbCmd, res)

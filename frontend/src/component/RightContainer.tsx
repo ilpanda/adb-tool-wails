@@ -1,5 +1,5 @@
 import {ACTION_DESC, ACTION_META, QuickAction, quickActions} from '../data/quickActions';
-import {ExecuteAction, GetAdbPath} from '../../wailsjs/go/main/App';
+import {ExecuteAction, GetAdbPath, IsAdbDownloading} from '../../wailsjs/go/main/App';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {InputRef} from 'antd';
 import {Empty, Input, message} from "antd";
@@ -173,7 +173,11 @@ function RightContainer() {
     async function handleClick(action: QuickAction) {
         const adbPath = await GetAdbPath();
         if (adbPath.error) {
-            message.error("请在设置项配置 adb 路径。");
+            if (await IsAdbDownloading()) {
+                message.info("本机未找到 adb，正在后台下载，请稍候。");
+            } else {
+                message.error("请在设置项配置 adb 路径。");
+            }
             return;
         }
         rememberRecent(action.action);

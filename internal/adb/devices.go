@@ -2,7 +2,6 @@ package adb
 
 import (
 	"adb-tool-wails/internal/types"
-	"fmt"
 	"strings"
 )
 
@@ -41,6 +40,6 @@ func GetDevices(data string, devices []string) []string {
 }
 
 func Devices(adbPath string) types.ExecResult {
-	cmd := fmt.Sprintf("%s devices", adbPath)
+	cmd := Command(adbPath, "", "devices")
 	return Exec(cmd)
 }

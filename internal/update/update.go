@@ -97,7 +97,7 @@ func Check(current string, devBuild bool) Info {
 
 // fetchLatestRelease 通过 Releases API 查询最新发布，网络错误时重试一次
 func fetchLatestRelease(current string) (*latestRelease, error) {
-	client := newHTTPClient()
+	client := NewHTTPClient()
 	client.Timeout = 15 * time.Second
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
@@ -134,7 +134,7 @@ func fetchLatestRelease(current string) (*latestRelease, error) {
 // latestReleaseFromRedirect 从发布页 /releases/latest 的跳转地址取得最新版本号，按 Release 的命名规则拼出安装包地址。
 // 这条路不受 API 限流影响，但拿不到安装包的大小与 sha256，下载后靠 gzip / zip 自带的 CRC 校验发现损坏
 func latestReleaseFromRedirect(current string) (*latestRelease, error) {
-	client := newHTTPClient()
+	client := NewHTTPClient()
 	client.Timeout = 15 * time.Second
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	req, err := http.NewRequest(http.MethodHead, releasesPage+"/latest", nil)

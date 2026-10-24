@@ -5,6 +5,7 @@ import (
 	"adb-tool-wails/internal/applog"
 	"adb-tool-wails/internal/aya"
 	"adb-tool-wails/internal/perf"
+	"adb-tool-wails/internal/platformtools"
 	"adb-tool-wails/internal/storage"
 	"adb-tool-wails/internal/update"
 	"context"
@@ -14,6 +15,7 @@ import (
 	goruntime "runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -36,6 +38,8 @@ type App struct {
 	perfMonitor       *perf.Monitor
 	appLoader         aya.Loader
 	updater           *update.Updater
+	// adbDownloading 本机没有 adb，正在后台下载内置 adb
+	adbDownloading atomic.Bool
 }
 
 // NewApp creates a new App application struct
@@ -75,9 +79,16 @@ func (a *App) startup(ctx context.Context) {
 	if err == nil && path != "" {
 		a.adbPath = "adb"
 		adbSource = "system"
-	} else if saveAdbPath != "" {
+	} else if _, err := exec.LookPath(saveAdbPath); saveAdbPath != "" && err == nil {
 		a.adbPath = saveAdbPath
 		adbSource = "saved"
+	} else if builtin := platformtools.Installed(); builtin != "" {
+		a.adbPath = builtin
+		adbSource = "builtin"
+	} else if saveAdbPath != "" {
+		// 保存的路径已失效，仍保留给用户在设置页查看和修改
+		a.adbPath = saveAdbPath
+		adbSource = "saved_missing"
 	}
 	applog.Infof(applog.CategoryStartup, "adb_path_selected source=%s path=%s", adbSource, a.adbPath)
 
@@ -95,6 +106,30 @@ func (a *App) startup(ctx context.Context) {
 	// 启动跟踪
 	go a.deviceTracker.Start(ctx)
 	applog.Infof(applog.CategoryStartup, "device_tracker_started adb_path=%s", a.adbPath)
+
+	if a.adbPath == "" && platformtools.Supported() {
+		a.adbDownloading.Store(true)
+		go a.installBuiltinAdb()
+	}
+}
+
+// installBuiltinAdb 本机找不到 adb 且未配置时，静默下载 platform-tools 并配置为内置 adb；
+// 设备跟踪会在下次重连时使用新路径。失败只记日志，下次启动再试
+func (a *App) installBuiltinAdb() {
+	defer a.adbDownloading.Store(false)
+	applog.Infof(applog.CategoryADB, "builtin_adb_download_started")
+	path, err := platformtools.Install(a.ctx)
+	if err != nil {
+		applog.Warnf(applog.CategoryADB, "builtin_adb_download_failed err=%q", err.Error())
+		return
+	}
+	applog.Infof(applog.CategoryADB, "builtin_adb_ready path=%s", path)
+	if a.adbPath != "" {
+		// 下载期间用户已手动配置
+		return
+	}
+	a.UpdateAdbPath(path)
+	runtime.EventsEmit(a.ctx, "adb-path-changed", path)
 }
 
 func (a *App) shutdown(ctx context.Context) {

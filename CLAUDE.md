@@ -37,7 +37,7 @@ Go `App` struct methods are bound to the frontend via Wails auto-generated bindi
 
 **Action dispatch:** The frontend sends an `Action` struct (action name, target package, device serial) to `App.ExecuteAction()` in `app_actions.go`, which routes via a switch statement to functions in `internal/actions`. Results are returned as `ExecResult{cmd, res, error}`.
 
-**Events (backend→frontend push):** `runtime.EventsEmit()` pushes device list updates (`adb_update`), app-list progress (`app-list-progress`), action stages (`action-stage`), update download status (`update-status`) and performance monitor data (`perf-sample`, `perf-memory`, `perf-event`, `perf-status`) to the frontend.
+**Events (backend→frontend push):** `runtime.EventsEmit()` pushes device list updates (`adb_update`), app-list progress (`app-list-progress`), action stages (`action-stage`), update download status (`update-status`), built-in adb ready (`adb-path-changed`) and performance monitor data (`perf-sample`, `perf-memory`, `perf-event`, `perf-status`) to the frontend.
 
 ### Project Layout
 
@@ -51,6 +51,7 @@ The repository root holds only the Wails `main` package: `main.go` (entry point)
 - `wireless/` — Wireless debugging: QR / pairing-code pairing, connect, USB to wireless (`adb tcpip`), mDNS discovery.
 - `files/` — Device file manager (list, preview, upload, download, delete).
 - `update/` — In-app update: checks GitHub Releases (falls back to the `/releases/latest` redirect when the API is rate-limited), downloads the platform asset in the background (system proxy, retry with resume, sha256 check), then replaces the app and relaunches (`.app` via `ditto` on macOS, the binary on Linux, runs the NSIS installer on Windows). Asset names must match those packaged in `release.yml`.
+- `platformtools/` — Built-in adb: when adb is neither on PATH nor configured, startup silently downloads Google's platform-tools (dl.google.com, then googledownloads.cn, then the Tencent mirror) into the config dir, verifies `adb version`, and saves it as the adb path. This path contains spaces on macOS (`Application Support`), so adb paths in shell strings must be quoted.
 - `aya/` — Client for the on-device Aya server. Pushes DEX, starts via `app_process`, communicates over forwarded TCP sockets using protobuf (`internal/aya/proto/wire.proto`).
 - `storage/` — BadgerDB key-value store for persistent config (ADB path, bookmarks). Data stored at `~/$UserConfigDir/config/badger`.
 - `applog/` — Rotating app log files shown in the diagnostic log page.
