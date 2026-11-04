@@ -1,6 +1,6 @@
 // components/ApplicationList.tsx
 import {memo, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Button, Dropdown, Empty, Input, message, Pagination, Progress, Segmented, Spin, Tooltip, Typography} from 'antd';
+import {Button, Dropdown, Empty, Input, message, Pagination, Progress, Segmented, Tooltip, Typography} from 'antd';
 import type {MenuProps} from 'antd';
 import {AppstoreOutlined, MoreOutlined, ReloadOutlined, SearchOutlined} from '@ant-design/icons';
 import {useDeviceStore} from '../store/deviceStore';
@@ -12,7 +12,7 @@ import {ActionType, quickActions} from '../data/quickActions';
 import {runQuickAction} from '../actions/runQuickAction';
 import PageHeader from './PageHeader';
 
-const {Paragraph} = Typography;
+const {Paragraph, Text} = Typography;
 
 type FilterType = 'all' | 'user' | 'system';
 
@@ -27,9 +27,13 @@ const quickAction = (action: ActionType) => ALL_ACTIONS.find(item => item.action
 
 type CardAction = 'launch' | 'perf' | 'target' | 'export' | 'uninstall';
 
+// 首屏数据到达前显示的骨架卡片数；分批加载中，当前页未满时在末尾补的骨架卡片数上限
+const INITIAL_SKELETONS = 8;
+const TRAILING_SKELETONS = 4;
+
 function ApplicationList() {
     const {selectedDevice} = useDeviceStore();
-    const {apps, isLoading, progress, load} = useAppListStore();
+    const {apps, isLoading, partial, progress, load} = useAppListStore();
     const targetPackage = usePackageListStore(state =>
         selectedDevice ? state.targetByDevice[selectedDevice.id] ?? '' : '');
 
@@ -176,6 +180,18 @@ function ApplicationList() {
     // 判断是否显示空状态
     const showEmpty = !isLoading && apps.length === 0;
     const showLoading = isLoading && apps.length === 0;
+    // 分批加载中：列表仍在增长，筛选结果可能不完整
+    const streaming = isLoading && partial;
+    const trailingSkeletons = streaming ? Math.min(TRAILING_SKELETONS, pageSize - paginatedApps.length) : 0;
+    const filtering = filteredApps.length !== apps.length;
+
+    let summary: string;
+    if (streaming) {
+        const loaded = progress?.total ? `${apps.length} / ${progress.total}` : `${apps.length}`;
+        summary = filtering ? `筛选出 ${filteredApps.length} 个 · 仍在加载 ${loaded}` : `已加载 ${loaded} 个应用`;
+    } else {
+        summary = filtering ? `筛选出 ${filteredApps.length} / ${apps.length} 个应用` : `共 ${apps.length} 个应用`;
+    }
 
     return (
         <div className="flex h-full min-w-0 flex-1 flex-col gap-5 overflow-hidden bg-canvas px-8 py-7 text-left text-ink">
@@ -210,11 +226,7 @@ function ApplicationList() {
                             {label: `系统 ${stats.system}`, value: 'system'},
                         ]}
                     />
-                    <span className="ml-auto text-[12px] text-mute">
-                        {filteredApps.length === apps.length
-                            ? `共 ${apps.length} 个应用`
-                            : `筛选出 ${filteredApps.length} / ${apps.length} 个应用`}
-                    </span>
+                    <span className="ml-auto text-[12px] text-mute">{summary}</span>
                 </div>
                 {progress && !progress.completed && isLoading && (
                     <Progress
@@ -229,12 +241,9 @@ function ApplicationList() {
 
             {/* 内容区域 */}
             <div className="min-h-0 flex-1 overflow-auto">
-                {showLoading ? (
-                    <div className="flex h-full items-center justify-center">
-                        <div className="flex flex-col items-center gap-3 text-[13px] text-mute">
-                            <Spin size="large"/>
-                            正在加载应用列表…
-                        </div>
+                {showLoading || (streaming && filteredApps.length === 0) ? (
+                    <div className={CARD_GRID} aria-busy="true" aria-label="正在加载应用列表">
+                        {Array.from({length: INITIAL_SKELETONS}, (_, i) => <SkeletonCard key={i}/>)}
                     </div>
                 ) : showEmpty ? (
                     <div className="flex h-full items-center justify-center">
@@ -245,10 +254,11 @@ function ApplicationList() {
                         <Empty description="未找到匹配的应用"/>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className={CARD_GRID} aria-busy={streaming}>
                         {paginatedApps.map((app) => (
                             <AppCard key={app.packageName} app={app} isTarget={app.packageName === targetPackage} onAction={handleAction}/>
                         ))}
+                        {Array.from({length: trailingSkeletons}, (_, i) => <SkeletonCard key={`skeleton-${i}`}/>)}
                     </div>
                 )}
             </div>
@@ -268,6 +278,43 @@ function ApplicationList() {
                     />
                 </div>
             )}
+        </div>
+    );
+}
+
+const CARD_GRID = 'grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+
+// 与 AppCard 布局一致的占位卡片
+function SkeletonCard() {
+    const bar = 'animate-pulse rounded bg-hairline-soft';
+    return (
+        <div className="flex h-full flex-col rounded-xl border border-hairline bg-elevated shadow-whisper" aria-hidden="true">
+            <div className="flex items-start gap-3 px-4 pt-4">
+                <div className="h-11 w-11 shrink-0 animate-pulse rounded-xl bg-hairline-soft"/>
+                <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+                    <div className={`h-3.5 w-2/5 ${bar}`}/>
+                    <div className={`h-3 w-4/5 ${bar}`}/>
+                </div>
+                <div className="h-5 w-9 shrink-0 animate-pulse rounded-full bg-hairline-soft"/>
+            </div>
+            <div className="mt-3 space-y-2.5 border-t border-hairline-soft px-4 py-3">
+                {['w-1/3', 'w-1/2', 'w-1/4', 'w-1/4'].map((w, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3">
+                        <div className={`h-3 w-12 ${bar}`}/>
+                        <div className={`h-3 ${w} ${bar}`}/>
+                    </div>
+                ))}
+            </div>
+            <div className="space-y-2 border-t border-hairline-soft px-4 py-3">
+                <div className={`h-3 w-16 ${bar}`}/>
+                <div className={`h-7 w-full ${bar}`}/>
+                <div className={`h-3 w-20 ${bar}`}/>
+                <div className={`h-7 w-full ${bar}`}/>
+            </div>
+            <div className="mt-auto flex items-center gap-2 border-t border-hairline-soft px-3 py-2.5">
+                <div className={`h-6 w-14 ${bar}`}/>
+                <div className={`h-6 w-20 ${bar}`}/>
+            </div>
         </div>
     );
 }
@@ -329,13 +376,11 @@ const AppCard = memo(function AppCard({app, isTarget, onAction}: AppCardProps) {
                             </Tooltip>
                         )}
                     </div>
-                    <Paragraph
-                        className="!mb-0 !font-mono !text-[11.5px] !text-mute"
-                        copyable={{tooltips: ['复制包名', '已复制']}}
-                        ellipsis={{rows: 1, tooltip: app.packageName}}
-                    >
-                        {app.packageName}
-                    </Paragraph>
+                    {/* 用 CSS 省略：antd 的 ellipsis 与 copyable 同用时要先渲染全文、再用 JS 测量截断，进入页面时会抖动 */}
+                    <div className="flex min-w-0 items-center gap-1 text-[11.5px] leading-[18px]">
+                        <span className="min-w-0 truncate font-mono text-mute" title={app.packageName}>{app.packageName}</span>
+                        <Text className="shrink-0 !text-[11.5px]" copyable={{text: app.packageName, tooltips: ['复制包名', '已复制']}}/>
+                    </div>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
                     app.system ? 'bg-hairline-soft text-mute' : 'bg-link-soft text-link-deep'

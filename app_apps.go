@@ -12,7 +12,8 @@ import (
 
 // 应用列表：通过设备端 Aya 服务批量读取应用信息，实现在 internal/aya
 
-// GetApplicationListWithProgress 获取应用列表，进度通过 app-list-progress 事件推送；开始新的加载会取消上一次
+// GetApplicationListWithProgress 获取应用列表，进度通过 app-list-progress 事件推送，
+// 每批结果通过 app-list-batch 事件推送；开始新的加载会取消上一次
 func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo, error) {
 	if a.adbPath == "" {
 		return nil, fmt.Errorf("ADB path not configured")
@@ -33,7 +34,15 @@ func (a *App) GetApplicationListWithProgress(deviceId string) ([]aya.PackageInfo
 	}
 	return a.appLoader.Load(a.ctx, param, a.ayaDexPath, listPackages, func(p aya.Progress) {
 		runtime.EventsEmit(a.ctx, "app-list-progress", p)
+	}, func(apps []aya.PackageInfo) {
+		runtime.EventsEmit(a.ctx, "app-list-batch", AppListBatch{DeviceId: deviceId, Apps: apps})
 	})
+}
+
+// AppListBatch 应用列表加载中途推送的一批结果（app-list-batch 事件）
+type AppListBatch struct {
+	DeviceId string            `json:"deviceId"`
+	Apps     []aya.PackageInfo `json:"apps"`
 }
 
 // CancelApplicationListLoading 取消正在进行的应用列表加载

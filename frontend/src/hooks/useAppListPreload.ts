@@ -14,7 +14,7 @@ export function useAppListPreload() {
         if (!deviceId) {
             store.cancel();
             store.clearCache();
-            useAppListStore.setState({apps: [], isLoading: false, progress: null});
+            useAppListStore.setState({apps: [], isLoading: false, partial: false, progress: null});
             return;
         }
         const timer = window.setTimeout(() => {

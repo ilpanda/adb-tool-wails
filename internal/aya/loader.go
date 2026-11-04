@@ -31,8 +31,11 @@ type Progress struct {
 	Completed bool `json:"completed"`
 }
 
-// 每批向 Aya 请求的应用数
-const loadBatchSize = 50
+// 每批向 Aya 请求的应用数。第一批取一页的量，让列表尽快出现首屏
+const (
+	firstBatchSize = 20
+	loadBatchSize  = 50
+)
 
 // Loader 加载设备上的应用列表。同一时间只进行一次加载：开始新的加载会先取消上一次并等待其结束
 type Loader struct {
@@ -42,13 +45,15 @@ type Loader struct {
 }
 
 // Load 通过 listPackages 取得包名后，分批从设备端 Aya 服务读取应用信息。
-// parent 结束（应用退出）时加载随之取消；onProgress 只在未取消时回调
+// 每批完成后通过 onBatch 交出这一批的结果，供前端边加载边显示；返回值仍是完整列表。
+// parent 结束（应用退出）时加载随之取消；onProgress、onBatch 只在未取消时回调
 func (l *Loader) Load(
 	parent context.Context,
 	param adb.ExecuteParams,
 	dexPath string,
 	listPackages func(adb.ExecuteParams) ([]string, error),
 	onProgress func(Progress),
+	onBatch func([]PackageInfo),
 ) ([]PackageInfo, error) {
 	l.Cancel()
 
@@ -107,12 +112,12 @@ func (l *Loader) Load(
 	report(Progress{Total: total})
 
 	apps := make([]PackageInfo, 0, total)
-	for start := 0; start < total; start += loadBatchSize {
+	for start, size := 0, firstBatchSize; start < total; start, size = start+size, loadBatchSize {
 		if cancelled() {
 			applog.Warnf(applog.CategoryAction, "app_list_cancelled device=%s", deviceId)
 			return nil, context.Canceled
 		}
-		end := min(start+loadBatchSize, total)
+		end := min(start+size, total)
 		applog.Infof(applog.CategoryAction, "app_list_batch_fetch device=%s start=%d end=%d total=%d", deviceId, start+1, end, total)
 
 		batch, err := client.GetPackageInfos(packageNames[start:end])
@@ -124,6 +129,9 @@ func (l *Loader) Load(
 			continue
 		}
 		apps = append(apps, batch...)
+		if !cancelled() && onBatch != nil && len(batch) > 0 {
+			onBatch(batch)
+		}
 		report(Progress{Total: total, Current: len(apps)})
 		applog.Infof(applog.CategoryAction, "app_list_progress device=%s loaded=%d total=%d", deviceId, len(apps), total)
 	}
