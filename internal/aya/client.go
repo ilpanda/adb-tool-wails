@@ -4,12 +4,16 @@ import (
 	"adb-tool-wails/internal/adb"
 	"adb-tool-wails/internal/applog"
 	"adb-tool-wails/internal/util"
+	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -22,7 +26,7 @@ import (
 )
 
 // AyaDexVersion 当前 aya.dex 的版本号，需要与 server/build.gradle 中的 versionName 保持一致
-const AyaDexVersion = "1.2"
+const AyaDexVersion = "1.4"
 
 type Client struct {
 	param       adb.ExecuteParams
@@ -64,91 +68,63 @@ func (c *Client) checkCancelled() error {
 	return nil
 }
 
-// Connect 连接到 Aya 服务
+const (
+	remoteDexPath = "/data/local/tmp/aya/aya.dex"
+	// [r] 让模式不匹配执行这条命令的 shell 自身（它的命令行里也含有这个字符串）
+	serverPattern = "'io.liriliri.aya.Serve[r]'"
+	// 版本握手的超时：服务未运行时 adb 会立即断开转发的连接，不必等满
+	versionTimeout = 3 * time.Second
+	requestTimeout = 30 * time.Second
+)
+
+// Connect 连接到 Aya 服务：设备上已有同版本的服务时直接复用，否则重新部署
 func (c *Client) Connect(localDexPath string) error {
 	if err := c.checkCancelled(); err != nil {
 		return err
 	}
 
-	// 尝试连接已运行的服务
-	if err := c.tryConnect(); err == nil {
-		// 连接成功，先启动 readLoop 才能发送消息
-		c.mu.Lock()
-		c.readStarted = true
-		c.mu.Unlock()
-		go c.readLoop()
-
-		// 检查版本
+	// 直接连接并握手，不先用 adb shell 检查服务是否在运行
+	if err := c.connectSocket(); err == nil {
+		c.startReadLoop()
 		remoteVersion, err := c.getRemoteVersion()
-		if err != nil {
-			applog.Warnf(applog.CategoryAya, "remote_version_failed device=%s err=%q", c.param.DeviceId, err.Error())
-			c.Close()
-		} else if remoteVersion == AyaDexVersion {
-			// 版本一致，直接使用现有连接
+		switch {
+		case err != nil:
+			applog.Infof(applog.CategoryAya, "server_unavailable device=%s err=%q", c.param.DeviceId, err.Error())
+		case remoteVersion == AyaDexVersion:
 			applog.Infof(applog.CategoryAya, "server_reused device=%s version=%s", c.param.DeviceId, remoteVersion)
 			return nil
-		} else {
-			// 版本不一致，需要更新
+		default:
 			applog.Warnf(applog.CategoryAya, "server_version_mismatch device=%s remote=%s local=%s", c.param.DeviceId, remoteVersion, AyaDexVersion)
-			c.Close()
 		}
-	}
-
-	// 需要重新部署服务
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	c.killServer()
-
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	// Push DEX
-	if err := c.pushDex(localDexPath); err != nil {
-		return fmt.Errorf("push dex failed: %w", err)
+		c.Close()
 	}
 
 	if err := c.checkCancelled(); err != nil {
 		return err
 	}
-
-	// 启动服务
-	if err := c.startServer(); err != nil {
-		return fmt.Errorf("start server failed: %w", err)
+	if err := c.deploy(localDexPath); err != nil {
+		return err
 	}
-
 	if err := c.checkCancelled(); err != nil {
 		return err
 	}
-
-	// 等待服务就绪
-	if err := c.waitForServer(10 * time.Second); err != nil {
-		return fmt.Errorf("wait for server failed: %w", err)
-	}
-
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	// 连接
-	if err := c.tryConnect(); err != nil {
+	if err := c.connectSocket(); err != nil {
 		return fmt.Errorf("connect failed: %w", err)
 	}
+	c.startReadLoop()
+	return nil
+}
 
-	// 启动读取协程
+func (c *Client) startReadLoop() {
 	c.mu.Lock()
 	c.readStarted = true
 	c.mu.Unlock()
 	go c.readLoop()
-
-	return nil
 }
 
 // getRemoteVersion 获取远端服务版本号
 func (c *Client) getRemoteVersion() (string, error) {
-	result, err := c.SendMessage("getVersion", nil)
+	result, err := c.sendMessage("getVersion", nil, versionTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -161,146 +137,85 @@ func (c *Client) getRemoteVersion() (string, error) {
 	return version, nil
 }
 
-// tryConnect 尝试连接到已运行的服务
-func (c *Client) tryConnect() error {
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	if !c.isRunning() {
-		// 再次检查是否是因为取消导致的
-		if err := c.checkCancelled(); err != nil {
-			return err
-		}
-		return fmt.Errorf("server not running")
-	}
-
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	return c.connectSocket()
-}
-
-// isRunning 检查服务是否运行
-func (c *Client) isRunning() bool {
-	if c.isCancelled() {
-		return false
-	}
-
-	cmd := adb.ShellCommand(c.param.AdbPath, c.param.DeviceId, "cat /proc/net/unix")
-	output, err := util.Exec(cmd, true, nil)
+// deploy 结束旧服务，设备上的 dex 与本地不同时才推送，然后启动服务并在设备端等待其就绪
+func (c *Client) deploy(localDexPath string) error {
+	localMD5, err := fileMD5(localDexPath)
 	if err != nil {
-		return false
+		return fmt.Errorf("read dex failed: %w", err)
 	}
-	return strings.Contains(output, "@aya")
-}
 
-// pushDex 推送 DEX 到设备
-func (c *Client) pushDex(localDexPath string) error {
+	// 一次 adb shell 完成：结束旧服务、读取设备上 dex 的 md5
+	out, _ := c.runAdb(10*time.Second, "shell", fmt.Sprintf("pkill -f %s; md5sum %s 2>/dev/null", serverPattern, remoteDexPath))
+	if err := c.checkCancelled(); err != nil {
+		return err
+	}
+	if fields := strings.Fields(out); len(fields) > 0 && fields[0] == localMD5 {
+		applog.Infof(applog.CategoryAya, "dex_push_skipped device=%s md5=%s", c.param.DeviceId, localMD5)
+	} else {
+		applog.Infof(applog.CategoryAya, "dex_push_started device=%s path=%s", c.param.DeviceId, localDexPath)
+		// adb push 会自动创建设备上缺失的目录
+		if _, err := c.runAdb(60*time.Second, "push", localDexPath, remoteDexPath); err != nil {
+			return fmt.Errorf("push dex failed: %w", err)
+		}
+		applog.Infof(applog.CategoryAya, "dex_push_completed device=%s", c.param.DeviceId)
+	}
 	if err := c.checkCancelled(); err != nil {
 		return err
 	}
 
-	applog.Infof(applog.CategoryAya, "dex_push_started device=%s path=%s", c.param.DeviceId, localDexPath)
-
-	// 创建目录
-	mkdirCmd := adb.ShellCommand(c.param.AdbPath, c.param.DeviceId, "mkdir -p /data/local/tmp/aya")
-	if _, err := util.Exec(mkdirCmd, true, nil); err != nil {
-		applog.Warnf(applog.CategoryAya, "dex_remote_dir_prepare_failed device=%s err=%q", c.param.DeviceId, err.Error())
-	}
-
+	// 先等旧进程退出（否则新服务绑定 @aya 会失败），再后台启动服务，最后等 @aya 出现。
+	// 主类名拆成 $p.Server 拼接，脚本自身的命令行里就不含完整类名，pgrep 不会匹配到这个 shell。
+	// 输出已重定向，adb shell 在脚本结束时即返回，不会被后台服务挂住
+	script := fmt.Sprintf(
+		"p=io.liriliri.aya; i=0; while [ $i -lt 40 ] && pgrep -f %[1]s >/dev/null; do sleep 0.05; i=$((i+1)); done; "+
+			"CLASSPATH=%[2]s nohup app_process /system/bin $p.Server >/dev/null 2>&1 & "+
+			"i=0; while [ $i -lt 200 ]; do grep -q '@aya$' /proc/net/unix && echo ready && exit 0; sleep 0.05; i=$((i+1)); done; echo timeout",
+		serverPattern, remoteDexPath)
+	applog.Infof(applog.CategoryAya, "server_start_requested device=%s", c.param.DeviceId)
+	out, err = c.runAdb(20*time.Second, "shell", script)
 	if err := c.checkCancelled(); err != nil {
 		return err
 	}
-
-	// 推送文件
-	pushCmd := adb.Command(c.param.AdbPath, c.param.DeviceId, fmt.Sprintf("push %s /data/local/tmp/aya/aya.dex", util.QuoteHostArg(localDexPath)))
-	if _, err := util.Exec(pushCmd, true, nil); err != nil {
-		return fmt.Errorf("push failed: %w", err)
+	if err != nil {
+		return fmt.Errorf("start server failed: %w", err)
 	}
-
-	applog.Infof(applog.CategoryAya, "dex_push_completed device=%s", c.param.DeviceId)
+	if strings.TrimSpace(out) != "ready" {
+		return fmt.Errorf("start server failed: server not ready after 10s")
+	}
+	applog.Infof(applog.CategoryAya, "server_ready device=%s", c.param.DeviceId)
 	return nil
 }
 
-// killServer 杀掉已存在的服务进程
-func (c *Client) killServer() {
-	applog.Infof(applog.CategoryAya, "server_kill_requested device=%s", c.param.DeviceId)
-
-	// 方法1：通过 pkill 杀进程
-	cmd := adb.ShellCommand(c.param.AdbPath, c.param.DeviceId, "pkill -f io.liriliri.aya.Server")
-	util.Exec(cmd, true, nil) // 忽略错误，可能本来就没有进程
-
-	// 等待进程退出
-	time.Sleep(200 * time.Millisecond)
-}
-
-// startServer 启动服务
-func (c *Client) startServer() error {
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	c.killServer()
-
-	if err := c.checkCancelled(); err != nil {
-		return err
-	}
-
-	applog.Infof(applog.CategoryAya, "server_start_requested device=%s", c.param.DeviceId)
-
-	// 直接调用 adb 而不经过本机 shell：服务在设备端用 nohup 并重定向输出后台运行，
-	// adb shell 下发命令后立即返回，不会在本机留下一直挂着的 adb 进程
-	remote := "CLASSPATH=/data/local/tmp/aya/aya.dex nohup app_process /system/bin io.liriliri.aya.Server >/dev/null 2>&1 &"
-	args := []string{"shell", remote}
-	if c.param.DeviceId != "" {
-		args = append([]string{"-s", c.param.DeviceId}, args...)
-	}
-	adbPath := c.param.AdbPath
-	if adbPath == "" {
-		adbPath = "adb"
-	}
-
-	applog.Infof(applog.CategoryAya, "server_start_cmd device=%s cmd=%q", c.param.DeviceId, adbPath+" "+strings.Join(args, " "))
+// runAdb 以参数列表直接执行 adb（不经过本机 shell），返回标准输出
+func (c *Client) runAdb(timeout time.Duration, args ...string) (string, error) {
 	parent := c.param.Ctxt
 	if parent == nil {
 		parent = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, adbPath, args...)
-	util.ConfigureCommand(cmd)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("start server failed: %w %s", err, strings.TrimSpace(string(out)))
+	adbPath := c.param.AdbPath
+	if adbPath == "" {
+		adbPath = "adb"
 	}
-
-	applog.Infof(applog.CategoryAya, "server_start_dispatched device=%s", c.param.DeviceId)
-	return nil
+	cmd := exec.CommandContext(ctx, adbPath, c.param.Args(args...)...)
+	util.ConfigureCommand(cmd)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return string(out), fmt.Errorf("%w %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return string(out), nil
 }
 
-// waitForServer 等待服务启动
-func (c *Client) waitForServer(timeout time.Duration) error {
-	applog.Infof(applog.CategoryAya, "server_wait_ready device=%s timeout_ms=%d", c.param.DeviceId, timeout.Milliseconds())
-
-	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-c.param.Ctxt.Done():
-			return c.param.Ctxt.Err()
-		case <-ticker.C:
-			if time.Now().After(deadline) {
-				return fmt.Errorf("server start timeout after %v", timeout)
-			}
-			if c.isRunning() {
-				applog.Infof(applog.CategoryAya, "server_ready device=%s", c.param.DeviceId)
-				return nil
-			}
-		}
+func fileMD5(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
 	}
+	sum := md5.Sum(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // connectSocket 连接 Socket
@@ -435,9 +350,14 @@ func (c *Client) readLoop() {
 
 // SendMessage 发送消息并接收响应
 func (c *Client) SendMessage(method string, params interface{}) (map[string]interface{}, error) {
+	return c.sendMessage(method, params, requestTimeout)
+}
+
+func (c *Client) sendMessage(method string, params interface{}, timeout time.Duration) (map[string]interface{}, error) {
 	c.mu.Lock()
 	conn := c.conn
 	closed := c.closed
+	readDone := c.readDone
 	c.mu.Unlock()
 
 	if conn == nil || closed {
@@ -487,29 +407,41 @@ func (c *Client) SendMessage(method string, params interface{}) (map[string]inte
 		ctx = context.Background()
 	}
 
+	var resp *pb.Response
 	select {
-	case resp := <-respCh:
-		applog.Infof(applog.CategoryAya, "response_received device=%s id=%s", c.param.DeviceId, resp.Id)
-
-		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(resp.Result), &result); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal result: %w, raw: %s", err, resp.Result)
+	case resp = <-respCh:
+	case <-readDone:
+		// 连接已断开；断开前可能刚好收到了响应
+		select {
+		case resp = <-respCh:
+		default:
 		}
-
-		return result, nil
-
-	case <-time.After(30 * time.Second):
+	case <-time.After(timeout):
 		c.mu.Lock()
 		delete(c.resolves, id)
 		c.mu.Unlock()
 		return nil, fmt.Errorf("request timeout")
-
 	case <-ctx.Done():
 		c.mu.Lock()
 		delete(c.resolves, id)
 		c.mu.Unlock()
 		return nil, ctx.Err()
 	}
+	if resp == nil {
+		// 连接断开（Close 会关闭等待中的 channel）
+		c.mu.Lock()
+		delete(c.resolves, id)
+		c.mu.Unlock()
+		return nil, fmt.Errorf("connection closed")
+	}
+
+	applog.Infof(applog.CategoryAya, "response_received device=%s id=%s", c.param.DeviceId, resp.Id)
+
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(resp.Result), &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal result: %w", err)
+	}
+	return result, nil
 }
 
 // Close 关闭连接
@@ -562,89 +494,6 @@ func (c *Client) Close() error {
 	}
 
 	return err
-}
-
-// GetPackageInfo 获取单个应用的详细信息
-func (c *Client) GetPackageInfo(packageName string) (*PackageInfo, error) {
-	params := map[string]interface{}{
-		"packageName": packageName,
-	}
-	result, err := c.SendMessage("getPackageInfo", params)
-	if err != nil {
-		return nil, err
-	}
-
-	info := &PackageInfo{
-		PackageName: packageName,
-	}
-
-	if label, ok := result["label"].(string); ok {
-		info.Label = label
-	}
-	if icon, ok := result["icon"].(string); ok {
-		info.Icon = icon
-	}
-	if versionName, ok := result["versionName"].(string); ok {
-		info.VersionName = versionName
-	}
-	if versionCode, ok := result["versionCode"].(float64); ok {
-		info.VersionCode = int(versionCode)
-	}
-	if firstInstall, ok := result["firstInstallTime"].(float64); ok {
-		info.FirstInstallTime = int64(firstInstall)
-	}
-	if lastUpdate, ok := result["lastUpdateTime"].(float64); ok {
-		info.LastUpdateTime = int64(lastUpdate)
-	}
-	if apkPath, ok := result["apkPath"].(string); ok {
-		info.ApkPath = apkPath
-	}
-	if apkSize, ok := result["apkSize"].(float64); ok {
-		info.ApkSize = int64(apkSize)
-	}
-	if appSize, ok := result["appSize"].(float64); ok {
-		info.AppSize = int64(appSize)
-	}
-	if dataSize, ok := result["dataSize"].(float64); ok {
-		info.DataSize = int64(dataSize)
-	}
-	if cacheSize, ok := result["cacheSize"].(float64); ok {
-		info.CacheSize = int64(cacheSize)
-	}
-	if enabled, ok := result["enabled"].(bool); ok {
-		info.Enabled = enabled
-	}
-	if system, ok := result["system"].(bool); ok {
-		info.System = system
-	}
-	if minSdk, ok := result["minSdkVersion"].(float64); ok {
-		info.MinSdkVersion = int(minSdk)
-	}
-	if targetSdk, ok := result["targetSdkVersion"].(float64); ok {
-		info.TargetSdkVersion = int(targetSdk)
-	}
-	if sigs, ok := result["signatures"].([]interface{}); ok {
-		info.Signatures = make([]string, 0, len(sigs))
-		for _, sig := range sigs {
-			if sigStr, ok := sig.(string); ok {
-				info.Signatures = append(info.Signatures, sigStr)
-			}
-		}
-	}
-	if sigSha256s, ok := result["signatureSha256s"].([]interface{}); ok {
-		info.SignatureSha256s = make([]string, 0, len(sigSha256s))
-		for _, sha256 := range sigSha256s {
-			if sha256Str, ok := sha256.(string); ok {
-				info.SignatureSha256s = append(info.SignatureSha256s, sha256Str)
-			}
-		}
-	}
-
-	if info.Label == "" {
-		info.Label = packageName
-	}
-
-	return info, nil
 }
 
 // GetPackageInfos 批量获取应用信息

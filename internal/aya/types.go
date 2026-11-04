@@ -22,7 +22,6 @@ type PackageInfo struct {
 	System           bool     `json:"system"`
 	MinSdkVersion    int      `json:"minSdkVersion"`
 	TargetSdkVersion int      `json:"targetSdkVersion"`
-	Signatures       []string `json:"signatures"`
 	SignatureSha256s []string `json:"signatureSha256s"`
 }
 

@@ -20,7 +20,6 @@ export interface PackageInfo {
     system: boolean;
     minSdkVersion: number;
     targetSdkVersion: number;
-    signatures: string[];
     signatureSha256s?: string[];
 }
 
