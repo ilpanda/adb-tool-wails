@@ -7,6 +7,7 @@
 
 一个现代化的 Android Debug Bridge (ADB) 图形界面工具，让 Android 设备调试与管理变得简单直观。
 
+[![Release](https://img.shields.io/github/v/release/ilpanda/adb-tool-wails)](https://github.com/ilpanda/adb-tool-wails/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Wails](https://img.shields.io/badge/Wails-v2-red.svg)](https://wails.io)
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](https://golang.org)
@@ -16,7 +17,7 @@
 
 </div>
 
-![系统设置](imgs/preview.png)
+![快捷功能](imgs/preview.png)
 
 
 ---
@@ -29,8 +30,9 @@
 - **无线调试** - 支持二维码配对、配对码配对、IP 连接，以及将 USB 设备切换为无线调试（适用于 Android 10 及以下）
 
 ### 快捷功能
+- **功能搜索** - 按 `⌘K` / `Ctrl+K` 快速查找功能，执行过程和结果可在底部的执行记录中查看
 - **常用操作** - 安装 APK、截图保存到电脑、截图复制到剪贴板、查看当前 Activity / Fragment 等
-- **应用操作** - 对目标应用执行启动、杀死、重启、清除数据、授予或重置权限、导出 APK、卸载等
+- **应用操作** - 搜索选择目标应用或一键使用前台应用，然后执行启动、杀死、重启、清除数据、授予或重置权限、导出 APK、卸载等
 - **调试导出** - 导出 meminfo、smaps、showmap、hprof、线程信息，查看线程优先级与可运行核
 - **Deep Link 测试** - 用 VIEW Intent 打开链接，显示打开的 Activity 与启动耗时，可限定只由目标应用解析
 - **快捷设置** - GPU 呈现模式、过度绘制、布局边界，以及开发者选项、WLAN、语言等系统设置页
@@ -40,7 +42,9 @@
 - 查看设备上所有已安装的应用（用户应用 / 系统应用），支持按名称或包名搜索
 - 显示版本、SDK、安装与更新时间、APK 路径、签名 SHA256
 - 每个应用可直接启动、进入性能监控、设为快捷功能的目标应用、导出 APK 或卸载
-- 选中设备后在后台预加载，打开页面即可查看
+- 选中设备后在后台预加载，应用较多时分批显示，无需等待全部加载完成
+
+![应用列表](imgs/app-list.png)
 
 ### 性能监控
 - 同时监控包名下的所有进程（主进程与 `:push` 等子进程），无需 root，Release 包可用
@@ -50,15 +54,22 @@
 - **进程事件** - 自动检测进程启动、退出、重启与 ANR，并给出原因（如低内存、崩溃、强制停止），在图表上标注
 - 支持导出 CSV
 
+![性能监控](imgs/perf-monitor.png)
+
 ### 文件管理
 - 浏览设备文件，预览文本与图片，上传、下载、删除，收藏常用目录
 - 拖入文件即可上传到当前目录
 
+![文件管理](imgs/file-manager.png)
+
 ### 其他
+- **内置 ADB** - 未检测到 adb 时自动在后台下载 Google platform-tools，无需手动安装
 - **拖拽安装** - 把 APK 拖进窗口即可安装，版本降级时会提示确认后卸载重装
 - **深色模式** - 跟随系统、浅色、深色三种外观
 - **应用内更新** - 启动时检查 GitHub Releases，在后台下载新版本，重启即可完成更新；会使用系统代理，下载中断时自动重试并续传。macOS 上通过应用内更新安装的新版本不会再触发「无法验证开发者」的提示
 - **诊断日志** - 查看与导出应用自身的运行日志，便于反馈问题
+
+![深色模式](imgs/dark-mode.png)
 
 ---
 ## 开发计划
@@ -73,7 +84,7 @@
 
 ### 前置要求
 
-- **ADB** - 确保系统已安装 Android Debug Bridge
+- **ADB（可选）** - 无需提前安装。启动时如果系统 PATH 和设置中都没有 adb，应用会自动下载 Google platform-tools。也可以自行安装，或在「设置」中指定 adb 路径
     - Windows: [下载 Platform Tools](https://developer.android.com/tools/releases/platform-tools)
     - macOS: `brew install android-platform-tools`
     - Linux: `sudo apt install android-tools-adb`
@@ -90,7 +101,7 @@
 #### 方式 1: 下载预编译版本
 访问 [Releases 页面](https://github.com/ilpanda/adb-tool-wails/releases) 下载适合你系统的版本：
 
-- **Windows**: `adb-tool-windows-amd64-installer.zip`
+- **Windows**: `adb-tool-windows-amd64-installer.zip`（安装版）或 `adb-tool-windows-amd64-portable.zip`（便携版）
 - **macOS**: `adb-tool-macos-universal.tar.gz`
 - **Linux**: `adb-tool-linux-amd64.tar.gz`
 
@@ -112,6 +123,8 @@
 
 
 #### 方式 2: 从源码构建
+需要先安装 Go 1.26+、Node.js 20+ 和 [Wails CLI](https://wails.io/docs/gettingstarted/installation)（v2.10.2）。Linux 还需要安装 `libgtk-3-dev` 和 `libwebkit2gtk-4.0-dev`。
+
 ```bash
 # 克隆仓库
 git clone https://github.com/ilpanda/adb-tool-wails.git
