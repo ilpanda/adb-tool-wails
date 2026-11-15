@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useMemo, useState} from 'react';
 import {Button, message, Select, Tooltip} from 'antd';
 import {useDeviceStore} from '../store/deviceStore';
@@ -13,6 +14,7 @@ interface PackagePickerProps {
 
 // 包名选择：可搜索的已安装包名列表 + 「使用前台应用」。快捷功能与性能监控共用
 function PackagePicker({value, onChange, disabled, className = ''}: PackagePickerProps) {
+    const locale = useLocale();
     const selectedDevice = useDeviceStore(state => state.selectedDevice);
     const packages = usePackageListStore(state =>
         selectedDevice ? state.packagesByDevice[selectedDevice.id] ?? EMPTY_PACKAGES : EMPTY_PACKAGES);
@@ -38,7 +40,7 @@ function PackagePicker({value, onChange, disabled, className = ''}: PackagePicke
                 ),
             };
         });
-    }, [packages, apps]);
+    }, [packages, apps, locale]);
 
     const pickForeground = async () => {
         if (!selectedDevice) return;
@@ -46,36 +48,35 @@ function PackagePicker({value, onChange, disabled, className = ''}: PackagePicke
         try {
             const pkg = await getForegroundPackage(selectedDevice.id);
             onChange(pkg);
-            message.success(`已切换到前台应用 ${pkg}`);
+            message.success(t("已切换到前台应用 {0}", [pkg]));
         } catch (error: any) {
-            message.error(`无法获取前台应用：${error?.message || error}`);
+            message.error(t("无法获取前台应用：{0}", [error?.message || error]));
         } finally {
             setPicking(false);
         }
     };
 
     return (
-        <div className={`flex min-w-0 items-center gap-3 ${className}`}>
+        <div className={`flex min-w-0 flex-wrap items-center gap-3 ${className}`}>
             <Select
                 value={value || undefined}
                 onChange={onChange}
-                placeholder={noDevice ? '请先连接设备' : '输入包名或应用名搜索'}
+                placeholder={noDevice ? t("请先连接设备") : t("输入包名或应用名搜索")}
                 disabled={noDevice || disabled}
                 showSearch
                 // 包名和应用名都能搜，例如输入「微信」或「tencent」
                 filterOption={(input, option) => option?.searchText.includes(input.trim().toLowerCase()) ?? false}
                 options={options}
-                className="min-w-0 flex-1 [&_.ant-select-selection-item]:text-[13px]"
+                className="min-w-0 flex-[1_1_200px] [&_.ant-select-selection-item]:text-[13px]"
             />
-            <Tooltip title="把手机前台正在运行的应用设为目标应用">
+            <Tooltip title={t("把手机前台正在运行的应用设为目标应用")}>
                 <Button
                     icon={<i className="fa-solid fa-location-crosshairs text-[12px]"/>}
                     loading={picking}
                     disabled={noDevice || disabled}
                     onClick={() => void pickForeground()}
                 >
-                    使用前台应用
-                </Button>
+                    {t("使用前台应用")}</Button>
             </Tooltip>
         </div>
     );

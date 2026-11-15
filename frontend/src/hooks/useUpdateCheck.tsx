@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect} from 'react';
 import {Button, notification} from 'antd';
 import {BrowserOpenURL, EventsOn} from '../../wailsjs/runtime/runtime';
@@ -17,7 +18,7 @@ export async function installUpdate() {
         const url = useUpdateStore.getState().info?.url;
         notification.error({
             key: NOTIFICATION_KEY,
-            message: '更新失败',
+            message: t("更新失败"),
             description: String(error),
             duration: 0,
             actions: url ? (
@@ -25,8 +26,7 @@ export async function installUpdate() {
                     BrowserOpenURL(url);
                     notification.destroy(NOTIFICATION_KEY);
                 }}>
-                    前往 GitHub 下载
-                </Button>
+                    {t("前往 GitHub 下载")}</Button>
             ) : undefined,
         });
     }
@@ -38,8 +38,7 @@ function dismissButton(version: string) {
             useUpdateStore.getState().dismiss(version);
             notification.destroy(NOTIFICATION_KEY);
         }}>
-            忽略此版本
-        </Button>
+            {t("忽略此版本")}</Button>
     );
 }
 
@@ -47,8 +46,8 @@ function dismissButton(version: string) {
 function notifyReady(info: update.Info) {
     notification.info({
         key: NOTIFICATION_KEY,
-        message: `新版本 ${info.latest} 已下载`,
-        description: '重启应用即可完成更新，也可以稍后点击左下角的更新按钮。',
+        message: t("新版本 {0} 已下载", [info.latest]),
+        description: t("重启应用即可完成更新，也可以稍后点击左下角的更新按钮。"),
         duration: 0,
         actions: (
             <div className="flex gap-2">
@@ -57,8 +56,7 @@ function notifyReady(info: update.Info) {
                     notification.destroy(NOTIFICATION_KEY);
                     void installUpdate();
                 }}>
-                    立即重启
-                </Button>
+                    {t("立即重启")}</Button>
             </div>
         ),
     });
@@ -68,8 +66,8 @@ function notifyReady(info: update.Info) {
 function notifyAvailable(info: update.Info) {
     notification.info({
         key: NOTIFICATION_KEY,
-        message: `发现新版本 ${info.latest}`,
-        description: `当前版本 ${info.current}，可前往 GitHub 下载最新安装包。`,
+        message: t("发现新版本 {0}", [info.latest]),
+        description: t("当前版本 {0}，可前往 GitHub 下载最新安装包。", [info.current]),
         duration: 0,
         actions: (
             <div className="flex gap-2">
@@ -78,14 +76,14 @@ function notifyAvailable(info: update.Info) {
                     BrowserOpenURL(info.url);
                     notification.destroy(NOTIFICATION_KEY);
                 }}>
-                    查看更新
-                </Button>
+                    {t("查看更新")}</Button>
             </div>
         ),
     });
 }
 
 export function useUpdateCheck() {
+    useLocale();
     useEffect(() => {
         const {setStatus} = useUpdateStore.getState();
         GetUpdateStatus().then(setStatus);

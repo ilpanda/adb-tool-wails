@@ -1,6 +1,7 @@
 package perf
 
 import (
+	"adb-tool-wails/internal/i18n"
 	"bytes"
 	"fmt"
 	"os/exec"
@@ -64,7 +65,7 @@ const (
 func GetThreadSchedInfo(adbPath, deviceId, packageName string, pid int) (ThreadSchedResult, error) {
 	var result ThreadSchedResult
 	if !adb.ValidPackageName(packageName) {
-		return result, fmt.Errorf("包名不合法: %s", packageName)
+		return result, fmt.Errorf(i18n.T("包名不合法: %s"), packageName)
 	}
 
 	pidExpr := strconv.Itoa(pid)
@@ -108,7 +109,7 @@ func GetThreadSchedInfo(adbPath, deviceId, packageName string, pid int) (ThreadS
 		if msg == "" {
 			msg = err.Error()
 		}
-		return result, fmt.Errorf("执行 adb 失败: %s", msg)
+		return result, fmt.Errorf(i18n.T("执行 adb 失败: %s"), msg)
 	}
 
 	sections := splitSections(strings.ReplaceAll(stdout.String(), "\r\n", "\n"))
@@ -116,9 +117,9 @@ func GetThreadSchedInfo(adbPath, deviceId, packageName string, pid int) (ThreadS
 	result.Pid, _ = strconv.Atoi(strings.TrimSpace(strings.Join(sections[secPid], "")))
 	if result.Pid <= 0 || len(sections[secStat]) == 0 {
 		if pid > 0 {
-			return result, fmt.Errorf("进程 %d 不存在，请刷新", pid)
+			return result, fmt.Errorf(i18n.T("进程 %d 不存在，请刷新"), pid)
 		}
-		return result, fmt.Errorf("未找到进程 %s，请检查应用是否运行", packageName)
+		return result, fmt.Errorf(i18n.T("未找到进程 %s，请检查应用是否运行"), packageName)
 	}
 
 	result.Clusters = parseClusters(sections[secPolicy], sections[secCapacity])

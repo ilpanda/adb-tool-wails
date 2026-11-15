@@ -2,6 +2,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"fmt"
 	"strings"
@@ -72,14 +73,14 @@ func SaveSmaps(param adb.ExecuteParams) types.ExecResult {
 		Ctxt:          param.Ctxt,
 		OnStage:       param.OnStage,
 		FilePrefix:    "smaps",
-		DialogTitle:   "保存 smaps",
+		DialogTitle:   i18n.T("保存 smaps"),
 		FileExtension: ".txt",
-		FilterDisplay: "文本文件 (*.txt)",
+		FilterDisplay: i18n.T("文本文件 (*.txt)"),
 		FilterPattern: "*.txt",
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultCanceled("", "用户取消保存")
+		return types.NewExecResultCanceled("", i18n.T("用户取消保存"))
 	}
 
 	result := dumpSmaps(param)
@@ -88,7 +89,7 @@ func SaveSmaps(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if strings.Contains(result.Res, "not debuggable") {
-		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 smaps\n"+result.Res, result.Error)
+		return types.NewExecResultFromString(result.Cmd, i18n.T("应用不是 debuggable，无法导出 smaps\n")+result.Res, result.Error)
 	}
 
 	return writeResultToFile(saveResult.SavePath, result.Res, result.Cmd)
@@ -104,14 +105,14 @@ func SaveShowMap(param adb.ExecuteParams) types.ExecResult {
 		Ctxt:          param.Ctxt,
 		OnStage:       param.OnStage,
 		FilePrefix:    "show_map",
-		DialogTitle:   "保存 show_map",
+		DialogTitle:   i18n.T("保存 show_map"),
 		FileExtension: ".txt",
-		FilterDisplay: "文本文件 (*.txt)",
+		FilterDisplay: i18n.T("文本文件 (*.txt)"),
 		FilterPattern: "*.txt",
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultCanceled("", "用户取消保存")
+		return types.NewExecResultCanceled("", i18n.T("用户取消保存"))
 	}
 
 	result := dumpShowMap(param)
@@ -120,7 +121,7 @@ func SaveShowMap(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if strings.Contains(result.Res, "not debuggable") {
-		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 showmap\n"+result.Res, result.Error)
+		return types.NewExecResultFromString(result.Cmd, i18n.T("应用不是 debuggable，无法导出 showmap\n")+result.Res, result.Error)
 	}
 
 	return writeResultToFile(saveResult.SavePath, result.Res, result.Cmd)
@@ -133,21 +134,21 @@ func SaveThreadInfo(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if !isRoot(param) {
-		return types.NewExecResultErrorString(packageIdResult.Cmd, "应用不是 root，无法导出线程信息")
+		return types.NewExecResultErrorString(packageIdResult.Cmd, i18n.T("应用不是 root，无法导出线程信息"))
 	}
 
 	saveResult := PrepareFileSave(SaveFileOptions{
 		Ctxt:          param.Ctxt,
 		OnStage:       param.OnStage,
 		FilePrefix:    "thread_info",
-		DialogTitle:   "保存 thread",
+		DialogTitle:   i18n.T("保存 thread"),
 		FileExtension: ".txt",
-		FilterDisplay: "文本文件 (*.txt)",
+		FilterDisplay: i18n.T("文本文件 (*.txt)"),
 		FilterPattern: "*.txt",
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultCanceled("", "用户取消保存")
+		return types.NewExecResultCanceled("", i18n.T("用户取消保存"))
 	}
 
 	result := doSaveThreadInfo(param)
@@ -168,7 +169,7 @@ func doSaveThreadInfo(param adb.ExecuteParams) types.ExecResult {
 		cmd := adb.ShellCommand(param.AdbPath, param.DeviceId, fmt.Sprintf("debuggerd -b %s", packageIdResult.Res))
 		return execCmd(cmd)
 	}
-	return types.NewExecResultErrorString(packageIdResult.Cmd, "应用不是 debuggable，无法导出 hprof")
+	return types.NewExecResultErrorString(packageIdResult.Cmd, i18n.T("应用不是 debuggable，无法导出 hprof"))
 }
 
 func SaveHprof(param adb.ExecuteParams) types.ExecResult {
@@ -181,14 +182,14 @@ func SaveHprof(param adb.ExecuteParams) types.ExecResult {
 		Ctxt:          param.Ctxt,
 		OnStage:       param.OnStage,
 		FilePrefix:    "hprof",
-		DialogTitle:   "保存 hprof",
+		DialogTitle:   i18n.T("保存 hprof"),
 		FileExtension: ".hprof",
-		FilterDisplay: "文本文件 (*.hprof)",
+		FilterDisplay: i18n.T("文本文件 (*.hprof)"),
 		FilterPattern: "*.hprof",
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultCanceled("", "用户取消保存")
+		return types.NewExecResultCanceled("", i18n.T("用户取消保存"))
 	}
 
 	timestamp := time.Now().Format("2006_01_02_15_04_05")
@@ -199,7 +200,7 @@ func SaveHprof(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if strings.Contains(result.Res, "not debuggable") {
-		return types.NewExecResultFromString(result.Cmd, "应用不是 debuggable，无法导出 hprof"+"\n"+result.Res, result.Error)
+		return types.NewExecResultFromString(result.Cmd, i18n.T("应用不是 debuggable，无法导出 hprof")+"\n"+result.Res, result.Error)
 	}
 
 	param.Stage(adb.StagePulling)
@@ -212,7 +213,7 @@ func SaveHprof(param adb.ExecuteParams) types.ExecResult {
 	rmResult := execCmd(adb.ShellCommand(param.AdbPath, param.DeviceId, fmt.Sprintf("rm %s", hprofSdcardPath)))
 	finalCmd = finalCmd + "\n" + rmResult.Cmd
 
-	success := types.NewExecResultSuccess(finalCmd, fmt.Sprintf("hprof 已保存到: %s", saveResult.SavePath))
+	success := types.NewExecResultSuccess(finalCmd, fmt.Sprintf(i18n.T("hprof 已保存到: %s"), saveResult.SavePath))
 	success.LocalPath = saveResult.SavePath
 	return success
 }

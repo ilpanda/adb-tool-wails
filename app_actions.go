@@ -4,6 +4,7 @@ import (
 	"adb-tool-wails/internal/actions"
 	"adb-tool-wails/internal/adb"
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"fmt"
 	"os"
@@ -67,7 +68,7 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 
 	deviceName := adb.GetDeviceNameArray(a.adbPath)
 	if len(deviceName) == 0 {
-		result = types.NewExecResultErrorString("", "no devices，请使用数据线连接手机，并打开开发者模式")
+		result = types.NewExecResultErrorString("", i18n.T("no devices，请使用数据线连接手机，并打开开发者模式"))
 		return
 	}
 
@@ -123,7 +124,7 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		result = actions.InstallApp(param)
 	case "install-apk-file":
 		if len(ac.Files) != 1 {
-			result = types.NewExecResultErrorString("install-apk-file", "需要且只能指定一个 APK 文件")
+			result = types.NewExecResultErrorString("install-apk-file", i18n.T("需要且只能指定一个 APK 文件"))
 		} else {
 			result = actions.InstallApkFile(param, ac.Files[0])
 		}
@@ -167,7 +168,7 @@ func (a *App) ExecuteAction(ac Action) (result types.ExecResult) {
 		"jump-notification", "jump-bluetooth", "jump-input", "jump-display":
 		result = actions.JumpToSettings(param)
 	default:
-		result = types.NewExecResultFromString(action, "", fmt.Sprintf("不支持的操作: %s", action))
+		result = types.NewExecResultFromString(action, "", fmt.Sprintf(i18n.T("不支持的操作: %s"), action))
 	}
 	return
 }
@@ -194,11 +195,11 @@ func (a *App) OpenDeepLink(deviceId string, link string, packageName string) act
 }
 
 func (a *App) SaveFile(content string, fileNamePrefix string) types.ExecResult {
-	return actions.SaveFile(a.ctx, content, fileNamePrefix, "保存文件")
+	return actions.SaveFile(a.ctx, content, fileNamePrefix, i18n.T("保存文件"))
 }
 
 func (a *App) SaveFileAsCsv(content string, fileNamePrefix string) types.ExecResult {
-	return actions.SaveFileAsCSV(a.ctx, content, fileNamePrefix, "保存文件")
+	return actions.SaveFileAsCSV(a.ctx, content, fileNamePrefix, i18n.T("保存文件"))
 }
 
 // RevealPath 在系统文件管理器中显示并选中本地文件

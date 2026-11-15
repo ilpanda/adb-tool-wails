@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect, useRef, useState} from 'react';
 import {Button, Checkbox, Input, Modal} from 'antd';
 import type {InputRef} from 'antd';
@@ -33,6 +34,7 @@ interface DeepLinkModalProps {
 
 // Deep Link 测试：am start -W -a VIEW -d <link> [package]，展示打开的 Activity 与启动耗时
 function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModalProps) {
+    useLocale();
     const [link, setLink] = useState('');
     const [limitToTarget, setLimitToTarget] = useState(false);
     const [running, setRunning] = useState(false);
@@ -72,7 +74,7 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
 
     return (
         <Modal
-            title="Deep Link 测试"
+            title={t("Deep Link 测试")}
             open={visible}
             onCancel={onClose}
             footer={null}
@@ -88,13 +90,12 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
                         value={link}
                         onChange={e => setLink(e.target.value)}
                         onPressEnter={() => void open()}
-                        placeholder="myapp://detail?id=1 或 https://example.com/path"
+                        placeholder={t("myapp://detail?id=1 或 https://example.com/path")}
                         className="!font-mono !text-[13px]"
                         allowClear
                     />
                     <Button type="primary" loading={running} disabled={!link.trim()} onClick={() => void open()}>
-                        打开
-                    </Button>
+                        {t("打开")}</Button>
                 </div>
 
                 <Checkbox
@@ -103,14 +104,12 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
                     onChange={e => setLimitToTarget(e.target.checked)}
                 >
                     <span className="text-[13px] text-body">
-                        只用目标应用解析（指定包名）
-                        {targetPackage
+                        {t("只用目标应用解析（指定包名）")}{targetPackage
                             ? <span className="ml-1 font-mono text-[12px] text-mute">{targetPackage}</span>
-                            : <span className="ml-1 text-[12px] text-faint">（未选择目标应用）</span>}
+                            : <span className="ml-1 text-[12px] text-faint">{t("（未选择目标应用）")}</span>}
                     </span>
                     <div className="text-[12px] text-faint">
-                        不弹选择框，也不会被浏览器等其他应用接走，用于验证目标应用能否处理这个链接
-                    </div>
+                        {t("不弹选择框，也不会被浏览器等其他应用接走，用于验证目标应用能否处理这个链接")}</div>
                 </Checkbox>
 
                 {result && (
@@ -119,16 +118,16 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
                     }`}>
                         {result.error ? (
                             <>
-                                <div className="font-medium text-error">无法打开：{result.error}</div>
+                                <div className="font-medium text-error">{t("无法打开：")}{result.error}</div>
                                 {result.output && !result.output.includes(result.error) && (
                                     <div className="mt-1 break-all font-mono text-[11.5px] text-body">{result.output.split('\n').find(line => line.startsWith('Error')) ?? ''}</div>
                                 )}
                             </>
                         ) : (
                             <div className="text-ink">
-                                <span className="font-medium">已打开</span>
+                                <span className="font-medium">{t("已打开")}</span>
                                 {result.activity && <span className="ml-2 break-all font-mono text-[12px]">{result.activity}</span>}
-                                {result.totalTime > 0 && <span className="ml-2 text-mute">启动耗时 {result.totalTime} ms</span>}
+                                {result.totalTime > 0 && <span className="ml-2 text-mute">{t("启动耗时 ")}{result.totalTime} ms</span>}
                             </div>
                         )}
                         {result.cmd && (
@@ -141,7 +140,7 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
                     <div>
                         <div className="mb-1.5 flex items-center justify-between">
                             <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-faint">Recent</span>
-                            <Button type="link" size="small" className="!px-0 !text-[12px]" onClick={clearRecent}>清空</Button>
+                            <Button type="link" size="small" className="!px-0 !text-[12px]" onClick={clearRecent}>{t("清空")}</Button>
                         </div>
                         <div className="flex flex-col gap-1">
                             {recent.map(item => (
@@ -149,7 +148,7 @@ function DeepLinkModal({visible, onClose, deviceId, targetPackage}: DeepLinkModa
                                     key={item}
                                     onClick={() => setLink(item)}
                                     onDoubleClick={() => void open(item)}
-                                    title="单击填入，双击直接打开"
+                                    title={t("单击填入，双击直接打开")}
                                     className="truncate rounded-md px-2 py-1 text-left font-mono text-[12px] text-body transition-colors hover:bg-hairline-soft"
                                 >
                                     {item}

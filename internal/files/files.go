@@ -3,6 +3,7 @@ package files
 
 import (
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
 	"bytes"
@@ -150,12 +151,12 @@ func (c Client) Preview(deviceId string, remotePath string) FilePreview {
 	}
 	size, err := strconv.ParseInt(strings.TrimSpace(string(stdout)), 10, 64)
 	if err != nil {
-		return FilePreview{Error: fmt.Sprintf("无法读取文件大小: %s", strings.TrimSpace(string(stdout)))}
+		return FilePreview{Error: fmt.Sprintf(i18n.T("无法读取文件大小: %s"), strings.TrimSpace(string(stdout)))}
 	}
 
 	if mime, ok := previewImageMimes[strings.ToLower(path.Ext(remotePath))]; ok {
 		if size > previewImageLimit {
-			return FilePreview{Kind: "image", Size: size, Error: fmt.Sprintf("图片超过 %d MB，请下载后查看", previewImageLimit/1024/1024)}
+			return FilePreview{Kind: "image", Size: size, Error: fmt.Sprintf(i18n.T("图片超过 %d MB，请下载后查看"), previewImageLimit/1024/1024)}
 		}
 		data, stderr, err := c.runAdb(deviceId, "exec-out", "cat -- "+q)
 		if err != nil {
@@ -192,7 +193,7 @@ func isBinary(data []byte, truncated bool) bool {
 func (c Client) Delete(deviceId string, remotePath string) types.ExecResult {
 	cleaned := path.Clean(remotePath)
 	if cleaned == "/" || cleaned == "." {
-		return types.NewExecResultErrorString("rm", "不允许删除根目录")
+		return types.NewExecResultErrorString("rm", i18n.T("不允许删除根目录"))
 	}
 
 	script := "rm -rf -- " + shellQuote(cleaned)
@@ -209,13 +210,13 @@ func (c Client) Delete(deviceId string, remotePath string) types.ExecResult {
 // UploadWithDialog 选择本地文件上传到设备目录（adb push）
 func (c Client) UploadWithDialog(deviceId string, remoteDir string) types.ExecResult {
 	localPath, err := runtime.OpenFileDialog(c.Ctx, runtime.OpenDialogOptions{
-		Title: "选择要上传的文件",
+		Title: i18n.T("选择要上传的文件"),
 	})
 	if err != nil {
-		return types.NewExecResultErrorString("upload", fmt.Sprintf("选择文件失败: %v", err))
+		return types.NewExecResultErrorString("upload", fmt.Sprintf(i18n.T("选择文件失败: %v"), err))
 	}
 	if localPath == "" {
-		return types.NewExecResultErrorString("upload", "已取消")
+		return types.NewExecResultCanceled("upload", i18n.T("已取消"))
 	}
 
 	dest := remoteDir
@@ -239,7 +240,7 @@ func (c Client) UploadWithDialog(deviceId string, remoteDir string) types.ExecRe
 // Upload 把本地文件或目录上传到设备目录（拖入文件管理时使用）
 func (c Client) Upload(deviceId string, remoteDir string, localPaths []string) types.ExecResult {
 	if len(localPaths) == 0 {
-		return types.NewExecResultErrorString("upload", "没有要上传的文件")
+		return types.NewExecResultErrorString("upload", i18n.T("没有要上传的文件"))
 	}
 	dest := remoteDir
 	if dest == "" {
@@ -264,13 +265,13 @@ func (c Client) Upload(deviceId string, remoteDir string, localPaths []string) t
 func (c Client) DownloadWithDialog(deviceId string, remotePath string) types.ExecResult {
 	localPath, err := runtime.SaveFileDialog(c.Ctx, runtime.SaveDialogOptions{
 		DefaultFilename: filepath.Base(remotePath),
-		Title:           "保存到本地",
+		Title:           i18n.T("保存到本地"),
 	})
 	if err != nil {
-		return types.NewExecResultErrorString("download", fmt.Sprintf("选择保存路径失败: %v", err))
+		return types.NewExecResultErrorString("download", fmt.Sprintf(i18n.T("选择保存路径失败: %v"), err))
 	}
 	if localPath == "" {
-		return types.NewExecResultErrorString("download", "已取消")
+		return types.NewExecResultCanceled("download", i18n.T("已取消"))
 	}
 
 	cmdLine := c.adbCmdLine(deviceId, "pull", remotePath, localPath)

@@ -19,15 +19,15 @@ interface PageHeaderProps {
 // 各页面统一的标题区：等宽小标签 + 标题 + 说明，右侧放主操作
 function PageHeader({eyebrow, title, description, actions, className = ''}: PageHeaderProps) {
     return (
-        <div className={`flex flex-col items-start justify-between gap-4 text-left sm:flex-row sm:items-end ${className}`}>
-            <div className="min-w-0">
+        <div className={`flex flex-wrap items-end justify-between gap-4 text-left ${className}`}>
+            <div className="min-w-0 flex-[1_1_280px]">
                 {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
                 <h1 className="mt-1 truncate text-[22px] font-semibold leading-7 tracking-[-0.4px] text-ink">
                     {title}
                 </h1>
                 {description && <p className="mt-1 text-[13px] text-mute">{description}</p>}
             </div>
-            {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+            {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
         </div>
     );
 }

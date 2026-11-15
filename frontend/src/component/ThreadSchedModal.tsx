@@ -1,3 +1,5 @@
+import {clusterLabel} from './perf/perfFormat';
+import {t, useLocale} from '../i18n';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Button, Input, Modal, Select, Table, Tag, Tooltip} from 'antd';
 import type {ColumnsType} from 'antd/es/table';
@@ -22,15 +24,15 @@ const CLUSTER_COLORS: Record<string, string> = {
     '超大核': 'red',
 };
 
-const STATE_NAMES: Record<string, string> = {
-    R: '运行',
-    S: '睡眠',
-    D: '不可中断',
-    T: '停止',
-    t: '跟踪停止',
-    Z: '僵尸',
-    X: '退出',
-};
+const STATE_NAMES = (): Record<string, string> => ({
+    R: t("运行"),
+    S: t("睡眠"),
+    D: t("不可中断"),
+    T: t("停止"),
+    t: t("跟踪停止"),
+    Z: t("僵尸"),
+    X: t("退出"),
+});
 
 function clusterColor(label: string) {
     return CLUSTER_COLORS[label] ?? 'blue';
@@ -49,6 +51,7 @@ function formatCpus(cpus: number[]) {
 
 // 直接显示 Cpus_allowed_list；若只落在某一个簇内，则使用该簇颜色
 function AllowedCpus({thread, clusters}: { thread: perf.ThreadSched; clusters: perf.CpuCluster[] }) {
+    useLocale();
     const allowed = thread.allowedCpus ?? [];
     if (allowed.length === 0) {
         return <span className="text-mute">{thread.cpusAllowed || '-'}</span>;
@@ -59,6 +62,7 @@ function AllowedCpus({thread, clusters}: { thread: perf.ThreadSched; clusters: p
 }
 
 const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, packageName, deviceId}) => {
+    const locale = useLocale();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [data, setData] = useState<perf.ThreadSchedResult | null>(null);
@@ -73,7 +77,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
     // silent：自动刷新时不显示 loading，失败时保留已有数据
     const load = useCallback(async (targetPid: number, silent = false) => {
         if (!packageName) {
-            setError('请先选择应用包名');
+            setError(t("请先选择应用包名"));
             return;
         }
         const seq = ++requestSeq.current;
@@ -87,7 +91,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             setLoadedAt(Date.now());
         } catch (e: any) {
             if (seq !== requestSeq.current) return;
-            setError(e?.toString() || '获取线程信息失败');
+            setError(e?.toString() || t("获取线程信息失败"));
             setAutoRefresh(false);
             if (!silent) setData(null);
         } finally {
@@ -132,7 +136,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
         const lower = keyword.trim().toLowerCase();
         if (!lower) return threads;
         return threads.filter(t => t.name.toLowerCase().includes(lower) || String(t.tid) === lower);
-    }, [data, keyword]);
+    }, [data, keyword, locale]);
 
     const columns: ColumnsType<perf.ThreadSched> = [
         {
@@ -142,24 +146,24 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             sorter: (a, b) => a.tid - b.tid,
         },
         {
-            title: '线程名',
+            title: t("线程名"),
             dataIndex: 'name',
             width: 200,
             ellipsis: true,
             sorter: (a, b) => a.name.localeCompare(b.name),
         },
         {
-            title: '状态',
+            title: t("状态"),
             dataIndex: 'state',
             width: 90,
             render: (state: string) => (
                 <span className={state === 'R' ? 'text-green-600 font-medium' : 'text-body'}>
-                    {state} {STATE_NAMES[state] ?? ''}
+                    {state} {STATE_NAMES()[state] ?? ''}
                 </span>
             ),
         },
         {
-            title: <Tooltip title="内核 prio，与 systrace / Perfetto 一致：普通线程为 120+nice，实时线程（标 RT）为 99-rtprio，数值越小优先级越高">prio</Tooltip>,
+            title: <Tooltip title={t("内核 prio，与 systrace / Perfetto 一致：普通线程为 120+nice，实时线程（标 RT）为 99-rtprio，数值越小优先级越高")}>prio</Tooltip>,
             dataIndex: 'prio',
             width: 140,
             sorter: (a, b) => a.prio - b.prio,
@@ -167,7 +171,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                 <span>
                     {prio}
                     {(record.policy === 'FIFO' || record.policy === 'RR') && (
-                        <Tooltip title={`实时调度 SCHED_${record.policy}，rtprio=${record.rtPriority}`}>
+                        <Tooltip title={t("实时调度 SCHED_{0}，rtprio={1}", [record.policy, record.rtPriority])}>
                             {/* antd Tag 自带 margin 重置会覆盖 Tailwind 的 ml-*，这里用内联样式 */}
                             <Tag color="magenta" style={{marginInlineStart: 8}}>RT</Tag>
                         </Tooltip>
@@ -176,7 +180,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             ),
         },
         {
-            title: <Tooltip title="nice 值及对应的 Process.THREAD_PRIORITY_* 常量">nice</Tooltip>,
+            title: <Tooltip title={t("nice 值及对应的 Process.THREAD_PRIORITY_* 常量")}>nice</Tooltip>,
             dataIndex: 'nice',
             width: 190,
             sorter: (a, b) => a.nice - b.nice,
@@ -188,14 +192,14 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
             ),
         },
         {
-            title: <Tooltip title="Cpus_allowed_list：线程允许运行的 CPU 编号">可运行核</Tooltip>,
+            title: <Tooltip title={t("Cpus_allowed_list：线程允许运行的 CPU 编号")}>{t("可运行核")}</Tooltip>,
             key: 'allowed',
             width: 220,
             sorter: (a, b) => (a.allowedCpus?.length ?? 0) - (b.allowedCpus?.length ?? 0),
             render: (_, record) => <AllowedCpus thread={record} clusters={clusters}/>,
         },
         {
-            title: <Tooltip title="线程所属的 cpuset 分组（/proc/<tid>/cpuset），由 Android 按进程状态分配：/top-app 前台应用、/foreground 前台服务、/background 后台、/system-background 系统后台、/restricted 受限。分组决定可运行的 CPU 核范围">cpuset</Tooltip>,
+            title: <Tooltip title={t("线程所属的 cpuset 分组（/proc/<tid>/cpuset），由 Android 按进程状态分配：/top-app 前台应用、/foreground 前台服务、/background 后台、/system-background 系统后台、/restricted 受限。分组决定可运行的 CPU 核范围")}>cpuset</Tooltip>,
             dataIndex: 'cpuset',
             width: 140,
             filters: Array.from(new Set((data?.threads ?? []).map(t => t.cpuset))).map(c => ({text: c, value: c})),
@@ -207,8 +211,8 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
         <Modal
             title={
                 <div className="flex items-center justify-between">
-                    <span>线程调度信息</span>
-                    <Tooltip title={autoRefresh ? '每 5 秒自动刷新，点击停止' : '立即刷新并每 5 秒自动刷新'}>
+                    <span>{t("线程调度信息")}</span>
+                    <Tooltip title={autoRefresh ? t("每 5 秒自动刷新，点击停止") : t("立即刷新并每 5 秒自动刷新")}>
                         <Button
                             type="link"
                             danger={autoRefresh}
@@ -217,7 +221,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                             disabled={loading}
                             className="mr-8"
                         >
-                            {autoRefresh ? '停止自动刷新' : '自动刷新'}
+                            {autoRefresh ? t("停止自动刷新") : t("自动刷新")}
                         </Button>
                     </Tooltip>
                 </div>
@@ -234,7 +238,7 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                     <Select
                         value={pid || undefined}
                         onChange={(value: number) => load(value)}
-                        placeholder={packageName || '未选择应用'}
+                        placeholder={packageName || t("未选择应用")}
                         className="min-w-[360px]"
                         disabled={loading || !data}
                         options={(data?.processes ?? []).map(p => ({value: p.pid, label: `${p.name}  (${p.pid})`}))}
@@ -242,24 +246,23 @@ const ThreadSchedModal: React.FC<ThreadSchedModalProps> = ({visible, onClose, pa
                     <Input
                         value={keyword}
                         onChange={e => setKeyword(e.target.value)}
-                        placeholder="按线程名或 TID 过滤"
+                        placeholder={t("按线程名或 TID 过滤")}
                         allowClear
                         prefix={<SearchOutlined className="text-faint"/>}
                         className="max-w-[320px]"
                     />
                     {data && (
                         <span className="text-mute text-sm">
-                            {filteredThreads.length} / {data.threads?.length ?? 0} 个线程
-                        </span>
+                            {filteredThreads.length} / {data.threads?.length ?? 0} {t(" 个线程")}</span>
                     )}
                 </div>
 
                 {clusters.length > 0 && (
                     <div className="flex items-center gap-2 text-sm text-body">
-                        <Tooltip title="同一簇内的核共享频率，最高频率越高性能越强（左小右大）"><span>CPU 簇：</span></Tooltip>
+                        <Tooltip title={t("同一簇内的核共享频率，最高频率越高性能越强（左小右大）")}><span>{t("CPU 簇：")}</span></Tooltip>
                         {clusters.map(c => (
-                            <Tag key={c.label} color={clusterColor(c.label)}>
-                                {c.label} {formatCpus(c.cpus)}  {formatFreq(c.maxFreq)}
+                            <Tag key={clusterLabel(c.label)} color={clusterColor(c.label)}>
+                                {clusterLabel(c.label)} {formatCpus(c.cpus)}  {formatFreq(c.maxFreq)}
                             </Tag>
                         ))}
                     </div>

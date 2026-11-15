@@ -6,6 +6,7 @@ package update
 
 import (
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
@@ -103,7 +104,7 @@ func (u *Updater) Download(ctx context.Context) error {
 	info := u.latest
 	if !info.CanInstall {
 		u.mu.Unlock()
-		return errors.New("没有可在应用内安装的新版本")
+		return errors.New(i18n.T("没有可在应用内安装的新版本"))
 	}
 	if u.status.Version == info.Latest && (u.status.State == StateDownloading || u.status.State == StateReady) {
 		u.mu.Unlock()
@@ -166,7 +167,7 @@ func (u *Updater) download(ctx context.Context, info Info) (string, error) {
 		err = extractTarGz(archive, pkg)
 	}
 	if err != nil {
-		return "", fmt.Errorf("解压失败：%w", err)
+		return "", fmt.Errorf(i18n.T("解压失败：%w"), err)
 	}
 	staged, err := findStaged(pkg, goruntime.GOOS)
 	if err != nil {
@@ -223,9 +224,9 @@ func (u *Updater) fetchOnce(ctx context.Context, info Info, dst string) error {
 	defer watchdog.Stop()
 	wrap := func(err error) error {
 		if stalled.Load() {
-			return fmt.Errorf("下载超时：%d 秒内没有收到数据", int(stallTimeout.Seconds()))
+			return fmt.Errorf(i18n.T("下载超时：%d 秒内没有收到数据"), int(stallTimeout.Seconds()))
 		}
-		return fmt.Errorf("下载失败：%w", err)
+		return fmt.Errorf(i18n.T("下载失败：%w"), err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, info.asset.URL, nil)
@@ -251,7 +252,7 @@ func (u *Updater) fetchOnce(ctx context.Context, info Info, dst string) error {
 		flags |= os.O_TRUNC
 		offset = 0
 	default:
-		return fmt.Errorf("下载失败：服务器返回 %d", resp.StatusCode)
+		return fmt.Errorf(i18n.T("下载失败：服务器返回 %d"), resp.StatusCode)
 	}
 	if total <= 0 && resp.ContentLength > 0 {
 		total = offset + resp.ContentLength
@@ -289,11 +290,11 @@ func verifyFile(path string, asset releaseAsset) error {
 	}
 	if asset.Size > 0 && size != asset.Size {
 		_ = os.Remove(path)
-		return fmt.Errorf("下载不完整：%d / %d 字节", size, asset.Size)
+		return fmt.Errorf(i18n.T("下载不完整：%d / %d 字节"), size, asset.Size)
 	}
 	if want, ok := strings.CutPrefix(asset.Digest, "sha256:"); ok && !strings.EqualFold(want, hex.EncodeToString(hash.Sum(nil))) {
 		_ = os.Remove(path)
-		return errors.New("安装包校验失败，请重试")
+		return errors.New(i18n.T("安装包校验失败，请重试"))
 	}
 	return nil
 }
@@ -318,7 +319,7 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 func safeJoin(dst, name string) (string, error) {
 	target := filepath.Join(dst, name)
 	if target != filepath.Clean(dst) && !strings.HasPrefix(target, filepath.Clean(dst)+string(os.PathSeparator)) {
-		return "", fmt.Errorf("非法路径：%s", name)
+		return "", fmt.Errorf(i18n.T("非法路径：%s"), name)
 	}
 	return target, nil
 }
@@ -358,7 +359,7 @@ func extractTarGz(src, dst string) error {
 			err = writeFile(target, reader, mode.Perm())
 		case tar.TypeSymlink:
 			if filepath.IsAbs(header.Linkname) {
-				return fmt.Errorf("非法链接：%s", header.Name)
+				return fmt.Errorf(i18n.T("非法链接：%s"), header.Name)
 			}
 			if err = os.MkdirAll(filepath.Dir(target), 0755); err == nil {
 				err = os.Symlink(header.Linkname, target)
@@ -439,7 +440,7 @@ func findStaged(pkg, goos string) (string, error) {
 			}
 		}
 	}
-	return "", errors.New("安装包中没有找到应用")
+	return "", errors.New(i18n.T("安装包中没有找到应用"))
 }
 
 // Install 用已下载的新版本替换当前应用，并安排在当前进程退出后启动新版本；成功后调用方应退出应用
@@ -448,7 +449,7 @@ func (u *Updater) Install() error {
 	staged, ready := u.staged, u.status.State == StateReady
 	u.mu.Unlock()
 	if !ready || staged == "" {
-		return errors.New("新版本尚未下载完成")
+		return errors.New(i18n.T("新版本尚未下载完成"))
 	}
 
 	exe, err := os.Executable()
@@ -456,7 +457,7 @@ func (u *Updater) Install() error {
 		exe, err = filepath.EvalSymlinks(exe)
 	}
 	if err != nil {
-		return fmt.Errorf("无法定位当前应用：%w", err)
+		return fmt.Errorf(i18n.T("无法定位当前应用：%w"), err)
 	}
 	switch goruntime.GOOS {
 	case "darwin":
@@ -481,23 +482,23 @@ func installApp(exe, staged string) error {
 	for !strings.HasSuffix(bundle, ".app") {
 		parent := filepath.Dir(bundle)
 		if parent == bundle {
-			return errors.New("无法定位当前应用的 .app 目录")
+			return errors.New(i18n.T("无法定位当前应用的 .app 目录"))
 		}
 		bundle = parent
 	}
 	if strings.Contains(bundle, "/AppTranslocation/") {
-		return errors.New("应用正从系统隔离位置运行，请先把它移到「应用程序」文件夹后再更新")
+		return errors.New(i18n.T("应用正从系统隔离位置运行，请先把它移到「应用程序」文件夹后再更新"))
 	}
 
 	backup := bundle + ".old"
 	_ = os.RemoveAll(backup)
 	if err := os.Rename(bundle, backup); err != nil {
-		return fmt.Errorf("没有权限替换应用：%w", err)
+		return fmt.Errorf(i18n.T("没有权限替换应用：%w"), err)
 	}
 	if out, err := exec.Command("ditto", staged, bundle).CombinedOutput(); err != nil {
 		_ = os.RemoveAll(bundle)
 		_ = os.Rename(backup, bundle)
-		return fmt.Errorf("复制新版本失败：%s", strings.TrimSpace(string(out)))
+		return fmt.Errorf(i18n.T("复制新版本失败：%s"), strings.TrimSpace(string(out)))
 	}
 	// 新版本由本程序复制，正常不带隔离标记，这里再清一次以防万一
 	_ = exec.Command("xattr", "-dr", "com.apple.quarantine", bundle).Run()
@@ -509,7 +510,7 @@ func installBinary(exe, staged string) error {
 	backup := exe + ".old"
 	_ = os.Remove(backup)
 	if err := os.Rename(exe, backup); err != nil {
-		return fmt.Errorf("没有权限替换应用：%w", err)
+		return fmt.Errorf(i18n.T("没有权限替换应用：%w"), err)
 	}
 	src, err := os.Open(staged)
 	if err == nil {
@@ -519,7 +520,7 @@ func installBinary(exe, staged string) error {
 	if err != nil {
 		_ = os.Remove(exe)
 		_ = os.Rename(backup, exe)
-		return fmt.Errorf("复制新版本失败：%w", err)
+		return fmt.Errorf(i18n.T("复制新版本失败：%w"), err)
 	}
 	return relaunch(`while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; rm -f "$2"; "$3" >/dev/null 2>&1 &`, backup, exe)
 }
@@ -528,7 +529,7 @@ func installBinary(exe, staged string) error {
 func relaunch(script string, args ...string) error {
 	argv := append([]string{"-c", script, "sh", strconv.Itoa(os.Getpid())}, args...)
 	if err := exec.Command("/bin/sh", argv...).Start(); err != nil {
-		return fmt.Errorf("已更新，但无法自动重启，请手动打开应用：%w", err)
+		return fmt.Errorf(i18n.T("已更新，但无法自动重启，请手动打开应用：%w"), err)
 	}
 	return nil
 }

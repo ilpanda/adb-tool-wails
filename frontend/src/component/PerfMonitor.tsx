@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, Button, ConfigProvider, message, Segmented, Select, Tooltip} from 'antd';
 import {
@@ -20,6 +21,8 @@ import {readStoredPackage, usePackageListStore} from '../store/packageListStore'
 import {ChartContext, CoreGrid, CpuChart, FreqChart, MemoryChart, MemoryMode} from './perf/PerfCharts';
 import {
     EVENT_META,
+    clusterLabel,
+    formatEventDetail,
     formatDuration,
     formatMemory,
     formatMHz,
@@ -35,16 +38,18 @@ import {
     TEMP_COLOR,
 } from './perf/perfFormat';
 
-const WINDOW_OPTIONS = [
-    {value: 60_000, label: '1 分钟'},
-    {value: 5 * 60_000, label: '5 分钟'},
-    {value: 15 * 60_000, label: '15 分钟'},
-    {value: 0, label: '全部'},
-];
+const WINDOW_OPTIONS = () => ([
+    {value: 60_000, label: t("1 分钟")},
+    {value: 5 * 60_000, label: t("5 分钟")},
+    {value: 15 * 60_000, label: t("15 分钟")},
+    {value: 0, label: t("全部")},
+]);
 
 const CARD = 'rounded-xl border border-hairline bg-elevated';
 
-const CardHeader: React.FC<{ eyebrow: string; title: string; children?: React.ReactNode }> = ({eyebrow, title, children}) => (
+const CardHeader: React.FC<{ eyebrow: string; title: string; children?: React.ReactNode }> = ({eyebrow, title, children}) => {
+    useLocale();
+    return ((
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline-soft px-5 py-3.5">
         <div>
             <Eyebrow>{eyebrow}</Eyebrow>
@@ -52,9 +57,12 @@ const CardHeader: React.FC<{ eyebrow: string; title: string; children?: React.Re
         </div>
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </div>
-);
+));
+};
 
-const StatCard: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactNode; accent?: string }> = ({label, value, sub, accent}) => (
+const StatCard: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactNode; accent?: string }> = ({label, value, sub, accent}) => {
+    useLocale();
+    return ((
     <div className={`${CARD} min-w-0 px-4 py-3.5`}>
         <div className="flex items-center gap-2">
             {accent && <span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor: accent}}/>}
@@ -63,7 +71,8 @@ const StatCard: React.FC<{ label: string; value: React.ReactNode; sub?: React.Re
         <div className={`${MONO} mt-1.5 truncate text-[22px] font-semibold leading-7 tracking-[-0.5px] text-ink`}>{value}</div>
         {sub && <div className="mt-1 truncate text-[12px] text-faint">{sub}</div>}
     </div>
-);
+));
+};
 
 // 点击内存曲线上的点后显示该时刻的完整 meminfo
 const MemoryDetail: React.FC<{
@@ -72,10 +81,11 @@ const MemoryDetail: React.FC<{
     packageName: string;
     onClose: () => void;
 }> = ({info, sample, packageName, onClose}) => {
+    useLocale();
     const copy = async () => {
         if (!info.rawMemInfo) return;
         await navigator.clipboard.writeText(info.rawMemInfo);
-        message.success('已复制到剪贴板');
+        message.success(t("已复制到剪贴板"));
     };
     const save = async () => {
         if (!info.rawMemInfo) return;
@@ -127,16 +137,17 @@ const MemoryDetail: React.FC<{
                 )}
             </div>
             <div className="flex gap-2 border-t border-hairline-soft px-4 py-3">
-                <Button icon={<CopyOutlined/>} onClick={copy} className="flex-1" disabled={!info.rawMemInfo}>复制原文</Button>
-                <Button type="primary" icon={<DownloadOutlined/>} onClick={save} className="flex-1" disabled={!info.rawMemInfo}>导出原文</Button>
+                <Button icon={<CopyOutlined/>} onClick={copy} className="flex-1" disabled={!info.rawMemInfo}>{t("复制原文")}</Button>
+                <Button type="primary" icon={<DownloadOutlined/>} onClick={save} className="flex-1" disabled={!info.rawMemInfo}>{t("导出原文")}</Button>
             </div>
-            {!info.rawMemInfo && <div className="px-4 pb-3 text-[11.5px] text-faint">只保留最近 60 次采样的原文</div>}
+            {!info.rawMemInfo && <div className="px-4 pb-3 text-[11.5px] text-faint">{t("只保留最近 60 次采样的原文")}</div>}
         </div>
     );
 };
 
 const EventTag: React.FC<{ event: PerfProcEvent }> = ({event}) => {
-    const meta = EVENT_META[event.kind];
+    useLocale();
+    const meta = EVENT_META()[event.kind];
     return (
         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-medium" style={{color: meta?.color, backgroundColor: meta?.soft}}>
             {meta?.label ?? event.kind}
@@ -145,6 +156,7 @@ const EventTag: React.FC<{ event: PerfProcEvent }> = ({event}) => {
 };
 
 const PerfMonitor: React.FC = () => {
+    const locale = useLocale();
     const {selectedDevice} = useDeviceStore();
     const {
         packageName, intervalMs, memIntervalMs, running, starting, error,
@@ -183,25 +195,25 @@ const PerfMonitor: React.FC = () => {
     // 数据不足一个窗口时从第一个点开始画，避免曲线挤在右侧
     const earliest = Number.isFinite(firstTs) ? firstTs : to - 60_000;
     const from = windowMs > 0 ? Math.max(to - windowMs, earliest) : earliest;
-    const visibleSamples = useMemo(() => samples.filter(s => s.timestamp >= from - 2000), [samples, from]);
-    const visibleMemory = useMemo(() => memory.filter(m => m.timestamp >= from - 10_000), [memory, from]);
+    const visibleSamples = useMemo(() => samples.filter(s => s.timestamp >= from - 2000), [samples, from, locale]);
+    const visibleMemory = useMemo(() => memory.filter(m => m.timestamp >= from - 10_000), [memory, from, locale]);
 
     const ctx: ChartContext = {from, to, packageName, processNames, hidden: hiddenProcesses, events};
     const effectiveFocus = processNames.includes(focusProcess) ? focusProcess : (processNames[0] ?? packageName);
 
     const handleStart = async () => {
         if (!selectedDevice?.id) {
-            message.error('请连接设备');
+            message.error(t("请连接设备"));
             return;
         }
         if (!packageName.trim()) {
-            message.error('请输入应用包名');
+            message.error(t("请输入应用包名"));
             return;
         }
         try {
             await start(selectedDevice.id);
         } catch (e: any) {
-            message.error(e?.toString() || '启动监控失败');
+            message.error(e?.toString() || t("启动监控失败"));
         }
     };
 
@@ -209,10 +221,10 @@ const PerfMonitor: React.FC = () => {
         const result = await SaveFileAsCsv(generatePerfCSV(packageName, samples, memory, events), `perf_${packageName}`);
         if (result.canceled) return;
         if (result.error) {
-            message.error('导出失败：' + result.error);
+            message.error(t("导出失败：") + result.error);
             return;
         }
-        message.success('已导出');
+        message.success(t("已导出"));
     };
 
     // 概览：只统计显示中的进程
@@ -228,48 +240,47 @@ const PerfMonitor: React.FC = () => {
 
     return (
         <ConfigProvider theme={PAGE_THEME}>
-            <div className="h-full flex-1 overflow-y-auto bg-canvas px-8 py-7 text-left text-ink">
+            <div className="@container h-full min-w-0 flex-1 overflow-y-auto bg-canvas px-8 py-7 text-left text-ink">
                 <div className="mx-auto flex max-w-7xl flex-col gap-5">
                     <PageHeader
                         eyebrow="Performance · /proc + dumpsys"
-                        title="性能监控"
-                        description="实时采集包名下所有进程的 CPU、内存与进程事件，Release 包可用，无需 root"
+                        title={t("性能监控")}
+                        description={t("实时采集包名下所有进程的 CPU、内存与进程事件，Release 包可用，无需 root")}
                         actions={<>
                             {!running ? (
-                                <Button type="primary" icon={<PlayCircleOutlined/>} onClick={handleStart}>开始</Button>
+                                <Button type="primary" icon={<PlayCircleOutlined/>} onClick={handleStart}>{t("开始")}</Button>
                             ) : (
-                                <Button danger icon={<PauseCircleOutlined/>} onClick={() => stop()} loading={starting}>停止</Button>
+                                <Button danger icon={<PauseCircleOutlined/>} onClick={() => stop()} loading={starting}>{t("停止")}</Button>
                             )}
                             <Button icon={<DeleteOutlined/>} onClick={() => {
                                 clear();
                                 setDetail(null);
-                            }} disabled={!hasData && events.length === 0}>清除</Button>
-                            <Button icon={<ExportOutlined/>} onClick={handleExport} disabled={!hasData}>导出 CSV</Button>
+                            }} disabled={!hasData && events.length === 0}>{t("清除")}</Button>
+                            <Button icon={<ExportOutlined/>} onClick={handleExport} disabled={!hasData}>{t("导出 CSV")}</Button>
                         </>}
                     />
 
                     {/* 设置 */}
                     <div className={`${CARD} p-5`}>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr_1fr]">
-                            <div>
-                                <label className="mb-1.5 block text-[13px] font-medium text-body">包名</label>
+                        <div className="grid grid-cols-2 gap-4 @min-[900px]:grid-cols-[2fr_1fr_1fr]">
+                            <div className="col-span-2 min-w-0 @min-[900px]:col-span-1">
+                                <label className="mb-1.5 block text-[13px] font-medium text-body">{t("包名")}</label>
                                 <PackagePicker value={packageName} onChange={setPackageName} disabled={running}/>
-                                <p className="mt-1.5 text-[12px] text-faint">监控包名下的所有进程，包括 :push 等子进程</p>
+                                <p className="mt-1.5 text-[12px] text-faint">{t("监控包名下的所有进程，包括 :push 等子进程")}</p>
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-[13px] font-medium text-body">CPU 采样间隔</label>
+                                <label className="mb-1.5 block text-[13px] font-medium text-body">{t("CPU 采样间隔")}</label>
                                 <Select value={intervalMs} onChange={setIntervalMs} className="w-full" disabled={running}
-                                        options={[{value: 1000, label: '1 秒'}, {value: 2000, label: '2 秒'}, {value: 5000, label: '5 秒'}]}/>
-                                <p className="mt-1.5 text-[12px] text-faint">CPU 占用、单核负载、频率、匿名内存 / Swap</p>
+                                        options={[{value: 1000, label: t("1 秒")}, {value: 2000, label: t("2 秒")}, {value: 5000, label: t("5 秒")}]}/>
+                                <p className="mt-1.5 text-[12px] text-faint">{t("CPU 占用、单核负载、频率、匿名内存 / Swap")}</p>
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-[13px] font-medium text-body">内存采样间隔</label>
+                                <label className="mb-1.5 block text-[13px] font-medium text-body">{t("内存采样间隔")}</label>
                                 <Select value={memIntervalMs} onChange={setMemIntervalMs} className="w-full" disabled={running}
-                                        options={[{value: 5000, label: '5 秒'}, {value: 10000, label: '10 秒'}, {value: 30000, label: '30 秒'}]}/>
+                                        options={[{value: 5000, label: t("5 秒")}, {value: 10000, label: t("10 秒")}, {value: 30000, label: t("30 秒")}]}/>
                                 <p className="mt-1.5 text-[12px] text-faint">
-                                    <Tooltip title="dumpsys meminfo 每个进程约 0.7~1 秒，进程较多时实际间隔会变长">
-                                        PSS 分类、Objects 计数、CPU 温度
-                                    </Tooltip>
+                                    <Tooltip title={t("dumpsys meminfo 每个进程约 0.7~1 秒，进程较多时实际间隔会变长")}>
+                                        {t("PSS 分类、Objects 计数、CPU 温度")}</Tooltip>
                                 </p>
                             </div>
                         </div>
@@ -278,38 +289,38 @@ const PerfMonitor: React.FC = () => {
                     {error && <Alert type="error" showIcon message={error} closable/>}
 
                     {/* 概览 */}
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
                         <StatCard
-                            label="进程 CPU"
+                            label={t("进程 CPU")}
                             accent="#0070f3"
                             value={formatPercent(procCpu)}
-                            sub={procCpu != null ? `单核口径 · 约 ${(procCpu / 100).toFixed(2)} 个核` : '单核口径'}
+                            sub={procCpu != null ? t("单核口径 · 约 {0} 个核", [(procCpu / 100).toFixed(2)]) : t("单核口径")}
                         />
                         <StatCard
-                            label="整机 CPU"
+                            label={t("整机 CPU")}
                             accent="var(--color-faint)"
                             value={formatPercent(latest?.deviceCpu)}
-                            sub={latest ? `整机口径 · ${latest.cpuCount} 核` : '整机口径'}
+                            sub={latest ? t("整机口径 · {0} 核", [latest.cpuCount]) : t("整机口径")}
                         />
                         <StatCard
-                            label="内存 PSS"
+                            label={t("内存 PSS")}
                             accent="var(--color-ink)"
                             value={formatMemory(totalPss)}
-                            sub={totalPss != null ? `另有 Swap PSS ${formatMemory(swapPss)}` : '每次内存采样更新'}
+                            sub={totalPss != null ? t("另有 Swap PSS {0}", [formatMemory(swapPss)]) : t("每次内存采样更新")}
                         />
                         <StatCard
-                            label="CPU 温度"
+                            label={t("CPU 温度")}
                             accent={TEMP_COLOR}
                             value={thermal?.cpuTemp ? `${thermal.cpuTemp.toFixed(1)} °C` : '--'}
-                            sub={thermal?.throttleTemp ? `降频阈值 ${thermal.throttleTemp} °C` : '来自 thermalservice'}
+                            sub={thermal?.throttleTemp ? t("降频阈值 {0} °C", [thermal.throttleTemp]) : t("来自 thermalservice")}
                         />
                         <StatCard
-                            label="进程事件"
+                            label={t("进程事件")}
                             accent={abnormalEvents.length > 0 ? '#e5484d' : '#46a758'}
                             value={abnormalEvents.length}
                             sub={lastEvent
-                                ? `${formatTime(lastEvent.timestamp)} ${shortProcessName(lastEvent.process, packageName)} ${EVENT_META[lastEvent.kind]?.label}`
-                                : '退出 / 重启 / ANR 次数'}
+                                ? `${formatTime(lastEvent.timestamp)} ${shortProcessName(lastEvent.process, packageName)} ${EVENT_META()[lastEvent.kind]?.label}`
+                                : t("退出 / 重启 / ANR 次数")}
                         />
                     </div>
 
@@ -318,7 +329,7 @@ const PerfMonitor: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-2">
                             {processNames.length === 0 && (
                                 <span className="text-[13px] text-faint">
-                                    {running ? '等待进程出现…' : '开始后会列出包名下的所有进程，点击可显示 / 隐藏'}
+                                    {running ? t("等待进程出现…") : t("开始后会列出包名下的所有进程，点击可显示 / 隐藏")}
                                 </span>
                             )}
                             {processNames.map(name => {
@@ -342,7 +353,7 @@ const PerfMonitor: React.FC = () => {
                                                 {proc.pid} · {formatPercent(proc.cpu)}{mem ? ` · ${formatMemory(mem.totalPss)}` : ''}
                                             </span>
                                         ) : (
-                                            <span className="text-[#e5484d]">未运行</span>
+                                            <span className="text-[#e5484d]">{t("未运行")}</span>
                                         )}
                                     </button>
                                 );
@@ -352,10 +363,10 @@ const PerfMonitor: React.FC = () => {
                             {running && hasData && Number.isFinite(firstTs) && (
                                 <span className="flex items-center gap-1.5 rounded-full border border-hairline bg-elevated px-2.5 py-0.5 text-[12px] text-body">
                                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-link"/>
-                                    已采集 {formatDuration(lastTs - firstTs)}
+                                    {t("已采集 ")}{formatDuration(lastTs - firstTs)}
                                 </span>
                             )}
-                            <Segmented size="small" value={windowMs} onChange={(v) => setWindowMs(v as number)} options={WINDOW_OPTIONS}/>
+                            <Segmented size="small" value={windowMs} onChange={(v) => setWindowMs(v as number)} options={WINDOW_OPTIONS()}/>
                         </div>
                     </div>
 
@@ -364,7 +375,7 @@ const PerfMonitor: React.FC = () => {
                             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-hairline text-mute">
                                 <PlayCircleOutlined/>
                             </div>
-                            <p className="text-[14px] text-body">{running ? '正在采集…' : '点击「开始」监控应用的 CPU、内存与进程事件'}</p>
+                            <p className="text-[14px] text-body">{running ? t("正在采集…") : t("点击「开始」监控应用的 CPU、内存与进程事件")}</p>
                             <code className="rounded-md border border-hairline bg-canvas px-3 py-1.5 font-mono text-[12px] text-body">
                                 <span className="text-faint">$ </span>
                                 cat /proc/stat /proc/&lt;pid&gt;/stat · dumpsys meminfo &lt;pid&gt; · logcat -b events
@@ -374,7 +385,7 @@ const PerfMonitor: React.FC = () => {
                         <>
                             {/* 内存 */}
                             <div className={`${CARD} relative`}>
-                                <CardHeader eyebrow="Memory" title="内存">
+                                <CardHeader eyebrow="Memory" title={t("内存")}>
                                     {memoryMode === 'breakdown' && (
                                         <Select
                                             size="small"
@@ -389,9 +400,9 @@ const PerfMonitor: React.FC = () => {
                                         value={memoryMode}
                                         onChange={(v) => setMemoryMode(v as MemoryMode)}
                                         options={[
-                                            {value: 'pss', label: 'PSS · 按进程'},
-                                            {value: 'breakdown', label: '分类明细'},
-                                            {value: 'rss', label: '匿名内存 / Swap'},
+                                            {value: 'pss', label: t("PSS · 按进程")},
+                                            {value: 'breakdown', label: t("分类明细")},
+                                            {value: 'rss', label: t("匿名内存 / Swap")},
                                         ]}
                                     />
                                 </CardHeader>
@@ -420,8 +431,7 @@ const PerfMonitor: React.FC = () => {
                                 <div className="h-72 px-3 pb-3 pt-3">
                                     {visibleMemory.length === 0 && memoryMode !== 'rss' ? (
                                         <div className="flex h-full items-center justify-center text-[13px] text-faint">
-                                            等待第一次 dumpsys meminfo…
-                                        </div>
+                                            {t("等待第一次 dumpsys meminfo…")}</div>
                                     ) : (
                                         <MemoryChart
                                             ctx={ctx}
@@ -438,10 +448,9 @@ const PerfMonitor: React.FC = () => {
 
                             {/* CPU */}
                             <div className={CARD}>
-                                <CardHeader eyebrow="CPU" title="CPU 占用">
+                                <CardHeader eyebrow="CPU" title={t("CPU 占用")}>
                                     <span className="text-[12px] text-mute">
-                                        左轴：进程（单核口径，最高 {(latest?.cpuCount ?? 8) * 100}%）· 右轴：整机（0-100%）
-                                    </span>
+                                        {t("左轴：进程（单核口径，最高 ")}{(latest?.cpuCount ?? 8) * 100}{t("%）· 右轴：整机（0-100%）")}</span>
                                 </CardHeader>
                                 <div className="h-64 px-3 pb-3 pt-3">
                                     <CpuChart ctx={ctx} samples={visibleSamples}/>
@@ -456,7 +465,7 @@ const PerfMonitor: React.FC = () => {
                                 >
                                     <div>
                                         <Eyebrow>Per core</Eyebrow>
-                                        <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-ink">单核负载</h2>
+                                        <h2 className="mt-0.5 text-[15px] font-semibold tracking-[-0.2px] text-ink">{t("单核负载")}</h2>
                                     </div>
                                     <span className="text-[12px] text-mute">
                                         {coresExpanded ? <DownOutlined/> : <RightOutlined/>}
@@ -470,10 +479,10 @@ const PerfMonitor: React.FC = () => {
                             </div>
                             {/* 频率与温度 */}
                             <div className={CARD}>
-                                <CardHeader eyebrow="Frequency · Thermal" title="频率与温度">
+                                <CardHeader eyebrow="Frequency · Thermal" title={t("频率与温度")}>
                                     {latest?.clusters.map(c => (
-                                        <span key={c.label} className={`${MONO} rounded-full border border-hairline px-2.5 py-0.5 text-[12px] text-body`}>
-                                            {c.label} {formatMHz(c.avgFreq)} / {formatMHz(c.maxFreq)}
+                                        <span key={clusterLabel(c.label)} className={`${MONO} rounded-full border border-hairline px-2.5 py-0.5 text-[12px] text-body`}>
+                                            {clusterLabel(c.label)} {formatMHz(c.avgFreq)} / {formatMHz(c.maxFreq)}
                                         </span>
                                     ))}
                                 </CardHeader>
@@ -487,24 +496,23 @@ const PerfMonitor: React.FC = () => {
 
                     {/* 进程事件 */}
                     <div className={CARD}>
-                        <CardHeader eyebrow="Process events" title="进程事件">
-                            <span className="text-[12px] text-mute">来源：轮询 pid + 启动时间、logcat events、exit-info</span>
+                        <CardHeader eyebrow="Process events" title={t("进程事件")}>
+                            <span className="text-[12px] text-mute">{t("来源：轮询 pid + 启动时间、logcat events、exit-info")}</span>
                         </CardHeader>
                         {events.length === 0 ? (
                             <div className="px-5 py-6 text-center text-[13px] text-faint">
-                                暂无事件。进程启动、退出、重启和 ANR 会记录在这里，并在图表上标出竖线
-                            </div>
+                                {t("暂无事件。进程启动、退出、重启和 ANR 会记录在这里，并在图表上标出竖线")}</div>
                         ) : (
                             <div className="max-h-72 overflow-y-auto">
                                 <table className="w-full text-[13px]">
                                     <thead className="sticky top-0 bg-elevated text-[12px] text-mute">
                                     <tr className="border-b border-hairline-soft">
-                                        <th className="px-5 py-2 text-left font-normal">时间</th>
-                                        <th className="px-2 py-2 text-left font-normal">类型</th>
-                                        <th className="px-2 py-2 text-left font-normal">进程</th>
+                                        <th className="px-5 py-2 text-left font-normal">{t("时间")}</th>
+                                        <th className="px-2 py-2 text-left font-normal">{t("类型")}</th>
+                                        <th className="px-2 py-2 text-left font-normal">{t("进程")}</th>
                                         <th className="px-2 py-2 text-left font-normal">PID</th>
-                                        <th className="px-2 py-2 text-left font-normal">原因</th>
-                                        <th className="px-5 py-2 text-left font-normal">详情</th>
+                                        <th className="px-2 py-2 text-left font-normal">{t("原因")}</th>
+                                        <th className="px-5 py-2 text-left font-normal">{t("详情")}</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -516,8 +524,8 @@ const PerfMonitor: React.FC = () => {
                                             <td className={`${MONO} whitespace-nowrap px-2 py-2 text-body`}>
                                                 {e.oldPid ? `${e.oldPid} → ${e.pid}` : e.pid}
                                             </td>
-                                            <td className="whitespace-nowrap px-2 py-2">{e.reason}</td>
-                                            <td className="break-all px-5 py-2 font-mono text-[12px] text-mute">{e.detail || '-'}</td>
+                                            <td className="whitespace-nowrap px-2 py-2">{t(e.reason)}</td>
+                                            <td className="break-all px-5 py-2 font-mono text-[12px] text-mute">{formatEventDetail(e.detail) || '-'}</td>
                                         </tr>
                                     ))}
                                     </tbody>
@@ -527,10 +535,10 @@ const PerfMonitor: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-mute">
-                        <span>· 进程 CPU 为单核口径：一个核跑满 = 100%</span>
-                        <span>· 匿名内存被换出到 zram 时 RSS 会下降，但并未释放，请结合 Swap 一起看</span>
-                        <span>· 进程重启后曲线断开，不代表内存被释放</span>
-                        <span>· 数据最多保留 1 小时，切换页面不影响采集</span>
+                        <span>{t("· 进程 CPU 为单核口径：一个核跑满 = 100%")}</span>
+                        <span>{t("· 匿名内存被换出到 zram 时 RSS 会下降，但并未释放，请结合 Swap 一起看")}</span>
+                        <span>{t("· 进程重启后曲线断开，不代表内存被释放")}</span>
+                        <span>{t("· 数据最多保留 1 小时，切换页面不影响采集")}</span>
                     </div>
                 </div>
             </div>

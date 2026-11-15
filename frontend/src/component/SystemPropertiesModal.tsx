@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Input, Typography, List, Button, Spin, Empty, Pagination } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
@@ -24,8 +25,9 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
                                                                          properties = [],
                                                                          loading = false,
                                                                          onRefresh,
-                                                                         title = '系统属性列表'
+                                                                         title = t("系统属性列表")
                                                                      }) => {
+    const locale = useLocale();
     const [filterText, setFilterText] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 100;
@@ -44,12 +46,12 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
             prop => prop.key.toLowerCase().includes(lowerFilter) ||
                 prop.value.toLowerCase().includes(lowerFilter)
         );
-    }, [properties, filterText]);
+    }, [properties, filterText, locale]);
 
     const currentData = useMemo(() => {
         const startIndex = (currentPage - 1) * pageSize;
         return filteredProps.slice(startIndex, startIndex + pageSize);
-    }, [filteredProps, currentPage]);
+    }, [filteredProps, currentPage, locale]);
 
     const handleRefresh = () => {
         setFilterText('');
@@ -74,8 +76,7 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
                         loading={loading}
                         className="mr-8"
                     >
-                        刷新
-                    </Button>
+                        {t("刷新")}</Button>
                 </div>
             }
             open={visible}
@@ -95,7 +96,7 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
         >
             <div className="flex flex-col">
                 <Input
-                    placeholder="请输入需要筛选的属性"
+                    placeholder={t("请输入需要筛选的属性")}
                     prefix={<SearchOutlined />}
                     value={filterText}
                     onChange={handleFilterChange}
@@ -108,7 +109,7 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
                     <div className="overflow-y-auto mb-4" style={{ maxHeight: 'calc(80vh - 260px)' }}>
                         {filteredProps.length === 0 ? (
                             <Empty
-                                description={filterText ? "没有找到匹配的属性" : "暂无数据"}
+                                description={filterText ? t("没有找到匹配的属性") : t("暂无数据")}
                                 className="py-10"
                             />
                         ) : (
@@ -138,7 +139,7 @@ const SystemPropertiesModal: React.FC<SystemPropertiesModalProps> = ({
                                 pageSize={pageSize}
                                 onChange={setCurrentPage}
                                 showSizeChanger={false}
-                                showTotal={(total) => `共 ${total} 条`}
+                                showTotal={(total) => t("共 {0} 条", [total])}
                             />
                         </div>
                     )}

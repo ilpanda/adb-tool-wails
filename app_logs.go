@@ -2,6 +2,7 @@ package main
 
 import (
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"fmt"
 	"os/exec"
@@ -82,18 +83,18 @@ func (a *App) ReadLogChunk(fileName string, cursor int64, maxBytes int64) (applo
 
 func (a *App) ExportLogs() types.ExecResult {
 	if a.logManager == nil {
-		return types.NewExecResultErrorString("export_logs", "日志管理器未初始化")
+		return types.NewExecResultErrorString("export_logs", i18n.T("日志管理器未初始化"))
 	}
 
 	savePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		DefaultFilename: fmt.Sprintf("adb-tool-wails-logs-%s.zip", time.Now().Format("20060102-150405")),
-		Title:           "导出日志",
+		Title:           i18n.T("导出日志"),
 	})
 	if err != nil {
-		return types.NewExecResultErrorString("export_logs", fmt.Sprintf("选择导出路径失败: %v", err))
+		return types.NewExecResultErrorString("export_logs", fmt.Sprintf(i18n.T("选择导出路径失败: %v"), err))
 	}
 	if savePath == "" {
-		return types.NewExecResultErrorString("export_logs", "已取消")
+		return types.NewExecResultErrorString("export_logs", i18n.T("已取消"))
 	}
 
 	if err := a.logManager.ExportZip(savePath); err != nil {
@@ -107,7 +108,7 @@ func (a *App) ExportLogs() types.ExecResult {
 
 func (a *App) ClearLogFile(fileName string) types.ExecResult {
 	if a.logManager == nil {
-		return types.NewExecResultErrorString("clear_log_file", "日志管理器未初始化")
+		return types.NewExecResultErrorString("clear_log_file", i18n.T("日志管理器未初始化"))
 	}
 
 	if err := a.logManager.ClearFile(fileName); err != nil {
@@ -120,7 +121,7 @@ func (a *App) ClearLogFile(fileName string) types.ExecResult {
 
 func (a *App) OpenLogDirectory() types.ExecResult {
 	if a.logManager == nil {
-		return types.NewExecResultErrorString("open_log_directory", "日志目录不可用")
+		return types.NewExecResultErrorString("open_log_directory", i18n.T("日志目录不可用"))
 	}
 
 	logDir := a.logManager.Directory()

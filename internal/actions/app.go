@@ -3,6 +3,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
 	"fmt"
@@ -175,7 +176,7 @@ func GrantAllPermission(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if len(grantablePermissions) == 0 {
-		return types.NewExecResultSuccess(dumpCmd, "未找到需要授权的危险权限")
+		return types.NewExecResultSuccess(dumpCmd, i18n.T("未找到需要授权的危险权限"))
 	}
 
 	var grantCmdsForExec []string
@@ -200,9 +201,9 @@ func GrantAllPermission(param adb.ExecuteParams) types.ExecResult {
 		}
 	}
 
-	resMsg := fmt.Sprintf("授权完成: 成功 %d/%d 个危险权限", successCount, len(grantablePermissions))
+	resMsg := fmt.Sprintf(i18n.T("授权完成: 成功 %d/%d 个危险权限"), successCount, len(grantablePermissions))
 	if result.Res != "" && strings.Contains(result.Res, "Exception") {
-		resMsg += "\n部分权限授权失败（可能需要特殊处理）"
+		resMsg += i18n.T("\n部分权限授权失败（可能需要特殊处理）")
 	}
 
 	displayCmd := strings.Join(grantCmdsForDisplay, "\n")
@@ -309,9 +310,9 @@ func StartActivity(param adb.ExecuteParams) types.ExecResult {
 	case result.Error != "":
 		return result
 	case strings.Contains(result.Res, "No activities found"):
-		result.Error = "该应用没有可启动的页面（没有声明 LAUNCHER Activity）"
+		result.Error = i18n.T("该应用没有可启动的页面（没有声明 LAUNCHER Activity）")
 	case strings.Contains(result.Res, "Events injected"):
-		result.Res = "已启动"
+		result.Res = i18n.T("已启动")
 	}
 	return result
 }
@@ -329,7 +330,7 @@ func ExportAppPackagePath(param adb.ExecuteParams) types.ExecResult {
 	}
 	param.Stage(adb.StageDialog)
 	dir, err := runtime.OpenDirectoryDialog(param.Ctxt, runtime.OpenDialogOptions{
-		Title: "选择导出目录",
+		Title: i18n.T("选择导出目录"),
 	})
 	param.Stage(adb.StageRunning)
 
@@ -338,7 +339,7 @@ func ExportAppPackagePath(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if dir == "" {
-		return types.NewExecResultCanceled(pathCmd, "用户取消选择导出目录")
+		return types.NewExecResultCanceled(pathCmd, i18n.T("用户取消选择导出目录"))
 	}
 	// 分包应用会返回多行 package:，基础包在第一行
 	path := strings.TrimPrefix(strings.TrimSpace(strings.Split(strings.TrimSpace(pathResult.Res), "\n")[0]), "package:")
@@ -349,7 +350,7 @@ func ExportAppPackagePath(param adb.ExecuteParams) types.ExecResult {
 	result := runAPKCommand(param, "pull", path, targetApkName)
 	if result.Error == "" {
 		result.LocalPath = targetApkName
-		result.Res = fmt.Sprintf("APK 已导出到: %s", targetApkName)
+		result.Res = fmt.Sprintf(i18n.T("APK 已导出到: %s"), targetApkName)
 	}
 	return result
 }
@@ -401,7 +402,7 @@ func PackagePid(param adb.ExecuteParams) types.ExecResult {
 	cmd := adb.ShellCommand(param.AdbPath, param.DeviceId, fmt.Sprintf("pidof %s", param.PackageName))
 	result := execCmd(cmd)
 	if result.Error == "" && result.Res == "" {
-		result.Error = "pid is null，请检测应用是否运行。"
+		result.Error = i18n.T("pid is null，请检测应用是否运行。")
 	}
 	result.Res = strings.TrimSpace(result.Res)
 	return result

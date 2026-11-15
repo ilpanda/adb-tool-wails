@@ -1,3 +1,4 @@
+import {t, useLocale, getLocale} from '../i18n';
 import {startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from 'react';
 import type {ReactNode} from 'react';
 import {Button, Dropdown, Empty, Input, Modal, Segmented, Spin, Tooltip, message} from 'antd';
@@ -130,7 +131,7 @@ function parseLsOutput(output: string, parentPath: string, dirLinks: string[]): 
     entries.sort((a, b) => {
         if (a.isDirectory && !b.isDirectory) return -1;
         if (!a.isDirectory && b.isDirectory) return 1;
-        return a.name.localeCompare(b.name, 'zh-CN');
+        return a.name.localeCompare(b.name, getLocale());
     });
 
     return entries;
@@ -188,12 +189,14 @@ function getEntryIcon(entry: FileEntry): {icon: string; tone: string} {
 }
 
 function EntryIcon({entry, className = ''}: { entry: FileEntry; className?: string }) {
+    useLocale();
     const {icon, tone} = getEntryIcon(entry);
     const family = icon.includes('fa-brands') ? '' : 'fa-solid';
     return <i className={`${family} ${icon} ${tone} ${className}`}/>;
 }
 
 function FileManager() {
+    const locale = useLocale();
     const {selectedDevice} = useDeviceStore();
     const [entries, setEntries] = useState<FileEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -221,7 +224,7 @@ function FileManager() {
         const normalized = normalizePath(path);
         const result = await ListDirectory(selectedDevice.id, normalized);
         if (result.error) {
-            message.error(`加载失败: ${result.error}`);
+            message.error(t("加载失败: {0}", [result.error]));
             return [];
         }
         return parseLsOutput(result.output, normalized, result.dirLinks || []);
@@ -254,20 +257,20 @@ function FileManager() {
 
         DeleteRemoteFile(selectedDevice.id, entry.fullPath).then((result: any) => {
             if (result.error) {
-                message.error(`删除失败: ${result.error}`);
+                message.error(t("删除失败: {0}", [result.error]));
                 return;
             }
-            message.success(`已删除: ${entry.name}`);
+            message.success(t("已删除: {0}", [entry.name]));
             refreshCurrentPath();
-        }).catch((e: any) => message.error(`删除失败: ${e.message || e}`));
+        }).catch((e: any) => message.error(t("删除失败: {0}", [e.message || e])));
     }, [refreshCurrentPath, selectedDevice]);
 
     const confirmDelete = useCallback((entry: FileEntry) => {
         Modal.confirm({
-            title: `删除${entry.isDirectory ? '文件夹' : '文件'}「${entry.name}」？`,
-            content: entry.isDirectory ? '文件夹内的所有内容都会被删除，且无法恢复。' : '删除后无法恢复。',
-            okText: '删除',
-            cancelText: '取消',
+            title: t("删除{0}「{1}」？", [entry.isDirectory ? t("文件夹") : t("文件"), entry.name]),
+            content: entry.isDirectory ? t("文件夹内的所有内容都会被删除，且无法恢复。") : t("删除后无法恢复。"),
+            okText: t("删除"),
+            cancelText: t("取消"),
             okButtonProps: {danger: true},
             onOk: async () => handleDelete(entry),
         });
@@ -278,11 +281,11 @@ function FileManager() {
 
         DownloadFile(selectedDevice.id, entry.fullPath).then((result: any) => {
             if (result.error) {
-                if (result.error !== '已取消') message.error(`下载失败: ${result.error}`);
+                if (!result.canceled) message.error(t("下载失败: {0}", [result.error]));
                 return;
             }
-            message.success(`下载完成: ${entry.name}`);
-        }).catch((e: any) => message.error(`下载失败: ${e.message || e}`));
+            message.success(t("下载完成: {0}", [entry.name]));
+        }).catch((e: any) => message.error(t("下载失败: {0}", [e.message || e])));
     }, [selectedDevice]);
 
     const handleOpenDirectory = useCallback(async (entry: FileEntry) => {
@@ -335,7 +338,7 @@ function FileManager() {
 
     const handleUpload = async () => {
         if (!selectedDevice) {
-            message.warning('请先连接设备');
+            message.warning(t("请先连接设备"));
             return;
         }
 
@@ -343,14 +346,14 @@ function FileManager() {
         try {
             const result = await UploadFile(selectedDevice.id, currentPath);
             if (result.error) {
-                if (result.error !== '已取消') message.error(`上传失败: ${result.error}`);
+                if (!result.canceled) message.error(t("上传失败: {0}", [result.error]));
                 return;
             }
 
-            message.success('上传成功');
+            message.success(t("上传成功"));
             await refreshCurrentPath();
         } catch (e: any) {
-            message.error(`上传失败: ${e.message || e}`);
+            message.error(t("上传失败: {0}", [e.message || e]));
         } finally {
             setUploading(false);
         }
@@ -360,17 +363,17 @@ function FileManager() {
     useEffect(() => {
         const setTarget = useDropTargetStore.getState().setTarget;
         setTarget({
-            hint: `松开上传到 ${currentPath}`,
+            hint: t("松开上传到 {0}", [currentPath]),
             upload: async (paths) => {
                 if (!selectedDevice) return;
-                const hide = message.loading(`正在上传 ${paths.length} 个文件到 ${currentPath}…`, 0);
+                const hide = message.loading(t("正在上传 {0} 个文件到 {1}…", [paths.length, currentPath]), 0);
                 try {
                     const result = await UploadLocalFiles(selectedDevice.id, currentPath, paths);
                     if (result.error) {
-                        message.error(`上传失败: ${result.error}`);
+                        message.error(t("上传失败: {0}", [result.error]));
                         return;
                     }
-                    message.success(`已上传 ${paths.length} 个文件`);
+                    message.success(t("已上传 {0} 个文件", [paths.length]));
                     await refreshCurrentPath();
                 } finally {
                     hide();
@@ -378,25 +381,25 @@ function FileManager() {
             },
         });
         return () => setTarget(null);
-    }, [currentPath, selectedDevice, refreshCurrentPath]);
+    }, [locale, currentPath, selectedDevice, refreshCurrentPath]);
 
     const filteredEntries = useMemo(() => {
         if (!deferredFilterText.trim()) return entries;
         const lower = deferredFilterText.toLowerCase();
         return entries.filter(entry => entry.name.toLowerCase().includes(lower));
-    }, [deferredFilterText, entries]);
+    }, [deferredFilterText, entries, locale]);
 
     const imageEntries = useMemo(
         () => filteredEntries.filter(entry => !entry.isDirectory && isImageEntry(entry)),
-        [filteredEntries],
+        [filteredEntries, locale],
     );
 
     const stats = useMemo(() => {
         const dirs = filteredEntries.filter(entry => entry.isDirectory).length;
         return {dirs, files: filteredEntries.length - dirs};
-    }, [filteredEntries]);
+    }, [filteredEntries, locale]);
 
-    const breadcrumbItems = useMemo(() => buildBreadcrumbItems(currentPath), [currentPath]);
+    const breadcrumbItems = useMemo(() => buildBreadcrumbItems(currentPath), [currentPath, locale]);
 
     // 路径较深时让面包屑停在末尾，保证当前目录可见
     useEffect(() => {
@@ -410,7 +413,7 @@ function FileManager() {
             label: (
                 <div className="flex min-w-[240px] items-center justify-between gap-3">
                     <span className="truncate font-mono text-[12px] text-body">{path}</span>
-                    <Tooltip title="取消收藏">
+                    <Tooltip title={t("取消收藏")}>
                         <CloseOutlined
                             className="shrink-0 text-[11px] text-faint hover:text-error"
                             onClick={event => {
@@ -423,7 +426,7 @@ function FileManager() {
             ),
             onClick: () => openPath(path),
         }))
-        : [{key: 'empty', label: <span className="text-[12px] text-faint">暂无收藏，可在文件夹右键菜单中收藏</span>, disabled: true}];
+        : [{key: 'empty', label: <span className="text-[12px] text-faint">{t("暂无收藏，可在文件夹右键菜单中收藏")}</span>, disabled: true}];
 
     const buildEntryContextMenu = useCallback((entry: FileEntry): NonNullable<MenuProps['items']> => {
         const isFav = entry.isDirectory && bookmarks.includes(entry.fullPath);
@@ -432,43 +435,43 @@ function FileManager() {
         if (entry.isDirectory) {
             items.push({
                 key: 'open',
-                label: '打开',
+                label: t("打开"),
                 icon: <FolderOpenOutlined/>,
                 onClick: () => handleOpenDirectory(entry),
             });
             items.push({
                 key: 'bookmark',
-                label: isFav ? '取消收藏' : '收藏路径',
+                label: isFav ? t("取消收藏") : t("收藏路径"),
                 icon: isFav ? <StarFilled/> : <StarOutlined/>,
                 onClick: () => toggleBookmark(entry.fullPath),
             });
         } else {
             items.push({
                 key: 'view',
-                label: '查看内容',
+                label: t("查看内容"),
                 icon: <EyeOutlined/>,
                 onClick: () => handleView(entry),
             });
         }
         items.push({
             key: 'download',
-            label: '下载到电脑',
+            label: t("下载到电脑"),
             icon: <DownloadOutlined/>,
             onClick: () => handleDownload(entry),
         });
         items.push({
             key: 'copy-path',
-            label: '复制路径',
+            label: t("复制路径"),
             icon: <CopyOutlined/>,
             onClick: () => {
                 navigator.clipboard.writeText(entry.fullPath);
-                message.success('已复制路径');
+                message.success(t("已复制路径"));
             },
         });
         items.push({type: 'divider'});
         items.push({
             key: 'delete',
-            label: '删除',
+            label: t("删除"),
             danger: true,
             icon: <DeleteOutlined/>,
             onClick: () => confirmDelete(entry),
@@ -485,7 +488,7 @@ function FileManager() {
         if (!selectedDevice) {
             return (
                 <div className="flex h-full items-center justify-center">
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请先连接设备"/>
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("请先连接设备")}/>
                 </div>
             );
         }
@@ -499,7 +502,7 @@ function FileManager() {
         if (filteredEntries.length === 0 && !showParentShortcut) {
             return (
                 <div className="flex h-full items-center justify-center">
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filterText ? '没有匹配的文件' : '目录为空'}/>
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filterText ? t("没有匹配的文件") : t("目录为空")}/>
                 </div>
             );
         }
@@ -516,7 +519,7 @@ function FileManager() {
                             <span className="flex h-9 items-center text-[26px] text-faint">
                                 {pathPending === parentPath ? <LoadingOutlined className="text-[18px]"/> : <i className="fa-solid fa-turn-up"/>}
                             </span>
-                            <span className="text-[12px] text-mute">上一级</span>
+                            <span className="text-[12px] text-mute">{t("上一级")}</span>
                         </button>
                     )}
 
@@ -560,7 +563,7 @@ function FileManager() {
         return (
             <div className="text-[13px]">
                 <div className={`sticky top-0 z-[1] grid ${columns} gap-3 border-b border-hairline-soft bg-elevated px-4 py-2`}>
-                    {['名称', '修改时间', '大小', '权限', ''].map((label, index) => (
+                    {[t("名称"), t("修改时间"), t("大小"), t("权限"), ''].map((label, index) => (
                         <span key={index} className={`font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-mute ${index === 2 ? 'text-right' : ''}`}>
                             {label}
                         </span>
@@ -577,8 +580,7 @@ function FileManager() {
                             <span className="flex w-5 justify-center">
                                 {pathPending === parentPath ? <LoadingOutlined/> : <i className="fa-solid fa-turn-up"/>}
                             </span>
-                            上一级
-                        </span>
+                            {t("上一级")}</span>
                     </button>
                 )}
 
@@ -613,10 +615,10 @@ function FileManager() {
                                 <span className="truncate font-mono text-[12px] text-faint">{entry.permissions}</span>
                                 <span className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                                     {!entry.isDirectory && (
-                                        <RowAction title="查看内容" onClick={() => handleView(entry)} icon={<EyeOutlined/>}/>
+                                        <RowAction title={t("查看内容")} onClick={() => handleView(entry)} icon={<EyeOutlined/>}/>
                                     )}
-                                    <RowAction title="下载到电脑" onClick={() => handleDownload(entry)} icon={<DownloadOutlined/>}/>
-                                    <RowAction title="删除" danger onClick={() => confirmDelete(entry)} icon={<DeleteOutlined/>}/>
+                                    <RowAction title={t("下载到电脑")} onClick={() => handleDownload(entry)} icon={<DownloadOutlined/>}/>
+                                    <RowAction title={t("删除")} danger onClick={() => confirmDelete(entry)} icon={<DeleteOutlined/>}/>
                                 </span>
                             </div>
                         </Dropdown>
@@ -630,25 +632,24 @@ function FileManager() {
         <div className="flex h-full min-w-0 flex-1 flex-col gap-5 overflow-hidden bg-canvas px-8 py-7 text-left text-ink">
             <PageHeader
                 eyebrow="Files · adb shell"
-                title="文件管理"
-                description={selectedDevice ? `浏览 ${selectedDevice.name} 上的文件，右键条目查看更多操作` : '连接设备后浏览设备文件'}
+                title={t("文件管理")}
+                description={selectedDevice ? t("浏览 {0} 上的文件，右键条目查看更多操作", [selectedDevice.name]) : t("连接设备后浏览设备文件")}
                 actions={<>
                     <Dropdown menu={{items: bookmarkMenuItems}} trigger={['click']} placement="bottomRight">
-                        <Button icon={<StarOutlined/>}>收藏夹{bookmarks.length > 0 ? ` · ${bookmarks.length}` : ''}</Button>
+                        <Button icon={<StarOutlined/>}>{t("收藏夹")}{bookmarks.length > 0 ? ` · ${bookmarks.length}` : ''}</Button>
                     </Dropdown>
                     <Button type="primary" icon={<UploadOutlined/>} onClick={handleUpload} loading={uploading} disabled={!selectedDevice}>
-                        上传到此处
-                    </Button>
+                        {t("上传到此处")}</Button>
                 </>}
             />
 
             <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-hairline bg-elevated shadow-whisper">
                 {/* 路径与工具栏 */}
                 <div className="flex items-center gap-2 border-b border-hairline-soft px-3 py-2.5">
-                    <Tooltip title="上一级">
+                    <Tooltip title={t("上一级")}>
                         <Button type="text" icon={<ArrowUpOutlined/>} disabled={currentPath === '/' || !selectedDevice} onClick={() => openPath(parentPath)}/>
                     </Tooltip>
-                    <Tooltip title="刷新">
+                    <Tooltip title={t("刷新")}>
                         <Button type="text" icon={<ReloadOutlined spin={loading}/>} disabled={!selectedDevice} onClick={refreshCurrentPath}/>
                     </Tooltip>
 
@@ -671,7 +672,7 @@ function FileManager() {
                                     setPathInput(currentPath);
                                 }
                             }}
-                            placeholder="输入路径后回车，如 /sdcard/Download"
+                            placeholder={t("输入路径后回车，如 /sdcard/Download")}
                             className="min-w-0 flex-1 !font-mono !text-[13px]"
                         />
                     ) : (
@@ -701,7 +702,7 @@ function FileManager() {
                                 );
                             })}
                             </div>
-                            <Tooltip title="编辑路径（双击路径栏）">
+                            <Tooltip title={t("编辑路径（双击路径栏）")}>
                                 <button
                                     type="button"
                                     onClick={() => selectedDevice && setEditingPath(true)}
@@ -713,7 +714,7 @@ function FileManager() {
                         </div>
                     )}
 
-                    <Tooltip title={isCurrentFav ? '取消收藏当前路径' : '收藏当前路径'}>
+                    <Tooltip title={isCurrentFav ? t("取消收藏当前路径") : t("收藏当前路径")}>
                         <Button
                             type="text"
                             disabled={currentPath === '/' || !selectedDevice}
@@ -726,7 +727,7 @@ function FileManager() {
 
                     <Input
                         size="small"
-                        placeholder="过滤当前目录"
+                        placeholder={t("过滤当前目录")}
                         value={filterText}
                         onChange={e => setFilterText(e.target.value)}
                         allowClear
@@ -738,8 +739,8 @@ function FileManager() {
                         value={viewMode}
                         onChange={value => startTransition(() => setViewMode(value))}
                         options={[
-                            {value: 'grid', icon: <AppstoreOutlined/>, title: '图标'},
-                            {value: 'list', icon: <BarsOutlined/>, title: '列表'},
+                            {value: 'grid', icon: <AppstoreOutlined/>, title: t("图标")},
+                            {value: 'list', icon: <BarsOutlined/>, title: t("列表")},
                         ]}
                     />
                 </div>
@@ -749,7 +750,7 @@ function FileManager() {
                 </div>
 
                 <div className="flex items-center justify-between border-t border-hairline-soft px-4 py-2 font-mono text-[11px] tabular-nums text-faint">
-                    <span>{stats.dirs} 个文件夹 · {stats.files} 个文件{deferredFilterText.trim() ? ` · 已过滤（共 ${entries.length} 项）` : ''}</span>
+                    <span>{stats.dirs} {t(" 个文件夹 · ")}{stats.files} {t(" 个文件")}{deferredFilterText.trim() ? t(" · 已过滤（共 {0} 项）", [entries.length]) : ''}</span>
                     <span className="truncate pl-4">{selectedDevice?.id ?? '-'}</span>
                 </div>
             </section>
@@ -776,6 +777,7 @@ function RowAction({title, icon, onClick, danger}: {
     onClick: () => void;
     danger?: boolean;
 }) {
+    useLocale();
     return (
         <Tooltip title={title}>
             <button

@@ -3,6 +3,7 @@ package perf
 import (
 	"adb-tool-wails/internal/adb"
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/util"
 	"bytes"
 	"context"
@@ -116,10 +117,10 @@ func NewMonitor(emit Emitter) *Monitor {
 // Start 停掉已有会话后开始新的监控
 func (m *Monitor) Start(parent context.Context, adbPath string, opts Options) error {
 	if !adb.ValidPackageName(opts.PackageName) {
-		return fmt.Errorf("包名不合法: %s", opts.PackageName)
+		return fmt.Errorf(i18n.T("包名不合法: %s"), opts.PackageName)
 	}
 	if opts.DeviceId == "" {
-		return fmt.Errorf("请先连接设备")
+		return fmt.Errorf("%s", i18n.T("请先连接设备"))
 	}
 	if adbPath == "" {
 		adbPath = "adb"
@@ -263,7 +264,7 @@ func (s *perfSession) fastLoop() {
 			failures++
 			applog.Warnf(applog.CategoryADB, "perf_fast_sample_failed count=%d err=%q", failures, err.Error())
 			if failures >= perfMaxFailures {
-				s.fail("采样连续失败：" + err.Error())
+				s.fail(i18n.T("采样连续失败：") + err.Error())
 				return
 			}
 		} else {

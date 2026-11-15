@@ -1,4 +1,4 @@
-// components/ApplicationList.tsx
+import {t, useLocale, getLocale} from '../i18n';
 import {memo, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Button, Dropdown, Empty, Input, message, Pagination, Progress, Segmented, Tooltip, Typography} from 'antd';
 import type {MenuProps} from 'antd';
@@ -18,12 +18,12 @@ type FilterType = 'all' | 'user' | 'system';
 
 const formatTime = (timestamp: number) => {
     if (!timestamp) return '-';
-    return new Date(timestamp).toLocaleDateString('zh-CN');
+    return new Date(timestamp).toLocaleDateString(getLocale());
 };
 
 // 卡片操作复用快捷功能的定义：确认框、执行记录与结果提示都与快捷功能一致
-const ALL_ACTIONS = quickActions.flatMap(section => section.items);
-const quickAction = (action: ActionType) => ALL_ACTIONS.find(item => item.action === action)!;
+const ALL_ACTIONS = () => (quickActions().flatMap(section => section.items));
+const quickAction = (action: ActionType) => ALL_ACTIONS().find(item => item.action === action)!;
 
 type CardAction = 'launch' | 'perf' | 'target' | 'export' | 'uninstall';
 
@@ -32,6 +32,7 @@ const INITIAL_SKELETONS = 8;
 const TRAILING_SKELETONS = 4;
 
 function ApplicationList() {
+    const locale = useLocale();
     const {selectedDevice} = useDeviceStore();
     const {apps, isLoading, partial, progress, load} = useAppListStore();
     const targetPackage = usePackageListStore(state =>
@@ -66,12 +67,12 @@ function ApplicationList() {
         }
         if (result.status === 'loaded') {
             if (result.count > 0) {
-                message.success(`成功加载 ${result.count} 个应用`);
+                message.success(t("成功加载 {0} 个应用", [result.count]));
             } else {
-                message.info('未找到应用');
+                message.info(t("未找到应用"));
             }
         } else if (result.status === 'error') {
-            message.error(`加载失败: ${result.error}`);
+            message.error(t("加载失败: {0}", [result.error]));
         }
     };
 
@@ -85,7 +86,7 @@ function ApplicationList() {
     // 手动刷新（强制重新加载）
     const handleRefresh = () => {
         if (!selectedDevice) {
-            message.warning('请先连接设备');
+            message.warning(t("请先连接设备"));
             return;
         }
         loadApps(true);
@@ -93,7 +94,7 @@ function ApplicationList() {
 
     const handleAction = useCallback(async (action: CardAction, app: PackageInfo) => {
         if (!selectedDevice) {
-            message.warning('请先连接设备');
+            message.warning(t("请先连接设备"));
             return;
         }
         const deviceId = selectedDevice.id;
@@ -115,12 +116,12 @@ function ApplicationList() {
             }
             case 'target':
                 usePackageListStore.getState().setTarget(deviceId, app.packageName);
-                message.success(`已将 ${app.label} 设为快捷功能的目标应用`);
+                message.success(t("已将 {0} 设为快捷功能的目标应用", [app.label]));
                 return;
             case 'perf': {
                 const perf = usePerfMonitorStore.getState();
                 if (perf.running && perf.packageName !== app.packageName) {
-                    message.warning(`性能监控正在监控 ${perf.packageName}，请先停止后再切换`);
+                    message.warning(t("性能监控正在监控 {0}，请先停止后再切换", [perf.packageName]));
                 } else if (!perf.running) {
                     perf.setPackageName(app.packageName);
                 }
@@ -152,7 +153,7 @@ function ApplicationList() {
         }
 
         return result;
-    }, [apps, searchText, filterType]);
+    }, [apps, searchText, filterType, locale]);
 
     // 筛选条件变化时重置页码
     useEffect(() => {
@@ -163,14 +164,14 @@ function ApplicationList() {
     const paginatedApps = useMemo(() => {
         const startIndex = (currentPage - 1) * pageSize;
         return filteredApps.slice(startIndex, startIndex + pageSize);
-    }, [filteredApps, currentPage, pageSize]);
+    }, [filteredApps, currentPage, pageSize, locale]);
 
     // 统计
     const stats = useMemo(() => ({
         total: apps.length,
         user: apps.filter(app => !app.system).length,
         system: apps.filter(app => app.system).length,
-    }), [apps]);
+    }), [apps, locale]);
 
     const handlePageChange = (page: number, size: number) => {
         setCurrentPage(page);
@@ -188,21 +189,20 @@ function ApplicationList() {
     let summary: string;
     if (streaming) {
         const loaded = progress?.total ? `${apps.length} / ${progress.total}` : `${apps.length}`;
-        summary = filtering ? `筛选出 ${filteredApps.length} 个 · 仍在加载 ${loaded}` : `已加载 ${loaded} 个应用`;
+        summary = filtering ? t("筛选出 {0} 个 · 仍在加载 {1}", [filteredApps.length, loaded]) : t("已加载 {0} 个应用", [loaded]);
     } else {
-        summary = filtering ? `筛选出 ${filteredApps.length} / ${apps.length} 个应用` : `共 ${apps.length} 个应用`;
+        summary = filtering ? t("筛选出 {0} / {1} 个应用", [filteredApps.length, apps.length]) : t("共 {0} 个应用", [apps.length]);
     }
 
     return (
         <div className="flex h-full min-w-0 flex-1 flex-col gap-5 overflow-hidden bg-canvas px-8 py-7 text-left text-ink">
             <PageHeader
                 eyebrow="Apps · aya"
-                title="应用列表"
-                description={selectedDevice ? `${selectedDevice.name} 上已安装的应用，可直接启动、导出或卸载` : '连接设备后查看已安装的应用'}
+                title={t("应用列表")}
+                description={selectedDevice ? t("{0} 上已安装的应用，可直接启动、导出或卸载", [selectedDevice.name]) : t("连接设备后查看已安装的应用")}
                 actions={
                     <Button icon={<ReloadOutlined/>} onClick={handleRefresh} loading={isLoading} disabled={!selectedDevice}>
-                        刷新
-                    </Button>
+                        {t("刷新")}</Button>
                 }
             />
 
@@ -210,7 +210,7 @@ function ApplicationList() {
             <div className="rounded-xl border border-hairline bg-elevated px-4 py-3 shadow-whisper">
                 <div className="flex flex-wrap items-center gap-3">
                     <Input
-                        placeholder="搜索应用名称或包名"
+                        placeholder={t("搜索应用名称或包名")}
                         prefix={<SearchOutlined className="text-faint"/>}
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
@@ -221,9 +221,9 @@ function ApplicationList() {
                         value={filterType}
                         onChange={(value) => setFilterType(value as FilterType)}
                         options={[
-                            {label: `全部 ${stats.total}`, value: 'all'},
-                            {label: `用户 ${stats.user}`, value: 'user'},
-                            {label: `系统 ${stats.system}`, value: 'system'},
+                            {label: t("全部 {0}", [stats.total]), value: 'all'},
+                            {label: t("用户 {0}", [stats.user]), value: 'user'},
+                            {label: t("系统 {0}", [stats.system]), value: 'system'},
                         ]}
                     />
                     <span className="ml-auto text-[12px] text-mute">{summary}</span>
@@ -242,16 +242,16 @@ function ApplicationList() {
             {/* 内容区域 */}
             <div className="min-h-0 flex-1 overflow-auto">
                 {showLoading || (streaming && filteredApps.length === 0) ? (
-                    <div className={CARD_GRID} aria-busy="true" aria-label="正在加载应用列表">
+                    <div className={CARD_GRID} aria-busy="true" aria-label={t("正在加载应用列表")}>
                         {Array.from({length: INITIAL_SKELETONS}, (_, i) => <SkeletonCard key={i}/>)}
                     </div>
                 ) : showEmpty ? (
                     <div className="flex h-full items-center justify-center">
-                        <Empty description={selectedDevice ? '暂无应用数据，点击刷新加载' : '请先连接设备'}/>
+                        <Empty description={selectedDevice ? t("暂无应用数据，点击刷新加载") : t("请先连接设备")}/>
                     </div>
                 ) : filteredApps.length === 0 ? (
                     <div className="flex h-full items-center justify-center">
-                        <Empty description="未找到匹配的应用"/>
+                        <Empty description={t("未找到匹配的应用")}/>
                     </div>
                 ) : (
                     <div className={CARD_GRID} aria-busy={streaming}>
@@ -273,7 +273,7 @@ function ApplicationList() {
                         onChange={handlePageChange}
                         showSizeChanger
                         showQuickJumper
-                        showTotal={(total, range) => `第 ${range[0]}-${range[1]} 项，共 ${total} 项`}
+                        showTotal={(total, range) => t("第 {0}-{1} 项，共 {2} 项", [range[0], range[1], total])}
                         pageSizeOptions={['12', '20', '40', '60', '100']}
                     />
                 </div>
@@ -286,6 +286,7 @@ const CARD_GRID = 'grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-
 
 // 与 AppCard 布局一致的占位卡片
 function SkeletonCard() {
+    useLocale();
     const bar = 'animate-pulse rounded bg-hairline-soft';
     return (
         <div className="flex h-full flex-col rounded-xl border border-hairline bg-elevated shadow-whisper" aria-hidden="true">
@@ -320,6 +321,7 @@ function SkeletonCard() {
 }
 
 function InfoRow({label, children}: { label: string; children: React.ReactNode }) {
+    useLocale();
     return (
         <div className="flex items-baseline justify-between gap-3 text-[12px]">
             <span className="shrink-0 text-mute">{label}</span>
@@ -329,12 +331,13 @@ function InfoRow({label, children}: { label: string; children: React.ReactNode }
 }
 
 function CopyBlock({label, value}: { label: string; value: string }) {
+    useLocale();
     return (
         <div>
             <div className="mb-1 text-[12px] text-mute">{label}</div>
             <Paragraph
                 className="!mb-0 break-all rounded-md bg-canvas px-2 py-1.5 !font-mono !text-[11px] !text-body"
-                copyable={{tooltips: ['复制', '已复制']}}
+                copyable={{tooltips: [t("复制"), t("已复制")]}}
             >
                 {value}
             </Paragraph>
@@ -350,11 +353,12 @@ interface AppCardProps {
 
 // 使用 memo 优化 AppCard，避免不必要的重渲染
 const AppCard = memo(function AppCard({app, isTarget, onAction}: AppCardProps) {
+    useLocale();
     const moreItems: MenuProps['items'] = [
-        {key: 'target', icon: <i className="fa-solid fa-location-crosshairs w-4 text-[12px]"/>, label: '设为目标应用', disabled: isTarget},
-        {key: 'export', icon: <i className="fa-solid fa-download w-4 text-[12px]"/>, label: '导出 APK'},
+        {key: 'target', icon: <i className="fa-solid fa-location-crosshairs w-4 text-[12px]"/>, label: t("设为目标应用"), disabled: isTarget},
+        {key: 'export', icon: <i className="fa-solid fa-download w-4 text-[12px]"/>, label: t("导出 APK")},
         {type: 'divider'},
-        {key: 'uninstall', icon: <i className="fa-solid fa-circle-minus w-4 text-[12px]"/>, label: '卸载', danger: true},
+        {key: 'uninstall', icon: <i className="fa-solid fa-circle-minus w-4 text-[12px]"/>, label: t("卸载"), danger: true},
     ];
 
     return (
@@ -371,7 +375,7 @@ const AppCard = memo(function AppCard({app, isTarget, onAction}: AppCardProps) {
                     <div className="flex items-center gap-1.5">
                         <h3 className="truncate text-[14px] font-semibold text-ink" title={app.label}>{app.label}</h3>
                         {isTarget && (
-                            <Tooltip title="快捷功能当前的目标应用">
+                            <Tooltip title={t("快捷功能当前的目标应用")}>
                                 <i className="fa-solid fa-location-crosshairs shrink-0 text-[11px] text-link"/>
                             </Tooltip>
                         )}
@@ -379,48 +383,46 @@ const AppCard = memo(function AppCard({app, isTarget, onAction}: AppCardProps) {
                     {/* 用 CSS 省略：antd 的 ellipsis 与 copyable 同用时要先渲染全文、再用 JS 测量截断，进入页面时会抖动 */}
                     <div className="flex min-w-0 items-center gap-1 text-[11.5px] leading-[18px]">
                         <span className="min-w-0 truncate font-mono text-mute" title={app.packageName}>{app.packageName}</span>
-                        <Text className="shrink-0 !text-[11.5px]" copyable={{text: app.packageName, tooltips: ['复制包名', '已复制']}}/>
+                        <Text className="shrink-0 !text-[11.5px]" copyable={{text: app.packageName, tooltips: [t("复制包名"), t("已复制")]}}/>
                     </div>
                 </div>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
                     app.system ? 'bg-hairline-soft text-mute' : 'bg-link-soft text-link-deep'
                 }`}>
-                    {app.system ? '系统' : '用户'}
+                    {app.system ? t("系统") : t("用户")}
                 </span>
             </div>
 
             <div className="mt-3 space-y-1.5 border-t border-hairline-soft px-4 py-3">
-                <InfoRow label="版本">
+                <InfoRow label={t("版本")}>
                     <span className="font-mono">{app.versionName || '-'}</span>
                     <span className="text-faint"> · {app.versionCode || '-'}</span>
                 </InfoRow>
                 <InfoRow label="SDK">
                     <span className="font-mono">min {app.minSdkVersion || '-'} · target {app.targetSdkVersion || '-'}</span>
                 </InfoRow>
-                <InfoRow label="首次安装">{formatTime(app.firstInstallTime)}</InfoRow>
-                <InfoRow label="最后更新">{formatTime(app.lastUpdateTime)}</InfoRow>
+                <InfoRow label={t("首次安装")}>{formatTime(app.firstInstallTime)}</InfoRow>
+                <InfoRow label={t("最后更新")}>{formatTime(app.lastUpdateTime)}</InfoRow>
             </div>
 
             <div className="space-y-2.5 border-t border-hairline-soft px-4 py-3">
-                <CopyBlock label="APK 路径" value={app.apkPath || '-'}/>
+                <CopyBlock label={t("APK 路径")} value={app.apkPath || '-'}/>
                 {app.signatureSha256s?.map((sha256, index) => (
-                    <CopyBlock key={index} label={index === 0 ? '签名 SHA256' : `签名 SHA256 #${index + 1}`} value={sha256}/>
+                    <CopyBlock key={index} label={index === 0 ? t("签名 SHA256") : t("签名 SHA256 #{0}", [index + 1])} value={sha256}/>
                 ))}
             </div>
 
             <div className="mt-auto flex items-center gap-2 border-t border-hairline-soft px-3 py-2.5">
                 <Button size="small" icon={<i className="fa-solid fa-play text-[11px]"/>} onClick={() => onAction('launch', app)}>
-                    启动
-                </Button>
+                    {t("启动")}</Button>
                 <Button size="small" icon={<i className="fa-solid fa-chart-line text-[11px]"/>} onClick={() => onAction('perf', app)}>
-                    性能监控
-                </Button>
+                    {t("性能监控")}</Button>
                 <Dropdown
                     trigger={['click']}
                     placement="bottomRight"
                     menu={{items: moreItems, onClick: ({key}) => onAction(key as CardAction, app)}}
                 >
-                    <Button size="small" type="text" icon={<MoreOutlined/>} className="ml-auto" aria-label="更多操作"/>
+                    <Button size="small" type="text" icon={<MoreOutlined/>} className="ml-auto" aria-label={t("更多操作")}/>
                 </Dropdown>
             </div>
         </div>

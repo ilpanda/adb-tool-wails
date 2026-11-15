@@ -2,6 +2,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"context"
 	"fmt"
@@ -73,9 +74,9 @@ func PrepareFileSave(opts SaveFileOptions) SaveFileResult {
 	savePath, _ := runtime.SaveFileDialog(opts.Ctxt, runtime.SaveDialogOptions{
 		DefaultDirectory: desktopDir,
 		DefaultFilename:  saveFileName,
-		Title:            opts.DialogTitle,
+		Title:            i18n.T(opts.DialogTitle),
 		Filters: []runtime.FileFilter{
-			{DisplayName: opts.FilterDisplay, Pattern: opts.FilterPattern},
+			{DisplayName: i18n.T(opts.FilterDisplay), Pattern: opts.FilterPattern},
 		},
 	})
 	if opts.OnStage != nil {
@@ -95,7 +96,7 @@ func writeResultToFile(savePath string, content string, cmd string) types.ExecRe
 	if err != nil {
 		return types.NewExecResultError(cmd, err)
 	}
-	result := types.NewExecResultSuccess(cmd, fmt.Sprintf("已保存到: %s", savePath))
+	result := types.NewExecResultSuccess(cmd, fmt.Sprintf(i18n.T("已保存到: %s"), savePath))
 	result.LocalPath = savePath
 	return result
 }
@@ -125,7 +126,7 @@ func saveFileAs(Ctxt context.Context, content string, fileNamePrefix string, dia
 	})
 
 	if saveResult.Canceled {
-		return types.NewExecResultCanceled("", "用户取消保存")
+		return types.NewExecResultCanceled("", i18n.T("用户取消保存"))
 	}
 	return writeResultToFile(saveResult.SavePath, content, "")
 }

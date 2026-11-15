@@ -2,6 +2,7 @@ package main
 
 import (
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/storage"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
@@ -22,7 +23,7 @@ func (a *App) GetAdbPath() types.ExecResult {
 		return types.NewExecResultSuccess("adb", path)
 	}
 	if a.adbDownloading.Load() {
-		return types.NewExecResultError("adb", errors.New("本机未找到 adb，正在后台下载，完成后自动配置"))
+		return types.NewExecResultError("adb", errors.New(i18n.T("本机未找到 adb，正在后台下载，完成后自动配置")))
 	}
 	return types.NewExecResultError("adb", err)
 }

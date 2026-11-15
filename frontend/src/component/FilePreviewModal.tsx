@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect, useState} from 'react';
 import type {ReactNode} from 'react';
 import {Button, Empty, Modal, Spin, Tooltip, message} from 'antd';
@@ -42,6 +43,7 @@ const CHECKERBOARD = {
 };
 
 function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownload, onClose}: FilePreviewModalProps) {
+    useLocale();
     const [preview, setPreview] = useState<files.FilePreview | null>(null);
     const [loading, setLoading] = useState(false);
     const [fitToWindow, setFitToWindow] = useState(true);
@@ -98,7 +100,7 @@ function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownl
             return (
                 <div className="flex h-60 flex-col items-center justify-center gap-2 rounded-lg border border-hairline bg-canvas px-6 text-center">
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={null} className="!m-0"/>
-                    <div className="text-[13px] text-body">无法预览这个文件</div>
+                    <div className="text-[13px] text-body">{t("无法预览这个文件")}</div>
                     <div className="max-w-full break-all font-mono text-[12px] text-mute">{preview.error}</div>
                 </div>
             );
@@ -108,8 +110,8 @@ function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownl
             return (
                 <div className="flex h-60 flex-col items-center justify-center gap-2 rounded-lg border border-hairline bg-canvas text-center">
                     <i className="fa-solid fa-file-circle-question text-[32px] text-faint"/>
-                    <div className="text-[13px] text-body">二进制文件，无法以文本预览</div>
-                    <div className="text-[12px] text-mute">可以下载到电脑后用对应的工具打开</div>
+                    <div className="text-[13px] text-body">{t("二进制文件，无法以文本预览")}</div>
+                    <div className="text-[12px] text-mute">{t("可以下载到电脑后用对应的工具打开")}</div>
                 </div>
             );
         }
@@ -143,11 +145,10 @@ function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownl
             <div className="overflow-hidden rounded-lg border border-hairline">
                 {preview.truncated && (
                     <div className="border-b border-warning-soft bg-warning-soft px-4 py-1.5 text-[12px] text-warning-deep">
-                        文件共 {formatSize(preview.size)}，仅显示开头 512 KB，完整内容请下载查看
-                    </div>
+                        {t("文件共 ")}{formatSize(preview.size)}{t("，仅显示开头 512 KB，完整内容请下载查看")}</div>
                 )}
                 <pre className="m-0 max-h-[60vh] overflow-auto whitespace-pre-wrap break-all bg-canvas p-4 font-mono text-[12px] leading-5 text-body">
-                    {preview.content || <span className="text-faint">（空文件）</span>}
+                    {preview.content || <span className="text-faint">{t("（空文件）")}</span>}
                 </pre>
             </div>
         );
@@ -155,23 +156,21 @@ function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownl
 
     const footer = target && preview && !loading ? [
         preview.kind === 'image' && !preview.error && (
-            <Tooltip key="fit" title="也可以点击图片切换">
+            <Tooltip key="fit" title={t("也可以点击图片切换")}>
                 <Button icon={fitToWindow ? <ExpandOutlined/> : <CompressOutlined/>} onClick={() => setFitToWindow(value => !value)}>
-                    {fitToWindow ? '原始尺寸' : '适应窗口'}
+                    {fitToWindow ? t("原始尺寸") : t("适应窗口")}
                 </Button>
             </Tooltip>
         ),
         preview.kind === 'text' && !preview.error && (
             <Button key="copy" icon={<CopyOutlined/>} onClick={() => {
                 navigator.clipboard.writeText(preview.content);
-                message.success('已复制内容');
+                message.success(t("已复制内容"));
             }}>
-                复制内容
-            </Button>
+                {t("复制内容")}</Button>
         ),
         <Button key="download" type="primary" icon={<DownloadOutlined/>} onClick={() => onDownload(target)}>
-            下载到电脑
-        </Button>,
+            {t("下载到电脑")}</Button>,
     ].filter(Boolean) : null;
 
     return (
@@ -198,6 +197,7 @@ function FilePreviewModal({deviceId, target, icon, siblings, onNavigate, onDownl
 }
 
 function NavButton({side, onClick}: { side: 'left' | 'right'; onClick: () => void }) {
+    useLocale();
     return (
         <button
             type="button"

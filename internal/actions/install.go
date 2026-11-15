@@ -2,6 +2,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
 	"archive/zip"
@@ -28,10 +29,10 @@ var apkPackagePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][
 func InstallApp(param adb.ExecuteParams) types.ExecResult {
 	param.Stage(adb.StageDialog)
 	filePath, err := runtime.OpenFileDialog(param.Ctxt, runtime.OpenDialogOptions{
-		Title: "选择 APK 文件",
+		Title: i18n.T("选择 APK 文件"),
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Android APK (*.apk)", Pattern: "*.apk"},
-			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
+			{DisplayName: i18n.T("所有文件 (*.*)"), Pattern: "*.*"},
 		},
 	})
 	param.Stage(adb.StageRunning)
@@ -39,7 +40,7 @@ func InstallApp(param adb.ExecuteParams) types.ExecResult {
 		return types.NewExecResultError("installApp", err)
 	}
 	if filePath == "" {
-		return types.NewExecResultCanceled("installApp", "用户取消安装")
+		return types.NewExecResultCanceled("installApp", i18n.T("用户取消安装"))
 	}
 	return InstallApkFile(param, filePath)
 }
@@ -47,7 +48,7 @@ func InstallApp(param adb.ExecuteParams) types.ExecResult {
 // InstallApkFile 安装本地 APK（选择文件或拖入窗口）；版本降级时弹窗确认后卸载重装
 func InstallApkFile(param adb.ExecuteParams, filePath string) types.ExecResult {
 	if !strings.EqualFold(filepath.Ext(filePath), ".apk") {
-		return types.NewExecResultErrorString("installApp", "不是 APK 文件: "+filepath.Base(filePath))
+		return types.NewExecResultErrorString("installApp", i18n.T("不是 APK 文件: ")+filepath.Base(filePath))
 	}
 
 	// 未指定序列号时先固定设备，避免确认期间连接变化后操作其他设备。
@@ -58,7 +59,7 @@ func InstallApkFile(param adb.ExecuteParams, filePath string) types.ExecResult {
 		}
 		param.DeviceId = strings.TrimSpace(device.Res)
 		if param.DeviceId == "" || param.DeviceId == "unknown" {
-			return types.NewExecResultErrorString(device.Cmd, "无法确定安装设备，请重新连接设备后重试")
+			return types.NewExecResultErrorString(device.Cmd, i18n.T("无法确定安装设备，请重新连接设备后重试"))
 		}
 	}
 
@@ -92,7 +93,7 @@ func InstallApkFile(param adb.ExecuteParams, filePath string) types.ExecResult {
 			case <-param.Ctxt.Done():
 				return false, param.Ctxt.Err()
 			case <-timer.C:
-				return false, fmt.Errorf("确认已超时，未执行卸载，请重新安装")
+				return false, fmt.Errorf("%s", i18n.T("确认已超时，未执行卸载，请重新安装"))
 			}
 		},
 	}
@@ -116,7 +117,7 @@ func (i apkInstaller) install(filePath string) types.ExecResult {
 	}
 	packageName, err := i.readPackage(filePath)
 	if err != nil || !apkPackagePattern.MatchString(packageName) {
-		result.Error += "\n无法读取 APK 包名，已停止卸载。"
+		result.Error += i18n.T("\n无法读取 APK 包名，已停止卸载。")
 		if err != nil {
 			result.Error += " " + err.Error()
 		}
@@ -124,26 +125,26 @@ func (i apkInstaller) install(filePath string) types.ExecResult {
 	}
 	confirmed, err := i.confirm(packageName)
 	if err != nil {
-		result.Error += "\n未完成卸载确认：" + err.Error()
+		result.Error += i18n.T("\n未完成卸载确认：") + err.Error()
 		return result
 	}
 	if !confirmed {
-		result.Error += "\n已取消卸载，原应用和数据未更改。"
+		result.Error += i18n.T("\n已取消卸载，原应用和数据未更改。")
 		return result
 	}
 
 	uninstall := i.run("uninstall", packageName)
 	commands := result.Cmd + "\n" + uninstall.Cmd
-	output := "首次安装：\n" + result.Res + "\n卸载：\n" + uninstall.Res
+	output := i18n.T("首次安装：\n") + result.Res + i18n.T("\n卸载：\n") + uninstall.Res
 	if uninstall.Error != "" {
-		return types.NewExecResultFromString(commands, output, "卸载失败，已停止安装："+uninstall.Error)
+		return types.NewExecResultFromString(commands, output, i18n.T("卸载失败，已停止安装：")+uninstall.Error)
 	}
 
 	retry := i.run("install", "-d", "-t", filePath)
 	retry.Cmd = commands + "\n" + retry.Cmd
-	retry.Res = output + "\n重新安装：\n" + retry.Res
+	retry.Res = output + i18n.T("\n重新安装：\n") + retry.Res
 	if retry.Error != "" {
-		retry.Error = "原应用已卸载，但重新安装失败：" + retry.Error
+		retry.Error = i18n.T("原应用已卸载，但重新安装失败：") + retry.Error
 	}
 	return retry
 }
@@ -195,7 +196,7 @@ func readAPKPackage(filePath string) (string, error) {
 		return "", err
 	}
 	if len(data) > maxManifestSize {
-		return "", fmt.Errorf("AndroidManifest.xml 过大")
+		return "", fmt.Errorf("%s", i18n.T("AndroidManifest.xml 过大"))
 	}
 	binaryXML, err := androidbinary.NewXMLFile(bytes.NewReader(data))
 	if err != nil {

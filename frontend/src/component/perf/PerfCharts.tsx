@@ -1,3 +1,5 @@
+import {clusterLabel} from './perfFormat';
+import {t, useLocale} from '../../i18n';
 import React, {useMemo} from 'react';
 import {
     Area,
@@ -108,11 +110,11 @@ function eventLines(ctx: ChartContext, yAxisId?: string) {
                 key={`ev-${e.id}`}
                 x={e.timestamp}
                 yAxisId={yAxisId}
-                stroke={EVENT_META[e.kind]?.color ?? 'var(--color-faint)'}
+                stroke={EVENT_META()[e.kind]?.color ?? 'var(--color-faint)'}
                 strokeDasharray="4 3"
                 strokeWidth={1.25}
                 ifOverflow="hidden"
-                label={{value: EVENT_META[e.kind]?.label, position: 'insideTopLeft', fontSize: 10, fill: EVENT_META[e.kind]?.color}}
+                label={{value: EVENT_META()[e.kind]?.label, position: 'insideTopLeft', fontSize: 10, fill: EVENT_META()[e.kind]?.color}}
             />
         ));
 }
@@ -135,6 +137,7 @@ interface ChartTooltipProps {
 }
 
 const ChartTooltip: React.FC<ChartTooltipProps> = ({active, payload, label, format, extra, hint}) => {
+    useLocale();
     const entries = (payload ?? []).filter(e => e.value != null && !Number.isNaN(e.value));
     if (!active || entries.length === 0 || label == null) return null;
     return (
@@ -173,6 +176,7 @@ const segmentLabel = (ctx: ChartContext, seg: Segment, segments: Segment[]) => {
 // ---------------------------------------------------------------- CPU
 
 export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = ({ctx, samples}) => {
+    const locale = useLocale();
     const {rows, segments} = useMemo(() => {
         const segs = new Map<string, Segment>();
         const rows = samples.map(sample => {
@@ -186,7 +190,7 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
             return row;
         });
         return {rows: withGaps(rows), segments: Array.from(segs.values())};
-    }, [samples, ctx.hidden]);
+    }, [samples, ctx.hidden, locale]);
 
     const threadList = (entry: TooltipEntry) => {
         const threads: PerfThread[] | null | undefined = entry.payload?.threads?.[entry.dataKey as string];
@@ -231,12 +235,12 @@ export const CpuChart: React.FC<{ ctx: ChartContext; samples: PerfSample[] }> = 
                 />
                 <Tooltip
                     cursor={{stroke: 'var(--color-hairline-strong)', strokeDasharray: '3 3'}}
-                    content={<ChartTooltip format={(v) => formatPercent(v)} extra={threadList} hint="进程为单核口径"/>}
+                    content={<ChartTooltip format={(v) => formatPercent(v)} extra={threadList} hint={t("进程为单核口径")}/>}
                 />
                 <Area
                     yAxisId="device"
                     dataKey="device"
-                    name="整机 CPU（右轴）"
+                    name={t("整机 CPU（右轴）")}
                     type="linear"
                     stroke="var(--color-faint)"
                     fill="var(--color-hairline-soft)"
@@ -277,6 +281,7 @@ interface MemoryChartProps {
 }
 
 export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, memory, focusProcess, visibleRegions, onPick}) => {
+    const locale = useLocale();
     const {rows, lines} = useMemo(() => {
         const segs = new Map<string, Segment>();
         if (mode === 'rss') {
@@ -292,7 +297,7 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
             });
             const segments = Array.from(segs.values());
             const lines = segments.flatMap(seg => [
-                {key: `anon|${seg.key}`, name: `${segmentLabel(ctx, seg, segments)} 匿名内存`, color: processColor(ctx.processNames, seg.name), dashed: false, seg},
+                {key: `anon|${seg.key}`, name: t("{0} 匿名内存", [segmentLabel(ctx, seg, segments)]), color: processColor(ctx.processNames, seg.name), dashed: false, seg},
                 {key: `swap|${seg.key}`, name: `${segmentLabel(ctx, seg, segments)} Swap`, color: processColor(ctx.processNames, seg.name), dashed: true, seg},
             ]);
             return {rows: withGaps(rows), lines};
@@ -340,7 +345,7 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
             seg,
         }));
         return {rows: withGaps(rows), lines};
-    }, [mode, samples, memory, focusProcess, visibleRegions, ctx.hidden, ctx.processNames, ctx.packageName]);
+    }, [mode, samples, memory, focusProcess, visibleRegions, ctx.hidden, ctx.processNames, ctx.packageName, locale]);
 
     // PSS 与分类明细的点可点击查看该时刻完整 meminfo
     const pickable = mode !== 'rss';
@@ -382,7 +387,7 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
                 />
                 <Tooltip
                     cursor={{stroke: 'var(--color-hairline-strong)', strokeDasharray: '3 3'}}
-                    content={<ChartTooltip format={(v) => formatMemory(v)} hint={pickable ? '点击圆点查看完整 meminfo' : undefined}/>}
+                    content={<ChartTooltip format={(v) => formatMemory(v)} hint={pickable ? t("点击圆点查看完整 meminfo") : undefined}/>}
                 />
                 {lines.map(line => (
                     <Line
@@ -407,6 +412,7 @@ export const MemoryChart: React.FC<MemoryChartProps> = ({ctx, mode, samples, mem
 // ---------------------------------------------------------------- 频率与温度
 
 export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; memory: PerfMemorySample[] }> = ({ctx, samples, memory}) => {
+    const locale = useLocale();
     const {rows, clusters, maxFreq, throttleTemp} = useMemo(() => {
         // 温度采样频率低，取每个高频采样点之前最近的一次，悬停时频率与温度能同时显示
         const temps = memory.filter(m => m.thermal.cpuTemp > 0);
@@ -414,7 +420,7 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
         const rows: Record<string, any>[] = samples.map(sample => {
             while (ti + 1 < temps.length && temps[ti + 1].timestamp <= sample.timestamp) ti++;
             const row: Record<string, any> = {t: sample.timestamp, temp: ti >= 0 ? temps[ti].thermal.cpuTemp : null};
-            for (const c of sample.clusters) row[`cl|${c.label}`] = Math.round(c.avgFreq / 1000);
+            for (const c of sample.clusters) row[`cl|${clusterLabel(c.label)}`] = Math.round(c.avgFreq / 1000);
             return row;
         });
         const throttleTemp = memory.reduce((v, m) => m.thermal.throttleTemp || v, 0);
@@ -422,7 +428,7 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
         const clusters = samples.length > 0 ? samples[samples.length - 1].clusters : [];
         const maxFreq = Math.max(0, ...clusters.map(c => c.maxFreq));
         return {rows: gapped, clusters, maxFreq, throttleTemp};
-    }, [samples, memory]);
+    }, [samples, memory, locale]);
 
     return (
         <ResponsiveContainer width="100%" height="100%">
@@ -452,11 +458,11 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
                 />
                 <Tooltip
                     cursor={{stroke: 'var(--color-hairline-strong)', strokeDasharray: '3 3'}}
-                    content={<ChartTooltip format={(v, e) => (e.dataKey === 'temp' ? `${v.toFixed(1)} °C` : `${v} MHz`)} hint="频率为区间平均值"/>}
+                    content={<ChartTooltip format={(v, e) => (e.dataKey === 'temp' ? `${v.toFixed(1)} °C` : `${v} MHz`)} hint={t("频率为区间平均值")}/>}
                 />
                 {clusters.map(c => (
                     <ReferenceLine
-                        key={`max-${c.label}`}
+                        key={`max-${clusterLabel(c.label)}`}
                         yAxisId="freq"
                         y={Math.round(c.maxFreq / 1000)}
                         stroke={clusterColor(c.label)}
@@ -467,10 +473,10 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
                 ))}
                 {clusters.map(c => (
                     <Line
-                        key={c.label}
+                        key={clusterLabel(c.label)}
                         yAxisId="freq"
-                        dataKey={`cl|${c.label}`}
-                        name={`${c.label} ${c.cpus.length > 1 ? `${c.cpus[0]}-${c.cpus[c.cpus.length - 1]}` : c.cpus[0]}`}
+                        dataKey={`cl|${clusterLabel(c.label)}`}
+                        name={`${clusterLabel(c.label)} ${c.cpus.length > 1 ? `${c.cpus[0]}-${c.cpus[c.cpus.length - 1]}` : c.cpus[0]}`}
                         type="stepAfter"
                         stroke={clusterColor(c.label)}
                         strokeWidth={1.5}
@@ -481,7 +487,7 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
                 <Line
                     yAxisId="temp"
                     dataKey="temp"
-                    name="CPU 温度（右轴）"
+                    name={t("CPU 温度（右轴）")}
                     type="stepAfter"
                     stroke={TEMP_COLOR}
                     strokeWidth={2}
@@ -496,7 +502,7 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
                         strokeOpacity={0.5}
                         strokeDasharray="6 4"
                         ifOverflow="hidden"
-                        label={{value: `降频阈值 ${throttleTemp}°C`, position: 'insideTopRight', fontSize: 10, fill: TEMP_COLOR}}
+                        label={{value: t("降频阈值 {0}°C", [throttleTemp]), position: 'insideTopRight', fontSize: 10, fill: TEMP_COLOR}}
                     />
                 )}
                 {eventLines(ctx, 'freq')}
@@ -508,12 +514,13 @@ export const FreqChart: React.FC<{ ctx: ChartContext; samples: PerfSample[]; mem
 // ---------------------------------------------------------------- 每核网格（参考 aya 的每核小图）
 
 export const CoreGrid: React.FC<{ samples: PerfSample[]; from: number; to: number }> = ({samples, from, to}) => {
+    const locale = useLocale();
     const latest = samples[samples.length - 1];
     const coreRows = useMemo(() => withGaps(samples.map(s => {
         const row: Record<string, any> = {t: s.timestamp};
         for (const core of s.cores) row[`c${core.cpu}`] = core.load;
         return row;
-    })), [samples]);
+    })), [samples, locale]);
     if (!latest) return null;
 
     const clusterOf = (cpu: number) => latest.clusters.find(c => c.cpus.includes(cpu));
@@ -528,7 +535,7 @@ export const CoreGrid: React.FC<{ samples: PerfSample[]; from: number; to: numbe
                             <div className="flex min-w-0 items-center gap-1.5">
                                 <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{backgroundColor: color}}/>
                                 <span className="font-mono text-[12px] font-medium text-ink">CPU{core.cpu}</span>
-                                {cluster && <span className="truncate text-[11px] text-faint">{cluster.label}</span>}
+                                {cluster && <span className="truncate text-[11px] text-faint">{clusterLabel(cluster.label)}</span>}
                             </div>
                             <span className={`${MONO} text-[12px] text-ink`}>{formatPercent(core.load, 0)}</span>
                         </div>

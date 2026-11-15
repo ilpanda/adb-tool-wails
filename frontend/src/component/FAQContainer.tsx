@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {Children, isValidElement, useEffect, useMemo, useRef, useState} from 'react';
 import type {ReactNode} from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -34,9 +35,10 @@ function buildToc(markdown: string): TocItem[] {
 }
 
 function CodeBlock({language, code}: { language: string; code: string }) {
+    useLocale();
     const handleCopy = async () => {
         await navigator.clipboard.writeText(code);
-        message.success('已复制');
+        message.success(t("已复制"));
     };
 
     return (
@@ -49,8 +51,7 @@ function CodeBlock({language, code}: { language: string; code: string }) {
                     className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] text-mute transition-colors hover:bg-hairline-soft hover:text-ink"
                 >
                     <i className="fa-regular fa-copy"/>
-                    复制
-                </button>
+                    {t("复制")}</button>
             </div>
             <pre className={`m-0 overflow-x-auto px-4 py-3 font-mono text-[12px] leading-5 text-ink ${
                 language === 'text' ? 'whitespace-pre-wrap break-all' : ''
@@ -60,8 +61,9 @@ function CodeBlock({language, code}: { language: string; code: string }) {
 }
 
 function FAQContainer() {
-    const content = useMemo(() => faqData.replace(/^\s*#\s+.+\n/, ''), []);
-    const toc = useMemo(() => buildToc(content), [content]);
+    const locale = useLocale();
+    const content = useMemo(() => faqData().replace(/^\s*#\s+.+\n/, ''), [locale]);
+    const toc = useMemo(() => buildToc(content), [content, locale]);
     const [activeId, setActiveId] = useState(toc[0]?.id ?? '');
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -91,8 +93,8 @@ function FAQContainer() {
             <div className="mx-auto flex max-w-5xl flex-col gap-5">
                 <PageHeader
                     eyebrow="Help · FAQ"
-                    title="常见问题"
-                    description="连接设备、授权调试和常见报错的处理方法"
+                    title={t("常见问题")}
+                    description={t("连接设备、授权调试和常见报错的处理方法")}
                 />
 
                 <div className="grid grid-cols-[minmax(0,1fr)_176px] items-start gap-6">

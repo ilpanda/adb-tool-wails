@@ -1,6 +1,7 @@
 package wireless
 
 import (
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/util"
 	"context"
 	"fmt"
@@ -23,6 +24,7 @@ type MdnsService struct {
 
 // Result 无线调试操作结果
 type Result struct {
+	Canceled  bool   `json:"canceled,omitempty"`
 	Cmd       string `json:"cmd"`
 	Output    string `json:"output"`
 	Connected string `json:"connected"` // 已连接的地址（ip:port），未连接为空
@@ -56,7 +58,7 @@ func runAdbArgs(ctx context.Context, adbPath string, args ...string) (string, st
 func Connect(adbPath, address string) Result {
 	address = strings.TrimSpace(address)
 	if address == "" || !reHostPort.MatchString(address) {
-		return Result{Error: "地址格式不正确，例如 192.168.1.5:5555"}
+		return Result{Error: i18n.T("地址格式不正确，例如 192.168.1.5:5555")}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -68,13 +70,13 @@ func Connect(adbPath, address string) Result {
 	case strings.Contains(lower, "connected to"):
 		result.Connected = strings.TrimSpace(output[strings.LastIndex(lower, "connected to")+len("connected to"):])
 	case ctx.Err() != nil:
-		result.Error = "连接超时，请确认手机与电脑在同一网络，并且无线调试已开启"
+		result.Error = i18n.T("连接超时，请确认手机与电脑在同一网络，并且无线调试已开启")
 	case output != "":
 		result.Error = output
 	case err != nil:
 		result.Error = err.Error()
 	default:
-		result.Error = "连接失败"
+		result.Error = i18n.T("连接失败")
 	}
 	return result
 }
@@ -84,10 +86,10 @@ func Pair(adbPath, address, code string) Result {
 	address = strings.TrimSpace(address)
 	code = strings.TrimSpace(code)
 	if !reHostPort.MatchString(address) || !strings.Contains(address, ":") {
-		return Result{Error: "请填写配对地址，格式为 IP:端口，例如 192.168.1.5:37123"}
+		return Result{Error: i18n.T("请填写配对地址，格式为 IP:端口，例如 192.168.1.5:37123")}
 	}
 	if !rePairCode.MatchString(code) {
-		return Result{Error: "配对码为 6 位数字"}
+		return Result{Error: i18n.T("配对码为 6 位数字")}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -96,13 +98,13 @@ func Pair(adbPath, address, code string) Result {
 	if !strings.Contains(output, "Successfully paired") {
 		switch {
 		case ctx.Err() != nil:
-			result.Error = "配对超时，请确认配对码弹窗仍在手机上显示"
+			result.Error = i18n.T("配对超时，请确认配对码弹窗仍在手机上显示")
 		case output != "":
 			result.Error = output
 		case err != nil:
 			result.Error = err.Error()
 		default:
-			result.Error = "配对失败"
+			result.Error = i18n.T("配对失败")
 		}
 		return result
 	}
@@ -219,9 +221,9 @@ func PairByQR(ctx context.Context, adbPath, serviceName, password string) Result
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
-				return Result{Error: "等待扫码超时，请重新生成二维码"}
+				return Result{Error: i18n.T("等待扫码超时，请重新生成二维码")}
 			}
-			return Result{Error: "已取消"}
+			return Result{Canceled: true}
 		case <-ticker.C:
 		}
 	}
@@ -250,13 +252,13 @@ func FromUSB(adbPath, deviceId string) Result {
 	ipOutput, _, _ := runAdbArgs(ctx, adbPath, "-s", deviceId, "shell", "ip -f inet addr show wlan0")
 	match := reWlanIP.FindStringSubmatch(ipOutput)
 	if match == nil {
-		return Result{Error: "未获取到手机的 WLAN IP，请确认手机已连接 Wi-Fi"}
+		return Result{Error: i18n.T("未获取到手机的 WLAN IP，请确认手机已连接 Wi-Fi")}
 	}
 	ip := match[1]
 
 	output, cmdLine, err := runAdbArgs(ctx, adbPath, "-s", deviceId, "tcpip", tcpipPort)
 	if err != nil {
-		return Result{Cmd: cmdLine, Output: output, Error: "切换到无线模式失败：" + output}
+		return Result{Cmd: cmdLine, Output: output, Error: i18n.T("切换到无线模式失败：") + output}
 	}
 	// adbd 重启需要时间；部分 adb 版本（如 macOS 上的 34.0.5）在设备 USB 重新枚举时 server 会崩溃重启，
 	// 连接可能失败一两次，多试几次
@@ -315,7 +317,7 @@ func MdnsSupported(adbPath string) (bool, string) {
 	defer cancel()
 	output, _, err := runAdbArgs(ctx, adbPath, "mdns", "check")
 	if err != nil {
-		return false, fmt.Sprintf("当前 adb 不支持 mDNS：%s", output)
+		return false, fmt.Sprintf(i18n.T("当前 adb 不支持 mDNS：%s"), output)
 	}
 	return strings.Contains(output, "mdns daemon version"), output
 }

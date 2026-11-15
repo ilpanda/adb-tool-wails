@@ -4,6 +4,7 @@ package platformtools
 
 import (
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/update"
 	"adb-tool-wails/internal/util"
 	"context"
@@ -82,7 +83,7 @@ func Supported() bool {
 func Install(ctx context.Context) (string, error) {
 	name := archiveName()
 	if name == "" {
-		return "", fmt.Errorf("没有 %s/%s 平台的 platform-tools", goruntime.GOOS, goruntime.GOARCH)
+		return "", fmt.Errorf(i18n.T("没有 %s/%s 平台的 platform-tools"), goruntime.GOOS, goruntime.GOARCH)
 	}
 	dir, err := Dir()
 	if err != nil {
@@ -115,7 +116,7 @@ func Install(ctx context.Context) (string, error) {
 	_ = os.RemoveAll(staging)
 	defer os.RemoveAll(staging)
 	if err := update.ExtractZip(archive, staging); err != nil {
-		return "", fmt.Errorf("解压 platform-tools 失败：%w", err)
+		return "", fmt.Errorf(i18n.T("解压 platform-tools 失败：%w"), err)
 	}
 	if err := verify(ctx, adbIn(staging)); err != nil {
 		return "", err
@@ -150,7 +151,7 @@ func download(ctx context.Context, url, dst string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("服务器返回 %d", resp.StatusCode)
+		return fmt.Errorf(i18n.T("服务器返回 %d"), resp.StatusCode)
 	}
 
 	file, err := os.Create(dst)
@@ -162,13 +163,13 @@ func download(ctx context.Context, url, dst string) error {
 		err = closeErr
 	}
 	if stalled.Load() {
-		return fmt.Errorf("下载超时：%d 秒内没有收到数据", int(stallTimeout.Seconds()))
+		return fmt.Errorf(i18n.T("下载超时：%d 秒内没有收到数据"), int(stallTimeout.Seconds()))
 	}
 	if err != nil {
 		return err
 	}
 	if resp.ContentLength > 0 && size != resp.ContentLength {
-		return fmt.Errorf("下载不完整：%d / %d 字节", size, resp.ContentLength)
+		return fmt.Errorf(i18n.T("下载不完整：%d / %d 字节"), size, resp.ContentLength)
 	}
 	return nil
 }
@@ -195,7 +196,7 @@ func verify(ctx context.Context, adb string) error {
 	util.ConfigureCommand(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("内置 adb 无法执行：%w %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf(i18n.T("内置 adb 无法执行：%w %s"), err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect, useState} from 'react';
 import {Tooltip} from 'antd';
 import {ACTION_DESC, ACTION_TONE, QuickAction, TONE_CLASS, iconClass} from '../data/quickActions';
@@ -6,11 +7,11 @@ import {useNow} from '../hooks/useNow';
 
 const FLASH_MS = 1500;
 
-const STAGE_TEXT: Record<string, string> = {
-    dialog: '等待选择文件…',
-    running: '执行中',
-    pulling: '正在保存到电脑',
-};
+const STAGE_TEXT = (): Record<string, string> => ({
+    dialog: t("等待选择文件…"),
+    running: t("执行中"),
+    pulling: t("正在保存到电脑"),
+});
 
 interface QuickActionCardProps {
     item: QuickAction;
@@ -24,6 +25,7 @@ interface QuickActionCardProps {
 
 // 执行状态：运行中、刚完成（短暂显示）、失败未查看
 function useTaskState(task?: ActionTask) {
+    useLocale();
     const running = task ? isActive(task) : false;
     const now = useNow(running);
     const [flash, setFlash] = useState(false);
@@ -47,18 +49,19 @@ function useTaskState(task?: ActionTask) {
 }
 
 function QuickActionCard({item, task, disabledReason, variant = 'tile', onClick}: QuickActionCardProps) {
+    useLocale();
     const {running, now, succeeded, failed} = useTaskState(task);
     const tone = TONE_CLASS[ACTION_TONE[item.action]];
     const disabled = Boolean(disabledReason) || running;
 
     const statusText = running && task
         ? task.status === 'dialog'
-            ? STAGE_TEXT.dialog
-            : `${STAGE_TEXT[task.status]} ${formatElapsed(elapsedMs(task, now))}`
+            ? STAGE_TEXT().dialog
+            : `${STAGE_TEXT()[task.status]} ${formatElapsed(elapsedMs(task, now))}`
         : failed
-            ? '执行失败，点击重试'
+            ? t("执行失败，点击重试")
             : succeeded && task
-                ? `完成 · ${formatElapsed(elapsedMs(task))}`
+                ? t("完成 · {0}", [formatElapsed(elapsedMs(task))])
                 : '';
 
     const icon = running
@@ -134,11 +137,11 @@ function QuickActionCard({item, task, disabledReason, variant = 'tile', onClick}
             >
                 <span className={disabledReason ? 'opacity-50' : ''}>{iconBox}</span>
                 <span className={`min-w-0 flex-1 ${disabledReason ? 'opacity-50' : ''}`}>
-                    <span className="block truncate text-[13px] font-medium text-ink">{item.label}</span>
-                    <span className={`mt-0.5 block truncate text-[12px] ${
+                    <span className="block break-words text-[13px] font-medium text-ink">{item.label}</span>
+                    <span className={`mt-0.5 block break-words text-[12px] ${
                         failed ? 'text-error' : running || succeeded ? 'font-mono tabular-nums text-link' : 'text-mute'
                     }`}>
-                        {statusText || ACTION_DESC[item.action] || '\u00a0'}
+                        {statusText || ACTION_DESC()[item.action] || '\u00a0'}
                     </span>
                 </span>
                 {stateMark}

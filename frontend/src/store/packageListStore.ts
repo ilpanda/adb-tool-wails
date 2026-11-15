@@ -1,5 +1,6 @@
 // store/packageListStore.ts
 // 设备上已安装的包名列表，按设备缓存，快捷功能与性能监控共用
+import {t} from '../i18n';
 import {create} from 'zustand';
 import {ExecuteAction} from '../../wailsjs/go/main/App';
 
@@ -90,7 +91,7 @@ export async function getForegroundPackage(deviceId: string): Promise<string> {
     const result = await ExecuteAction({action: 'view-package', targetPackageName: '', deviceId});
     const pkg = (result.res || '').trim();
     if (result.error || !pkg) {
-        throw new Error(result.error || '没有输出');
+        throw new Error(result.error || t("没有输出"));
     }
     return pkg;
 }

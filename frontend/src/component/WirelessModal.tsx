@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Button, Input, Modal, QRCode, Segmented, Spin} from 'antd';
 import {
@@ -43,31 +44,34 @@ const randomString = (length: number, chars: string) =>
     Array.from(crypto.getRandomValues(new Uint32Array(length)), n => chars[n % chars.length]).join('');
 
 function Steps({children}: { children: React.ReactNode }) {
+    useLocale();
     return <div className="rounded-lg bg-canvas px-3 py-2.5 text-[12.5px] leading-6 text-body">{children}</div>;
 }
 
 function ResultLine({result}: { result: wireless.Result | null }) {
+    useLocale();
     if (!result) return null;
     if (result.error) {
         return <Alert type="error" showIcon message={result.error}/>;
     }
     // 配对成功但没找到连接端口时由 PairedConnect 引导补充，这里不显示「成功」
     if (result.paired && !result.connected) return null;
-    return <Alert type="success" showIcon message={result.connected ? `已连接 ${result.connected}` : '操作成功'}/>;
+    return <Alert type="success" showIcon message={result.connected ? t("已连接 {0}", [result.connected]) : t("操作成功")}/>;
 }
 
 // 配对成功但自动连接失败（电脑与手机不在同一网段时 mDNS 找不到连接端口）：让用户补充连接端口
 function PairedConnect({host, busy, onConnect}: { host: string; busy: boolean; onConnect: (address: string) => void }) {
+    useLocale();
     const [address, setAddress] = useState(`${host}:`);
     const valid = /:\d+$/.test(address);
     return (
         <Alert
             type="warning"
             showIcon
-            message="配对成功，还差一步：连接"
+            message={t("配对成功，还差一步：连接")}
             description={
                 <div className="flex flex-col gap-2">
-                    <span>没能自动找到连接端口（电脑与手机不在同一网段时常见）。请填写手机「无线调试」页面上「IP 地址和端口」中的端口，它与配对端口不同。</span>
+                    <span>{t("没能自动找到连接端口（电脑与手机不在同一网段时常见）。请填写手机「无线调试」页面上「IP 地址和端口」中的端口，它与配对端口不同。")}</span>
                     <div className="flex gap-2">
                         <Input
                             value={address}
@@ -75,7 +79,7 @@ function PairedConnect({host, busy, onConnect}: { host: string; busy: boolean; o
                             onPressEnter={() => valid && onConnect(address)}
                             className="!font-mono"
                         />
-                        <Button type="primary" loading={busy} disabled={!valid} onClick={() => onConnect(address)}>连接</Button>
+                        <Button type="primary" loading={busy} disabled={!valid} onClick={() => onConnect(address)}>{t("连接")}</Button>
                     </div>
                 </div>
             }
@@ -90,6 +94,7 @@ interface WirelessModalProps {
 
 // 无线调试：二维码配对 / 配对码配对 / IP 连接 / USB 转无线，参考 aya 的实现
 function WirelessModal({open, onClose}: WirelessModalProps) {
+    const locale = useLocale();
     const {devices, selectedDevice, setSelectedDevices} = useDeviceStore();
     const [mode, setMode] = useState<Mode>('qr');
     const [mdnsSupported, setMdnsSupported] = useState<boolean | null>(null);
@@ -134,7 +139,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
         const slowTimer = window.setTimeout(() => run === qrRun.current && setQrSlow(true), 15000);
         WirelessPairByQR(qr.name, qr.password).then(res => {
             if (run !== qrRun.current) return;
-            if (res.error === '已取消') return;
+            if (res.canceled) return;
             setResult(res);
             setQrState(res.error ? 'error' : 'done');
             if (res.connected) setRecent(rememberAddress(res.connected));
@@ -170,7 +175,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
     };
 
     return (
-        <Modal title="无线调试" open={open} onCancel={onClose} footer={null} width={560} destroyOnHidden>
+        <Modal title={t("无线调试")} open={open} onCancel={onClose} footer={null} width={560} destroyOnHidden>
             <div className="flex flex-col gap-4 pt-1">
                 <Segmented
                     block
@@ -180,10 +185,10 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                         setResult(null);
                     }}
                     options={[
-                        {value: 'qr', label: '二维码配对'},
-                        {value: 'code', label: '配对码配对'},
-                        {value: 'ip', label: 'IP 连接'},
-                        {value: 'usb', label: 'USB 转无线'},
+                        {value: 'qr', label: t("二维码配对")},
+                        {value: 'code', label: t("配对码配对")},
+                        {value: 'ip', label: t("IP 连接")},
+                        {value: 'usb', label: t("USB 转无线")},
                     ]}
                 />
 
@@ -192,8 +197,8 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                         <Alert
                             type="warning"
                             showIcon
-                            message="当前 adb 不支持 mDNS，无法使用二维码配对"
-                            description="请升级 Android SDK Platform-Tools（31 及以上），或改用「配对码配对」。"
+                            message={t("当前 adb 不支持 mDNS，无法使用二维码配对")}
+                            description={t("请升级 Android SDK Platform-Tools（31 及以上），或改用「配对码配对」。")}
                         />
                     ) : (
                         <div className="flex gap-5">
@@ -203,21 +208,19 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col gap-3">
                                 <Steps>
-                                    1. 手机与电脑连接同一 Wi-Fi（Android 11 及以上）<br/>
-                                    2. 打开「开发者选项 → 无线调试」<br/>
-                                    3. 点击「使用二维码配对设备」并扫描左侧二维码
-                                </Steps>
+                                    {t("1. 手机与电脑连接同一 Wi-Fi（Android 11 及以上）")}<br/>
+                                    {t("2. 打开「开发者选项 → 无线调试」")}<br/>
+                                    {t("3. 点击「使用二维码配对设备」并扫描左侧二维码")}</Steps>
                                 {qrState === 'waiting' && mdnsSupported && (
                                     <div className="flex items-center gap-2 text-[13px] text-mute">
-                                        <Spin size="small"/> 等待手机扫码…
-                                    </div>
+                                        <Spin size="small"/> {t(" 等待手机扫码…")}</div>
                                 )}
                                 {qrState === 'waiting' && qrSlow && (
                                     <Alert
                                         type="info"
                                         showIcon
-                                        message="扫码后一直没有反应？"
-                                        description="二维码配对依赖 mDNS（局域网组播）发现手机。电脑与手机不在同一网段（公司网络常见）或网络屏蔽组播时无法使用，请改用「配对码配对」。"
+                                        message={t("扫码后一直没有反应？")}
+                                        description={t("二维码配对依赖 mDNS（局域网组播）发现手机。电脑与手机不在同一网段（公司网络常见）或网络屏蔽组播时无法使用，请改用「配对码配对」。")}
                                     />
                                 )}
                                 <ResultLine result={result}/>
@@ -225,7 +228,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                                     <PairedConnect host={result.host} busy={busy} onConnect={address => void run(() => WirelessConnect(address))}/>
                                 )}
                                 {qrState !== 'waiting' && (
-                                    <Button onClick={() => setQrSeed(seed => seed + 1)}>重新生成二维码</Button>
+                                    <Button onClick={() => setQrSeed(seed => seed + 1)}>{t("重新生成二维码")}</Button>
                                 )}
                             </div>
                         </div>
@@ -235,11 +238,9 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                 {mode === 'code' && (
                     <div className="flex flex-col gap-3">
                         <Steps>
-                            在手机「开发者选项 → 无线调试」中点击「使用配对码配对设备」，填写弹窗里的 IP 地址和端口、6 位配对码。
-                            配对成功后会自动连接。
-                        </Steps>
+                            {t("在手机「开发者选项 → 无线调试」中点击「使用配对码配对设备」，填写弹窗里的 IP 地址和端口、6 位配对码。 配对成功后会自动连接。")}</Steps>
                         <div className="flex flex-col gap-1.5">
-                            <span className="text-[13px] font-medium text-body">IP 地址和端口</span>
+                            <span className="text-[13px] font-medium text-body">{t("IP 地址和端口")}</span>
                             <Input
                                 value={pairAddress}
                                 onChange={e => setPairAddress(e.target.value.trim())}
@@ -248,7 +249,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                             />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                            <span className="text-[13px] font-medium text-body">配对码</span>
+                            <span className="text-[13px] font-medium text-body">{t("配对码")}</span>
                             <Input.OTP length={6} value={pairCode} onChange={setPairCode}/>
                         </div>
                         <Button
@@ -257,8 +258,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                             disabled={!pairAddress || pairCode.length !== 6}
                             onClick={() => void run(() => WirelessPair(pairAddress, pairCode))}
                         >
-                            配对并连接
-                        </Button>
+                            {t("配对并连接")}</Button>
                         <ResultLine result={result}/>
                         {result?.paired && !result.connected && !result.error && (
                             <PairedConnect host={result.host} busy={busy} onConnect={address => void run(() => WirelessConnect(address))}/>
@@ -269,8 +269,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                 {mode === 'ip' && (
                     <div className="flex flex-col gap-3">
                         <Steps>
-                            连接已配对的设备（「无线调试」页面上显示的 IP 地址和端口），或已通过「USB 转无线」开启 5555 端口的设备。
-                        </Steps>
+                            {t("连接已配对的设备（「无线调试」页面上显示的 IP 地址和端口），或已通过「USB 转无线」开启 5555 端口的设备。")}</Steps>
                         <div className="flex gap-2">
                             <Input
                                 value={connectAddress}
@@ -280,8 +279,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                                 className="!font-mono"
                             />
                             <Button type="primary" loading={busy} disabled={!connectAddress} onClick={() => void run(() => WirelessConnect(connectAddress))}>
-                                连接
-                            </Button>
+                                {t("连接")}</Button>
                         </div>
                         {recent.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
@@ -303,9 +301,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                 {mode === 'usb' && (
                     <div className="flex flex-col gap-3">
                         <Steps>
-                            让当前 USB 连接的设备开启 5555 端口并通过 WLAN 连接，适用于 Android 10 及以下或未开启无线调试的设备。
-                            切换时设备会短暂断开，完成后可以拔掉数据线。手机需要与电脑在同一网络。
-                        </Steps>
+                            {t("让当前 USB 连接的设备开启 5555 端口并通过 WLAN 连接，适用于 Android 10 及以下或未开启无线调试的设备。 切换时设备会短暂断开，完成后可以拔掉数据线。手机需要与电脑在同一网络。")}</Steps>
                         {usbDevice ? (
                             <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2.5">
                                 <div className="min-w-0">
@@ -313,11 +309,10 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                                     <div className="truncate font-mono text-[11.5px] text-mute">{usbDevice.id}</div>
                                 </div>
                                 <Button type="primary" loading={busy} onClick={() => void run(() => WirelessFromUSB(usbDevice.id))}>
-                                    切换到无线
-                                </Button>
+                                    {t("切换到无线")}</Button>
                             </div>
                         ) : (
-                            <Alert type="info" showIcon message="请先在左侧选择一台通过 USB 连接的设备"/>
+                            <Alert type="info" showIcon message={t("请先在左侧选择一台通过 USB 连接的设备")}/>
                         )}
                         <ResultLine result={result}/>
                     </div>
@@ -325,7 +320,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
 
                 {wirelessDevices.length > 0 && (
                     <div className="border-t border-hairline-soft pt-3">
-                        <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-faint">已连接的无线设备</div>
+                        <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-faint">{t("已连接的无线设备")}</div>
                         <div className="flex flex-col gap-1.5">
                             {wirelessDevices.map(device => (
                                 <div key={device.id} className="flex items-center justify-between gap-3 rounded-lg px-1 py-1">
@@ -333,7 +328,7 @@ function WirelessModal({open, onClose}: WirelessModalProps) {
                                         <div className="truncate text-[13px] text-ink">{device.name}</div>
                                         <div className="truncate font-mono text-[11.5px] text-mute">{device.id}</div>
                                     </div>
-                                    <Button size="small" onClick={() => void disconnect(device.id)}>断开</Button>
+                                    <Button size="small" onClick={() => void disconnect(device.id)}>{t("断开")}</Button>
                                 </div>
                             ))}
                         </div>

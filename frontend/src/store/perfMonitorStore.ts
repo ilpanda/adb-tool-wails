@@ -1,5 +1,6 @@
 // store/perfMonitorStore.ts
 // 性能监控数据放在 store 中：切换页面后后端继续采样，回到页面数据仍在
+import {t} from '../i18n';
 import {create} from 'zustand';
 import {EventsOn} from '../../wailsjs/runtime';
 import {StartPerfMonitor, StopPerfMonitor} from '../../wailsjs/go/main/App';
@@ -258,7 +259,7 @@ export const usePerfMonitorStore = create<PerfMonitorState>((set, get) => {
             try {
                 await StartPerfMonitor({deviceId, packageName, intervalMs, memIntervalMs});
             } catch (e: any) {
-                set({running: false, starting: false, error: e?.toString() || '启动监控失败'});
+                set({running: false, starting: false, error: e?.toString() || t("启动监控失败")});
                 throw e;
             }
         },

@@ -1,6 +1,7 @@
+import {t} from '../i18n';
 import {Button, Modal, message, notification} from 'antd';
 import {ExecuteAction, GetTerminalOpenMode, RevealPath} from '../../wailsjs/go/main/App';
-import {ACTION_META, QuickAction} from '../data/quickActions';
+import {ACTION_META, QuickAction, actionLabel} from '../data/quickActions';
 import {ActionTask, TaskResult, useActionTaskStore} from '../store/actionTaskStore';
 
 interface RunContext {
@@ -24,14 +25,14 @@ function firstLine(text: string, max = 80): string {
 }
 
 function confirmDanger(item: QuickAction, packageName: string): Promise<boolean> {
-    const text = ACTION_META[item.action].danger;
+    const text = ACTION_META()[item.action].danger;
     if (!text) return Promise.resolve(true);
     return new Promise(resolve => {
         Modal.confirm({
-            title: `${item.label}？`,
-            content: text.replace('{pkg}', packageName || '当前应用'),
+            title: t("{0}？", [item.label]),
+            content: text.replace('{pkg}', packageName || t("当前应用")),
             okText: item.label,
-            cancelText: '取消',
+            cancelText: t("取消"),
             okButtonProps: {danger: true},
             onOk: () => resolve(true),
             onCancel: () => resolve(false),
@@ -41,28 +42,28 @@ function confirmDanger(item: QuickAction, packageName: string): Promise<boolean>
 
 export async function revealLocalPath(path: string) {
     const result = await RevealPath(path);
-    if (result.error) message.error(`无法打开: ${result.error}`);
+    if (result.error) message.error(t("无法打开: {0}", [result.error]));
 }
 
 function presentResult(task: ActionTask) {
     const {openDetail} = useActionTaskStore.getState();
-    const meta = ACTION_META[task.action];
+    const meta = ACTION_META()[task.action];
     const key = `task-${task.id}`;
 
     if (task.status === 'canceled') {
-        message.info(`已取消${task.label}`);
+        message.info(t("已取消{0}", [actionLabel(task.action, task.label)]));
         return;
     }
 
     if (task.status === 'error') {
         notification.error({
             key,
-            message: `${task.label}失败`,
+            message: t("{0}失败", [actionLabel(task.action, task.label)]),
             description: firstLine(task.error, 120),
             actions: <Button size="small" onClick={() => {
                 notification.destroy(key);
                 openDetail(task.id);
-            }}>查看详情</Button>,
+            }}>{t("查看详情")}</Button>,
             duration: 6,
         });
         return;
@@ -75,12 +76,12 @@ function presentResult(task: ActionTask) {
         case 'file':
             notification.success({
                 key,
-                message: `${task.label}完成`,
+                message: t("{0}完成", [actionLabel(task.action, task.label)]),
                 description: task.localPath ? <span className="break-all font-mono text-[12px]">{task.localPath}</span> : firstLine(task.output),
                 actions: task.localPath ? <Button size="small" onClick={() => {
                     notification.destroy(key);
                     void revealLocalPath(task.localPath);
-                }}>在访达中显示</Button> : undefined,
+                }}>{t("在访达中显示")}</Button> : undefined,
                 duration: 6,
             });
             return;
@@ -88,8 +89,8 @@ function presentResult(task: ActionTask) {
             const summary = firstLine(task.output, 60);
             // 输出较短时直接展示，例如开关类命令返回的当前状态
             message.success(summary && !summary.includes('\n') && summary.length <= 60 && summary !== 'success'
-                ? `${task.label}：${summary}`
-                : `${task.label}已执行`);
+                ? t("{0}：{1}", [actionLabel(task.action, task.label), summary])
+                : t("{0}已执行", [actionLabel(task.action, task.label)]));
             return;
         }
         default:
@@ -104,7 +105,7 @@ export async function runQuickAction(item: QuickAction, ctx: RunContext): Promis
     if (!(await confirmDanger(item, ctx.packageName))) return null;
 
     const store = useActionTaskStore.getState();
-    const meta = ACTION_META[item.action];
+    const meta = ACTION_META()[item.action];
     const id = newTaskId();
     store.addTask({
         id,
@@ -126,7 +127,7 @@ export async function runQuickAction(item: QuickAction, ctx: RunContext): Promis
             files: ctx.files,
         });
     } catch (error: any) {
-        result = {error: error?.message || String(error) || '执行失败'};
+        result = {error: error?.message || String(error) || t("执行失败")};
     }
 
     useActionTaskStore.getState().finishTask(id, result);

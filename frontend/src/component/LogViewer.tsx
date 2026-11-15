@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {Button, Empty, Input, Popconfirm, Segmented, Select, Spin, Tooltip, message} from 'antd';
 import {
@@ -25,13 +26,13 @@ const MAX_RENDER_LINES = 3000;
 type Level = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 type LevelFilter = 'all' | Level;
 
-const LEVEL_OPTIONS: Array<{value: LevelFilter; label: string}> = [
-    {value: 'all', label: '全部'},
+const LEVEL_OPTIONS = (): Array<{value: LevelFilter; label: string}> => ([
+    {value: 'all', label: t("全部")},
     {value: 'ERROR', label: 'Error'},
     {value: 'WARN', label: 'Warn'},
     {value: 'INFO', label: 'Info'},
     {value: 'DEBUG', label: 'Debug'},
-];
+]);
 
 interface ParsedLine {
     raw: string;
@@ -54,6 +55,7 @@ function parseLine(raw: string): ParsedLine {
 }
 
 function LogViewer() {
+    const locale = useLocale();
     const [status, setStatus] = useState<applog.StatusDTO | null>(null);
     const [files, setFiles] = useState<applog.FileDTO[]>([]);
     const [selectedFile, setSelectedFile] = useState('');
@@ -100,7 +102,7 @@ function LogViewer() {
             }
         } catch (error) {
             console.error(error);
-            setErrorText('加载日志信息失败');
+            setErrorText(t("加载日志信息失败"));
         } finally {
             setLoading(false);
         }
@@ -120,7 +122,7 @@ function LogViewer() {
             setSelectedFile(fileName);
         } catch (error) {
             console.error(error);
-            setErrorText('读取日志失败');
+            setErrorText(t("读取日志失败"));
         } finally {
             setLoading(false);
         }
@@ -139,7 +141,7 @@ function LogViewer() {
             applyChunk(chunk, true);
         } catch (error) {
             console.error(error);
-            setErrorText('读取更早日志失败');
+            setErrorText(t("读取更早日志失败"));
         } finally {
             setLoadingOlder(false);
         }
@@ -170,7 +172,7 @@ function LogViewer() {
             .split(/\r?\n/)
             .filter((line, index, arr) => !(index === arr.length - 1 && line === ''))
             .map(parseLine);
-    }, [content]);
+    }, [content, locale]);
 
     const levelCounts = useMemo(() => {
         const counts: Record<Level, number> = {ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0};
@@ -178,7 +180,7 @@ function LogViewer() {
             if (line.level) counts[line.level] += 1;
         });
         return counts;
-    }, [allLines]);
+    }, [allLines, locale]);
 
     const filteredLines = useMemo(() => {
         const keyword = searchTerm.trim().toLowerCase();
@@ -191,14 +193,14 @@ function LogViewer() {
             }
             return line.raw.toLowerCase().includes(keyword);
         });
-    }, [allLines, levelFilter, searchTerm]);
+    }, [allLines, levelFilter, searchTerm, locale]);
 
     const visibleLines = useMemo(() => {
         if (filteredLines.length <= MAX_RENDER_LINES) {
             return filteredLines;
         }
         return filteredLines.slice(filteredLines.length - MAX_RENDER_LINES);
-    }, [filteredLines]);
+    }, [filteredLines, locale]);
 
     useLayoutEffect(() => {
         const el = scrollRef.current;
@@ -210,7 +212,7 @@ function LogViewer() {
 
     const handleExport = async () => {
         const result = await ExportLogs();
-        showExecResult(result, '日志已导出');
+        showExecResult(result, t("日志已导出"));
     };
 
     const handleClear = async () => {
@@ -236,23 +238,23 @@ function LogViewer() {
         setStatus(nextStatus);
         setFiles(nextFiles);
 
-        message.success('当前日志已清空');
+        message.success(t("当前日志已清空"));
     };
 
     const handleOpenDir = async () => {
         const result = await OpenLogDirectory();
-        showExecResult(result, '已打开日志目录');
+        showExecResult(result, t("已打开日志目录"));
     };
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(visibleLines.map(line => line.raw).join('\n'));
-        message.success(`已复制 ${visibleLines.length} 行`);
+        message.success(t("已复制 {0} 行", [visibleLines.length]));
     };
 
     const handleCopyDir = async () => {
         if (!status?.directory) return;
         await navigator.clipboard.writeText(status.directory);
-        message.success('已复制日志目录');
+        message.success(t("已复制日志目录"));
     };
 
     const showExecResult = (result: types.ExecResult, successText: string) => {
@@ -270,11 +272,11 @@ function LogViewer() {
         <div className="flex h-full min-w-0 flex-1 flex-col gap-5 overflow-hidden bg-canvas px-8 py-7 text-left text-ink">
             <PageHeader
                 eyebrow="Diagnostics · app log"
-                title="诊断日志"
-                description="ADB Tool 自身的运行日志，反馈问题时可导出附上"
+                title={t("诊断日志")}
+                description={t("ADB Tool 自身的运行日志，反馈问题时可导出附上")}
                 actions={<>
-                    <Button icon={<FolderOpenOutlined/>} onClick={handleOpenDir}>打开目录</Button>
-                    <Button type="primary" icon={<DownloadOutlined/>} onClick={handleExport}>导出 ZIP</Button>
+                    <Button icon={<FolderOpenOutlined/>} onClick={handleOpenDir}>{t("打开目录")}</Button>
+                    <Button type="primary" icon={<DownloadOutlined/>} onClick={handleExport}>{t("导出 ZIP")}</Button>
                 </>}
             />
 
@@ -283,7 +285,7 @@ function LogViewer() {
                         <div className="flex items-center gap-3">
                             <Select
                                 value={selectedFile || undefined}
-                                placeholder={loading ? '正在加载...' : '还没有日志文件'}
+                                placeholder={loading ? t("正在加载...") : t("还没有日志文件")}
                                 onChange={(name: string) => void loadLatest(name)}
                                 popupMatchSelectWidth={false}
                                 className="w-60 [&_.ant-select-selection-item]:font-mono [&_.ant-select-selection-item]:text-[13px]"
@@ -308,27 +310,27 @@ function LogViewer() {
                             <div className="mr-auto flex min-w-0 items-center gap-2 font-mono text-[11px] tabular-nums text-faint">
                                 {selectedMeta?.isCurrent && <CurrentBadge/>}
                                 <span className="truncate">
-                                    {selectedMeta ? `${formatBytes(selectedMeta.size)} · 更新于 ${formatTime(selectedMeta.modifiedAt)}` : ''}
+                                    {selectedMeta ? t("{0} · 更新于 {1}", [formatBytes(selectedMeta.size), formatTime(selectedMeta.modifiedAt)]) : ''}
                                 </span>
                             </div>
 
                             <div className="flex items-center gap-1">
-                                <Tooltip title="刷新文件列表与最新内容">
+                                <Tooltip title={t("刷新文件列表与最新内容")}>
                                     <Button type="text" icon={<ReloadOutlined spin={loading}/>} onClick={() => void initialize()} disabled={loading}/>
                                 </Tooltip>
-                                <Tooltip title="复制当前显示的行">
+                                <Tooltip title={t("复制当前显示的行")}>
                                     <Button type="text" icon={<CopyOutlined/>} onClick={handleCopy} disabled={visibleLines.length === 0}/>
                                 </Tooltip>
                                 <Popconfirm
-                                    title="清空当前日志文件？"
-                                    description="清空后无法恢复。"
-                                    okText="清空"
-                                    cancelText="取消"
+                                    title={t("清空当前日志文件？")}
+                                    description={t("清空后无法恢复。")}
+                                    okText={t("清空")}
+                                    cancelText={t("取消")}
                                     okButtonProps={{danger: true}}
                                     onConfirm={() => void handleClear()}
                                     disabled={!selectedFile || loading}
                                 >
-                                    <Tooltip title="清空日志">
+                                    <Tooltip title={t("清空日志")}>
                                         <Button type="text" danger icon={<DeleteOutlined/>} disabled={!selectedFile || loading}/>
                                     </Tooltip>
                                 </Popconfirm>
@@ -338,7 +340,7 @@ function LogViewer() {
                             <Input
                                 allowClear
                                 prefix={<SearchOutlined className="text-faint"/>}
-                                placeholder="搜索已加载内容"
+                                placeholder={t("搜索已加载内容")}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="min-w-[140px] flex-1"
@@ -346,7 +348,7 @@ function LogViewer() {
                             <Segmented
                                 size="small"
                                 className="shrink-0"
-                                options={LEVEL_OPTIONS.map(option => ({
+                                options={LEVEL_OPTIONS().map(option => ({
                                     value: option.value,
                                     label: (
                                         <span className="flex items-center gap-1.5 px-0.5">
@@ -366,7 +368,7 @@ function LogViewer() {
 
                     {(errorText || truncated) && (
                         <div className={`border-b px-4 py-2 text-[12px] ${errorText ? 'border-error-soft bg-error-soft text-error' : 'border-warning-soft bg-warning-soft text-warning-deep'}`}>
-                            {errorText || `匹配结果较多，仅显示最后 ${MAX_RENDER_LINES} 行`}
+                            {errorText || t("匹配结果较多，仅显示最后 {0} 行", [MAX_RENDER_LINES])}
                         </div>
                     )}
 
@@ -377,14 +379,14 @@ function LogViewer() {
                             </div>
                         ) : visibleLines.length === 0 ? (
                             <div className="flex h-full items-center justify-center">
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={allLines.length > 0 ? '没有匹配的日志' : '日志为空'}/>
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={allLines.length > 0 ? t("没有匹配的日志") : t("日志为空")}/>
                             </div>
                         ) : (
                             <div className="py-1">
                                 {hasMore && !truncated && (
                                     <div className="flex justify-center py-2">
                                         <Button size="small" type="text" loading={loadingOlder} onClick={() => void loadOlder()} className="!text-mute">
-                                            加载更早的 {formatBytes(CHUNK_BYTES)}
+                                            {t("加载更早的 ")}{formatBytes(CHUNK_BYTES)}
                                         </Button>
                                     </div>
                                 )}
@@ -399,14 +401,14 @@ function LogViewer() {
                         <button
                             type="button"
                             onClick={() => void handleCopyDir()}
-                            title={status?.directory ? `${status.directory}\n点击复制` : undefined}
+                            title={status?.directory ? t("{0}\n点击复制", [status.directory]) : undefined}
                             className="group flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         >
                             <span className="truncate group-hover:text-ink">{status?.directory || '-'}</span>
                             <CopyOutlined className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"/>
                         </button>
                         <span className="shrink-0">
-                            已加载 {allLines.length} 行 · 匹配 {filteredLines.length} 行{hasMore ? '' : ' · 已到文件开头'}
+                            {t("已加载 ")}{allLines.length} {t(" 行 · 匹配 ")}{filteredLines.length} {t(" 行")}{hasMore ? '' : t(" · 已到文件开头")}
                         </span>
                     </div>
                 </section>
@@ -422,14 +424,15 @@ const LEVEL_STYLE: Record<Level, {dot: string; badge: string; row: string}> = {
 };
 
 function CurrentBadge() {
+    useLocale();
     return (
         <span className="shrink-0 rounded-full bg-link-soft px-1.5 py-px font-sans text-[10px] font-medium text-link-deep">
-            当前
-        </span>
+            {t("当前")}</span>
     );
 }
 
 function LogRow({line}: { line: ParsedLine }) {
+    useLocale();
     if (!line.level) {
         return <div className="whitespace-pre-wrap break-all px-4 py-px text-body hover:bg-canvas">{line.raw}</div>;
     }

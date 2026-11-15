@@ -1,3 +1,4 @@
+import {t, useLocale} from '../i18n';
 import {useEffect} from 'react';
 import {message} from 'antd';
 import {create} from 'zustand';
@@ -22,22 +23,22 @@ const baseName = (path: string) => path.split(/[\\/]/).pop() || path;
 async function installApks(paths: string[]) {
     const device = useDeviceStore.getState().selectedDevice;
     if (!device) {
-        message.warning('请先连接设备');
+        message.warning(t("请先连接设备"));
         return;
     }
     const apks = paths.filter(path => path.toLowerCase().endsWith('.apk'));
     const others = paths.length - apks.length;
     if (apks.length === 0) {
-        message.warning('拖入 APK 可直接安装；上传其他文件请在「文件管理」中拖入');
+        message.warning(t("拖入 APK 可直接安装；上传其他文件请在「文件管理」中拖入"));
         return;
     }
     if (others > 0) {
-        message.info(`已忽略 ${others} 个非 APK 文件，上传文件请在「文件管理」中拖入`);
+        message.info(t("已忽略 {0} 个非 APK 文件，上传文件请在「文件管理」中拖入", [others]));
     }
     // 逐个安装：版本降级时需要逐个确认
     for (const path of apks) {
         await runQuickAction(
-            {icon: 'fa-box-open', label: `安装 ${baseName(path)}`, action: 'install-apk-file'},
+            {icon: 'fa-box-open', label: t("安装 {0}", [baseName(path)]), action: 'install-apk-file'},
             {packageName: '', deviceId: device.id, deviceName: device.name, files: [path]},
         );
     }
@@ -53,6 +54,7 @@ function clearDropHighlight() {
 
 // 监听拖入窗口的文件。窗口根节点需设置 --wails-drop-target: drop，拖拽经过时 Wails 会加上 wails-drop-target-active
 export function useFileDrop() {
+    useLocale();
     useEffect(() => {
         // 拖拽过程中 dragover 会持续触发（静止时也至少每几百毫秒一次），超过 1 秒没有就视为拖拽已结束
         let idleTimer = 0;
@@ -69,7 +71,7 @@ export function useFileDrop() {
             const target = useDropTargetStore.getState().target;
             if (target) {
                 if (!useDeviceStore.getState().selectedDevice) {
-                    message.warning('请先连接设备');
+                    message.warning(t("请先连接设备"));
                     return;
                 }
                 void target.upload(paths);
@@ -86,6 +88,7 @@ export function useFileDrop() {
 }
 
 export function useDropHint(): string {
+    useLocale();
     const target = useDropTargetStore(state => state.target);
-    return target?.hint ?? '松开安装 APK';
+    return target?.hint ?? t("松开安装 APK");
 }

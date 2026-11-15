@@ -2,6 +2,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"fmt"
 	"regexp"
@@ -28,21 +29,21 @@ type AppDescInfo struct {
 
 func (a *AppDescInfo) String() string {
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("包名: %s\n", a.PackageName))
-	builder.WriteString(fmt.Sprintf("CPU架构: %s\n", a.PrimaryCpuAbi))
-	builder.WriteString(fmt.Sprintf("版本名称: %s\n", a.VersionName))
-	builder.WriteString(fmt.Sprintf("版本号: %s\n", a.VersionCode))
-	builder.WriteString(fmt.Sprintf("最小SDK: %s\n", a.MinSdk))
-	builder.WriteString(fmt.Sprintf("目标SDK: %s\n", a.TargetSdk))
-	builder.WriteString(fmt.Sprintf("时间戳: %s\n", a.TimeStamp))
-	builder.WriteString(fmt.Sprintf("首次安装时间: %s\n", a.FirstInstallTime))
-	builder.WriteString(fmt.Sprintf("最后更新时间: %s\n", a.LastUpdateTime))
-	builder.WriteString(fmt.Sprintf("签名版本: v%s\n", a.SignVersion))
-	builder.WriteString(fmt.Sprintf("数据目录: %s\n", a.DataDir))
-	builder.WriteString(fmt.Sprintf("外部数据目录: %s\n", a.ExternalDataDir))
-	builder.WriteString(fmt.Sprintf("安装路径: %s\n", a.InstallPath))
-	builder.WriteString(fmt.Sprintf("应用大小: %s\n", a.Size))
-	builder.WriteString(fmt.Sprintf("系统应用: %t\n", a.IsSystem))
+	builder.WriteString(fmt.Sprintf(i18n.T("包名: %s\n"), a.PackageName))
+	builder.WriteString(fmt.Sprintf(i18n.T("CPU架构: %s\n"), a.PrimaryCpuAbi))
+	builder.WriteString(fmt.Sprintf(i18n.T("版本名称: %s\n"), a.VersionName))
+	builder.WriteString(fmt.Sprintf(i18n.T("版本号: %s\n"), a.VersionCode))
+	builder.WriteString(fmt.Sprintf(i18n.T("最小SDK: %s\n"), a.MinSdk))
+	builder.WriteString(fmt.Sprintf(i18n.T("目标SDK: %s\n"), a.TargetSdk))
+	builder.WriteString(fmt.Sprintf(i18n.T("时间戳: %s\n"), a.TimeStamp))
+	builder.WriteString(fmt.Sprintf(i18n.T("首次安装时间: %s\n"), a.FirstInstallTime))
+	builder.WriteString(fmt.Sprintf(i18n.T("最后更新时间: %s\n"), a.LastUpdateTime))
+	builder.WriteString(fmt.Sprintf(i18n.T("签名版本: v%s\n"), a.SignVersion))
+	builder.WriteString(fmt.Sprintf(i18n.T("数据目录: %s\n"), a.DataDir))
+	builder.WriteString(fmt.Sprintf(i18n.T("外部数据目录: %s\n"), a.ExternalDataDir))
+	builder.WriteString(fmt.Sprintf(i18n.T("安装路径: %s\n"), a.InstallPath))
+	builder.WriteString(fmt.Sprintf(i18n.T("应用大小: %s\n"), a.Size))
+	builder.WriteString(fmt.Sprintf(i18n.T("系统应用: %t\n"), a.IsSystem))
 	return builder.String()
 }
 

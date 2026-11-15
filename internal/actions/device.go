@@ -2,6 +2,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
 	"bufio"
@@ -67,26 +68,26 @@ func Screenshot(param adb.ExecuteParams) types.ExecResult {
 	savePath, err := runtime.SaveFileDialog(param.Ctxt, runtime.SaveDialogOptions{
 		DefaultDirectory: desktopDir,
 		DefaultFilename:  defaultFilename,
-		Title:            "保存截图",
+		Title:            i18n.T("保存截图"),
 		Filters: []runtime.FileFilter{
 			{
-				DisplayName: "PNG 图片 (*.png)",
+				DisplayName: i18n.T("PNG 图片 (*.png)"),
 				Pattern:     "*.png",
 			},
 			{
-				DisplayName: "所有文件 (*.*)",
+				DisplayName: i18n.T("所有文件 (*.*)"),
 				Pattern:     "*.*",
 			},
 		},
 	})
 
 	if err != nil {
-		return types.NewExecResultErrorString("screenshot", fmt.Sprintf("保存对话框错误: %v", err))
+		return types.NewExecResultErrorString("screenshot", fmt.Sprintf(i18n.T("保存对话框错误: %v"), err))
 	}
 
 	param.Stage(adb.StageRunning)
 	if savePath == "" {
-		return types.NewExecResultCanceled("", "用户取消保存")
+		return types.NewExecResultCanceled("", i18n.T("用户取消保存"))
 	}
 
 	// 2. 执行截图命令
@@ -97,7 +98,7 @@ func Screenshot(param adb.ExecuteParams) types.ExecResult {
 	cmdScreencap := adb.ShellCommand(param.AdbPath, param.DeviceId, fmt.Sprintf("screencap -p %s", devicePath))
 	res, err := util.Exec(cmdScreencap, false, nil)
 	if err != nil {
-		return types.NewExecResultErrorString(cmdScreencap, fmt.Sprintf("截图失败: %v, 输出: %s", err, res))
+		return types.NewExecResultErrorString(cmdScreencap, fmt.Sprintf(i18n.T("截图失败: %v, 输出: %s"), err, res))
 	}
 
 	// 步骤2: 拉取到本地
@@ -105,7 +106,7 @@ func Screenshot(param adb.ExecuteParams) types.ExecResult {
 	cmdPull := adb.Command(param.AdbPath, param.DeviceId, fmt.Sprintf("pull %s %s", devicePath, util.QuoteHostArg(savePath)))
 	res, err = util.Exec(cmdPull, false, nil)
 	if err != nil {
-		return types.NewExecResultErrorString(cmdPull, fmt.Sprintf("拉取文件失败: %v, 输出: %s", err, res))
+		return types.NewExecResultErrorString(cmdPull, fmt.Sprintf(i18n.T("拉取文件失败: %v, 输出: %s"), err, res))
 	}
 
 	// 步骤3: 清理设备临时文件
@@ -116,10 +117,10 @@ func Screenshot(param adb.ExecuteParams) types.ExecResult {
 
 	// 步骤4: 验证文件是否存在
 	if _, err := os.Stat(savePath); os.IsNotExist(err) {
-		return types.NewExecResultErrorString(finalCmd, "截图保存失败，文件不存在")
+		return types.NewExecResultErrorString(finalCmd, i18n.T("截图保存失败，文件不存在"))
 	}
 
-	result := types.NewExecResultSuccess(finalCmd, fmt.Sprintf("截图已保存到: %s", savePath))
+	result := types.NewExecResultSuccess(finalCmd, fmt.Sprintf(i18n.T("截图已保存到: %s"), savePath))
 	result.LocalPath = savePath
 	return result
 }
@@ -253,7 +254,7 @@ func GetDeviceInfo(param adb.ExecuteParams) types.ExecResult {
 	ipAddress := getFormatIPAdress(ipInfo)
 
 	// 格式化结果
-	result := fmt.Sprintf(`
+	result := fmt.Sprintf(i18n.T(`
 名称: %s
 品牌: %s
 产品型号: %s
@@ -267,7 +268,7 @@ CPU 型号: %s、%d 核
 存储: %s
 字体缩放：%sx
 WIFI 名称：%s
-IP 地址：%s`,
+IP 地址：%s`),
 		deviceName,
 		brand,
 		model,
@@ -287,7 +288,7 @@ IP 地址：%s`,
 	)
 
 	if otaVersion != "" {
-		result += fmt.Sprintf("\nOTA 版本号: %s", otaVersion)
+		result += fmt.Sprintf(i18n.T("\nOTA 版本号: %s"), otaVersion)
 	}
 	result += "\n"
 
@@ -436,7 +437,7 @@ func JumpToSettings(param adb.ExecuteParams) types.ExecResult {
 	case "jump-wifi-settings":
 		intent = "android.settings.WIFI_SETTINGS"
 	default:
-		return types.NewExecResultErrorString(param.Action, "未知的跳转操作")
+		return types.NewExecResultErrorString(param.Action, i18n.T("未知的跳转操作"))
 	}
 
 	cmd := adb.ShellCommand(param.AdbPath, param.DeviceId, fmt.Sprintf("am start -a %s", intent))

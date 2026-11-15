@@ -1,3 +1,4 @@
+import {t, getLocale} from '../../i18n';
 import type {PerfEventKind, PerfMemInfo, PerfMemorySample, PerfProcEvent, PerfSample} from '../../store/perfMonitorStore';
 
 // 页面局部主题：近黑主色 + 细边框 + 6px 圆角（与其他页面一致）
@@ -22,7 +23,7 @@ export function processColor(processNames: string[], name: string): string {
 
 // 主进程显示「主进程」，子进程只显示冒号后的部分
 export function shortProcessName(name: string, packageName: string): string {
-    if (name === packageName) return '主进程';
+    if (name === packageName) return t("主进程");
     if (name.startsWith(packageName + ':')) return name.slice(packageName.length);
     return name;
 }
@@ -41,12 +42,12 @@ export function clusterColor(label: string): string {
 
 export const TEMP_COLOR = '#7928ca';
 
-export const EVENT_META: Record<PerfEventKind, { label: string; color: string; soft: string }> = {
-    started: {label: '启动', color: '#46a758', soft: '#e9f6ea'},
-    died: {label: '退出', color: '#e5484d', soft: '#ffe5e5'},
-    restarted: {label: '重启', color: '#f5a623', soft: '#ffefcf'},
+export const EVENT_META = (): Record<PerfEventKind, { label: string; color: string; soft: string }> => ({
+    started: {label: t("启动"), color: '#46a758', soft: '#e9f6ea'},
+    died: {label: t("退出"), color: '#e5484d', soft: '#ffe5e5'},
+    restarted: {label: t("重启"), color: '#f5a623', soft: '#ffefcf'},
     anr: {label: 'ANR', color: '#eb367f', soft: '#fde8f1'},
-};
+});
 
 export interface MemoryRegion {
     key: keyof PerfMemInfo;
@@ -85,14 +86,14 @@ export const formatMHz = (khz: number | null | undefined): string =>
     khz == null || khz <= 0 ? '--' : `${Math.round(khz / 1000)} MHz`;
 
 export const formatTime = (timestamp: number): string =>
-    new Date(timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
+    new Date(timestamp).toLocaleTimeString(getLocale(), {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
 
 export const formatDuration = (ms: number): string => {
     const seconds = Math.round(ms / 1000);
-    if (seconds < 60) return `${seconds} 秒`;
+    if (seconds < 60) return t("{0} 秒", [seconds]);
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} 分 ${seconds % 60} 秒`;
-    return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
+    if (minutes < 60) return t("{0} 分 {1} 秒", [minutes, seconds % 60]);
+    return t("{0} 小时 {1} 分", [Math.floor(minutes / 60), minutes % 60]);
 };
 
 const escapeCSVCell = (value: string | number | null | undefined): string => {
@@ -104,17 +105,17 @@ const escapeCSVCell = (value: string | number | null | undefined): string => {
 
 const csvLine = (cells: Array<string | number | null | undefined>) => cells.map(escapeCSVCell).join(',');
 
-const formatDateTime = (timestamp: number) => new Date(timestamp).toLocaleString('zh-CN', {hour12: false});
+const formatDateTime = (timestamp: number) => new Date(timestamp).toLocaleString(getLocale(), {hour12: false});
 
 // 导出为一个 CSV，按「CPU 与 RSS / 内存 PSS / 进程事件」三段排列
 export function generatePerfCSV(packageName: string, samples: PerfSample[], memory: PerfMemorySample[], events: PerfProcEvent[]): string {
     const lines: string[] = [
-        `# 包名: ${packageName}`,
-        `# 导出时间: ${new Date().toLocaleString('zh-CN', {hour12: false})}`,
-        '# CPU 为单核口径（一个核满载 = 100%），整机 CPU 为整机口径（全部核满载 = 100%），内存单位 KB',
+        t("# 包名: {0}", [packageName]),
+        t("# 导出时间: {0}", [new Date().toLocaleString(getLocale(), {hour12: false})]),
+        t("# CPU 为单核口径（一个核满载 = 100%），整机 CPU 为整机口径（全部核满载 = 100%），内存单位 KB"),
         '',
-        '# CPU 与 RSS（高频采样）',
-        csvLine(['时间', '进程', 'PID', 'CPU(%)', '整机CPU(%)', 'RssAnon', 'RssFile', 'RssShmem', 'Swap', '线程数', 'CPU 占用最高的线程']),
+        t("# CPU 与 RSS（高频采样）"),
+        csvLine([t("时间"), t("进程"), 'PID', 'CPU(%)', t("整机CPU(%)"), 'RssAnon', 'RssFile', 'RssShmem', 'Swap', t("线程数"), t("CPU 占用最高的线程")]),
     ];
     for (const sample of samples) {
         for (const p of sample.processes) {
@@ -128,8 +129,8 @@ export function generatePerfCSV(packageName: string, samples: PerfSample[], memo
         }
     }
 
-    lines.push('', '# 内存 PSS（dumpsys meminfo）');
-    lines.push(csvLine(['时间', '进程', 'PID', ...MEMORY_REGIONS.map(r => r.name), 'Swap PSS', 'Total RSS', 'CPU温度(°C)', ...KEY_OBJECTS]));
+    lines.push('', t("# 内存 PSS（dumpsys meminfo）"));
+    lines.push(csvLine([t("时间"), t("进程"), 'PID', ...MEMORY_REGIONS.map(r => r.name), 'Swap PSS', 'Total RSS', t("CPU温度(°C)"), ...KEY_OBJECTS]));
     for (const sample of memory) {
         for (const p of sample.processes) {
             lines.push(csvLine([
@@ -142,12 +143,24 @@ export function generatePerfCSV(packageName: string, samples: PerfSample[], memo
         }
     }
 
-    lines.push('', '# 进程事件');
-    lines.push(csvLine(['时间', '类型', '进程', 'PID', '旧 PID', '原因', '详情', '来源']));
+    lines.push('', t("# 进程事件"));
+    lines.push(csvLine([t("时间"), t("类型"), t("进程"), 'PID', t("旧 PID"), t("原因"), t("详情"), t("来源")]));
     for (const e of events) {
         lines.push(csvLine([
-            formatDateTime(e.timestamp), EVENT_META[e.kind]?.label ?? e.kind, e.process, e.pid, e.oldPid || '', e.reason, e.detail, e.source,
+            formatDateTime(e.timestamp), EVENT_META()[e.kind]?.label ?? e.kind, e.process, e.pid, e.oldPid || '', t(e.reason), formatEventDetail(e.detail), e.source,
         ]));
     }
     return '﻿' + lines.join('\n');
+}
+
+// CPU cluster labels and event descriptions are stable wire values; translate
+// only application-owned text, leaving process names and Android output intact.
+export function clusterLabel(label: string): string {
+    const numbered = /^簇(\d+)$/.exec(label);
+    return numbered ? t('簇{0}', [numbered[1]]) : t(label);
+}
+
+export function formatEventDetail(detail: string): string {
+    return detail.replace(/(^|；)启动方式：/g, (_, prefix: string) =>
+        (prefix ? '; ' : '') + t('启动方式：'));
 }

@@ -3,6 +3,7 @@ package update
 
 import (
 	"adb-tool-wails/internal/applog"
+	"adb-tool-wails/internal/i18n"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -112,7 +113,7 @@ func fetchLatestRelease(current string) (*latestRelease, error) {
 		req.Header.Set("User-Agent", "adb-tool-wails/"+current)
 		resp, err := client.Do(req)
 		if err != nil {
-			lastErr = fmt.Errorf("无法连接 GitHub：%w", err)
+			lastErr = fmt.Errorf(i18n.T("无法连接 GitHub：%w"), err)
 			continue
 		}
 		var release latestRelease
@@ -121,10 +122,10 @@ func fetchLatestRelease(current string) (*latestRelease, error) {
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("GitHub 返回 %d", resp.StatusCode)
+			return nil, fmt.Errorf(i18n.T("GitHub 返回 %d"), resp.StatusCode)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("解析版本信息失败：%w", err)
+			return nil, fmt.Errorf(i18n.T("解析版本信息失败：%w"), err)
 		}
 		return &release, nil
 	}
@@ -150,7 +151,7 @@ func latestReleaseFromRedirect(current string) (*latestRelease, error) {
 	location := resp.Header.Get("Location")
 	_, tag, ok := strings.Cut(location, "/releases/tag/")
 	if !ok || tag == "" {
-		return nil, fmt.Errorf("发布页返回 %d，没有跳转到最新版本", resp.StatusCode)
+		return nil, fmt.Errorf(i18n.T("发布页返回 %d，没有跳转到最新版本"), resp.StatusCode)
 	}
 
 	release := &latestRelease{TagName: tag, HTMLURL: releasesPage + "/tag/" + tag}

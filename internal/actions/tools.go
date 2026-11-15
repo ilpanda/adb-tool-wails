@@ -2,6 +2,7 @@ package actions
 
 import (
 	"adb-tool-wails/internal/adb"
+	"adb-tool-wails/internal/i18n"
 	"adb-tool-wails/internal/types"
 	"adb-tool-wails/internal/util"
 	"bytes"
@@ -34,13 +35,13 @@ func ScreenshotToClipboard(param adb.ExecuteParams) types.ExecResult {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return types.NewExecResultErrorString(cmdLine, "截图失败: "+msg)
+		return types.NewExecResultErrorString(cmdLine, i18n.T("截图失败: ")+msg)
 	}
 
 	data := stdout.Bytes()
 	config, err := png.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return types.NewExecResultErrorString(cmdLine, "截图数据不是有效的 PNG，设备可能处于锁屏或安全页面")
+		return types.NewExecResultErrorString(cmdLine, i18n.T("截图数据不是有效的 PNG，设备可能处于锁屏或安全页面"))
 	}
 
 	file, err := os.CreateTemp("", "adb-tool-screenshot-*.png")
@@ -56,9 +57,9 @@ func ScreenshotToClipboard(param adb.ExecuteParams) types.ExecResult {
 	}
 
 	if err := copyImageToClipboard(path); err != nil {
-		return types.NewExecResultErrorString(cmdLine, "复制到剪贴板失败: "+err.Error())
+		return types.NewExecResultErrorString(cmdLine, i18n.T("复制到剪贴板失败: ")+err.Error())
 	}
-	return types.NewExecResultSuccess(cmdLine, fmt.Sprintf("%d×%d，可直接粘贴", config.Width, config.Height))
+	return types.NewExecResultSuccess(cmdLine, fmt.Sprintf(i18n.T("%d×%d，可直接粘贴"), config.Width, config.Height))
 }
 
 // copyImageToClipboard 用各平台自带的工具把 PNG 写入系统剪贴板
@@ -111,12 +112,12 @@ type DeepLinkResult struct {
 func OpenDeepLink(param adb.ExecuteParams, link string, packageName string) DeepLinkResult {
 	link = strings.TrimSpace(link)
 	if link == "" || !strings.Contains(link, ":") {
-		return DeepLinkResult{Error: "链接格式不正确，需要包含 scheme，例如 myapp://home 或 https://example.com"}
+		return DeepLinkResult{Error: i18n.T("链接格式不正确，需要包含 scheme，例如 myapp://home 或 https://example.com")}
 	}
 	script := "am start -W -a android.intent.action.VIEW -d " + deviceQuote(link)
 	if packageName != "" {
 		if !adb.ValidPackageName(packageName) {
-			return DeepLinkResult{Error: "包名不合法: " + packageName}
+			return DeepLinkResult{Error: i18n.T("包名不合法: ") + packageName}
 		}
 		script += " " + packageName
 	}
@@ -144,7 +145,7 @@ func parseDeepLinkOutput(result *DeepLinkResult) {
 			if result.Error == "" {
 				result.Error = line
 				if strings.Contains(line, "unable to resolve Intent") {
-					result.Error = "设备上没有应用能处理这个链接，请检查 scheme / host 是否已在 AndroidManifest 中声明"
+					result.Error = i18n.T("设备上没有应用能处理这个链接，请检查 scheme / host 是否已在 AndroidManifest 中声明")
 				}
 			}
 		case strings.HasPrefix(line, "Activity:"):

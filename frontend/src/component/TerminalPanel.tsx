@@ -1,3 +1,5 @@
+import {actionLabel} from '../data/quickActions';
+import {t, useLocale, getLocale} from '../i18n';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {MouseEvent as ReactMouseEvent} from 'react';
 import {Button, Empty, Input, Segmented, Tooltip, message} from 'antd';
@@ -18,22 +20,23 @@ const STATUS_ICON: Record<string, {icon: string; className: string}> = {
     canceled: {icon: 'fa-circle-minus', className: 'text-faint'},
 };
 
-const STAGE_TEXT: Record<string, string> = {
-    dialog: '等待选择文件…',
-    running: '执行中…',
-    pulling: '正在保存到电脑…',
-};
+const STAGE_TEXT = (): Record<string, string> => ({
+    dialog: t("等待选择文件…"),
+    running: t("执行中…"),
+    pulling: t("正在保存到电脑…"),
+});
 
 function formatClock(ts: number) {
-    return new Date(ts).toLocaleTimeString('zh-CN', {hour12: false});
+    return new Date(ts).toLocaleTimeString(getLocale(), {hour12: false});
 }
 
 function copy(text: string) {
     void navigator.clipboard.writeText(text);
-    message.success('已复制');
+    message.success(t("已复制"));
 }
 
 function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defaultOpen: boolean }) {
+    useLocale();
     const [open, setOpen] = useState(defaultOpen);
     const openDetail = useActionTaskStore(state => state.openDetail);
     const status = STATUS_ICON[task.status];
@@ -53,10 +56,10 @@ function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defa
             >
                 <i className={`fa-solid ${status.icon} w-3.5 text-center text-[12px] ${status.className}`}/>
                 <span className="w-16 shrink-0 font-mono text-[11px] tabular-nums text-faint">{formatClock(task.createdAt)}</span>
-                <span className="shrink-0 text-[13px] font-medium text-ink">{task.label}</span>
+                <span className="shrink-0 text-[13px] font-medium text-ink">{actionLabel(task.action, task.label)}</span>
                 {task.packageName && <span className="min-w-0 truncate font-mono text-[11px] text-mute">{task.packageName}</span>}
                 <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-mute">
-                    {active ? STAGE_TEXT[task.status] : ''} {task.status === 'dialog' ? '' : formatElapsed(elapsedMs(task, now))}
+                    {active ? STAGE_TEXT()[task.status] : ''} {task.status === 'dialog' ? '' : formatElapsed(elapsedMs(task, now))}
                 </span>
                 <span
                     role="button"
@@ -67,8 +70,7 @@ function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defa
                     }}
                     className="shrink-0 rounded px-1.5 text-[12px] text-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
                 >
-                    详情
-                </span>
+                    {t("详情")}</span>
                 <i className={`fa-solid fa-chevron-right text-[9px] text-faint transition-transform ${open ? 'rotate-90' : ''}`}/>
             </button>
 
@@ -82,7 +84,7 @@ function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defa
                         </div>
                     )}
                     {active ? (
-                        <div className="text-faint">{STAGE_TEXT[task.status]}</div>
+                        <div className="text-faint">{STAGE_TEXT()[task.status]}</div>
                     ) : body ? (
                         <div className="group/out relative">
                             <pre className={`m-0 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border px-3 py-2 ${
@@ -93,7 +95,7 @@ function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defa
                             <CopyOutlined className="absolute right-2 top-2 cursor-pointer text-faint opacity-0 hover:text-ink group-hover/out:opacity-100" onClick={() => copy(body)}/>
                         </div>
                     ) : (
-                        <div className="text-faint">（无输出）</div>
+                        <div className="text-faint">{t("（无输出）")}</div>
                     )}
                 </div>
             )}
@@ -103,6 +105,7 @@ function TaskRow({task, now, defaultOpen}: { task: ActionTask; now: number; defa
 
 // 快捷功能的执行记录：点击时立即插入一条，执行完成后原地更新
 function TerminalPanel() {
+    const locale = useLocale();
     const {tasks, panelOpen, setPanelOpen, clearFinished} = useActionTaskStore();
     const [height, setHeight] = useState(320);
     const [fullscreen, setFullscreen] = useState(false);
@@ -116,9 +119,9 @@ function TerminalPanel() {
         return tasks.filter(task => {
             if (filter === 'error' && task.status !== 'error') return false;
             if (!lower) return true;
-            return [task.label, task.packageName, task.cmd, task.output, task.error].some(text => text.toLowerCase().includes(lower));
+            return [actionLabel(task.action, task.label), task.packageName, task.cmd, task.output, task.error].some(text => text.toLowerCase().includes(lower));
         });
-    }, [filter, keyword, tasks]);
+    }, [filter, keyword, tasks, locale]);
 
     const errorCount = tasks.filter(task => task.status === 'error').length;
 
@@ -149,7 +152,7 @@ function TerminalPanel() {
 
     const handleExport = async () => {
         const text = tasks.map(task => [
-            `[${formatClock(task.createdAt)}] ${task.label}${task.packageName ? ` (${task.packageName})` : ''} · ${task.status} · ${formatElapsed(elapsedMs(task))}`,
+            `[${formatClock(task.createdAt)}] ${actionLabel(task.action, task.label)}${task.packageName ? ` (${task.packageName})` : ''} · ${task.status} · ${formatElapsed(elapsedMs(task))}`,
             task.cmd && `$ ${task.cmd}`,
             (task.error || task.output).trim(),
         ].filter(Boolean).join('\n')).join('\n\n');
@@ -176,8 +179,8 @@ function TerminalPanel() {
                     value={filter}
                     onChange={value => setFilter(value as Filter)}
                     options={[
-                        {value: 'all', label: '全部'},
-                        {value: 'error', label: `失败${errorCount ? ` ${errorCount}` : ''}`},
+                        {value: 'all', label: t("全部")},
+                        {value: 'error', label: t("失败{0}", [errorCount ? ` ${errorCount}` : ''])},
                     ]}
                 />
                 <Input
@@ -186,20 +189,20 @@ function TerminalPanel() {
                     value={keyword}
                     onChange={event => setKeyword(event.target.value)}
                     prefix={<SearchOutlined className="text-faint"/>}
-                    placeholder="搜索命令或输出"
+                    placeholder={t("搜索命令或输出")}
                     className="!w-48"
                 />
                 <div className="ml-auto flex items-center gap-0.5">
-                    <Tooltip title="导出记录">
+                    <Tooltip title={t("导出记录")}>
                         <Button type="text" size="small" icon={<DownloadOutlined/>} disabled={tasks.length === 0} onClick={() => void handleExport()}/>
                     </Tooltip>
-                    <Tooltip title="清空已完成的记录">
+                    <Tooltip title={t("清空已完成的记录")}>
                         <Button type="text" size="small" icon={<DeleteOutlined/>} disabled={tasks.length === 0} onClick={clearFinished}/>
                     </Tooltip>
-                    <Tooltip title={fullscreen ? '退出全屏' : '全屏'}>
+                    <Tooltip title={fullscreen ? t("退出全屏") : t("全屏")}>
                         <Button type="text" size="small" icon={fullscreen ? <CompressOutlined/> : <ExpandOutlined/>} onClick={() => setFullscreen(value => !value)}/>
                     </Tooltip>
-                    <Tooltip title="收起">
+                    <Tooltip title={t("收起")}>
                         <Button type="text" size="small" icon={<CloseOutlined/>} onClick={() => {
                             setFullscreen(false);
                             setPanelOpen(false);
@@ -211,7 +214,7 @@ function TerminalPanel() {
             <div className="min-h-0 flex-1 overflow-y-auto">
                 {visible.length === 0 ? (
                     <div className="flex h-full items-center justify-center">
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={tasks.length === 0 ? '还没有执行记录' : '没有匹配的记录'}/>
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={tasks.length === 0 ? t("还没有执行记录") : t("没有匹配的记录")}/>
                     </div>
                 ) : (
                     <>
