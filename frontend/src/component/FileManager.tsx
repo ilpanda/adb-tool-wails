@@ -31,6 +31,7 @@ import {
     UploadLocalFiles,
 } from "../../wailsjs/go/main/App";
 import {useDeviceStore} from "../store/deviceStore";
+import {ClipboardSetText} from "../../wailsjs/runtime/runtime";
 import {useDropTargetStore} from "../hooks/useFileDrop";
 import PageHeader from "./PageHeader";
 import FilePreviewModal from "./FilePreviewModal";
@@ -714,6 +715,27 @@ function FileManager() {
                         </div>
                     )}
 
+                    <Tooltip title={t("复制当前路径")}>
+                        <Button
+                            type="text"
+                            aria-label={t("复制当前路径")}
+                            className="shrink-0 !rounded-[6px]"
+                            disabled={!selectedDevice}
+                            onClick={async () => {
+                                try {
+                                    const copied = await ClipboardSetText(currentPath);
+                                    if (copied) {
+                                        message.success(t("已复制路径"));
+                                    } else {
+                                        message.error(t("复制失败"));
+                                    }
+                                } catch {
+                                    message.error(t("复制失败"));
+                                }
+                            }}
+                            icon={<CopyOutlined/>}
+                        />
+                    </Tooltip>
                     <Tooltip title={isCurrentFav ? t("取消收藏当前路径") : t("收藏当前路径")}>
                         <Button
                             type="text"
