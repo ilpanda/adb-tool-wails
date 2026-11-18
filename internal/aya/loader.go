@@ -6,22 +6,26 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
 
-// ExtractDex 把内嵌的 aya.dex 写到临时目录，返回文件路径
+// ExtractDex creates an instance-private copy. The caller removes it on shutdown.
 func ExtractDex(data []byte) (string, error) {
-	dir := filepath.Join(os.TempDir(), "aya-wails")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	dex, err := os.CreateTemp("", "aya-wails-*.dex")
+	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, "aya.dex")
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if _, err := dex.Write(data); err != nil {
+		dex.Close()
+		os.Remove(dex.Name())
 		return "", err
 	}
-	return path, nil
+	if err := dex.Close(); err != nil {
+		os.Remove(dex.Name())
+		return "", err
+	}
+	return dex.Name(), nil
 }
 
 // Progress 应用列表加载进度

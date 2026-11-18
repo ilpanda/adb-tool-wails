@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/dgraph-io/badger/v4"
 )
 
 type BadgerStore struct {
-	db *badger.DB
+	db          *badger.DB
+	clipboardMu sync.Mutex
 }
 
 func NewBadgerStore(appName string) (*BadgerStore, error) {

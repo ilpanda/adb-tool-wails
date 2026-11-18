@@ -10,6 +10,7 @@ export const VIEW = {
     perfMonitor: '5',
     fileManager: '6',
     logs: '7',
+    clipboard: '8',
 } as const;
 
 interface NavStore {

@@ -15,14 +15,18 @@ android {
 
     defaultConfig {
         minSdk 23
-        versionCode 5
-        versionName '1.4'
+        versionCode 8
+        versionName '1.7'
     }
 
     buildTypes {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        clipboardPoc {
+            initWith release
+            versionNameSuffix '-clipboard-poc.1'
         }
     }
 
@@ -40,7 +44,9 @@ android.applicationVariants.all { variant ->
     variant.outputs.all {
         outputFileName = "aya-server-v${versionName}.apk"
 
-        def dexPath = new File(rootProject.rootDir.parentFile, "resources").path
+        def dexPath = variant.buildType.name == 'release' ?
+                new File(rootProject.rootDir.parentFile, "resources").path :
+                new File(project.buildDir, "outputs/${variant.name}").path
         variant.assembleProvider.get().doLast {
             copy {
                 def file = zipTree(file(outputFile)).matching { include 'classes*.dex' }.singleFile

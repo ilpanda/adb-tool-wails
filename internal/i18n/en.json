@@ -1,4 +1,5 @@
 {
+  "无法加载本地历史": "Could not load local history",
   "\nOTA 版本号: %s": "\nOTA build: %s",
   "\n卸载：\n": "\nUninstall:\n",
   "\n名称: %s\n品牌: %s\n产品型号: %s\n安卓版本: %s %s\n屏幕尺寸: %s\n屏幕像素密度: %sdpi\n密度: %.2f\nCPU 架构: %s\nCPU 型号: %s、%d 核\n内存: %s\n存储: %s\n字体缩放：%sx\nWIFI 名称：%s\nIP 地址：%s": "\nName: %s\nBrand: %s\nModel: %s\nAndroid version: %s %s\nScreen size: %s\nScreen density: %sdpi\nDensity: %.2f\nCPU architecture: %s\nCPU model: %s, %d cores\nMemory: %s\nStorage: %s\nFont scale: %sx\nWi-Fi name: %s\nIP address: %s",
@@ -157,5 +158,15 @@
   "非法路径：%s": "Invalid path: %s",
   "非法链接：%s": "Invalid link: %s",
   "首次安装时间: %s\n": "First installed: %s\n",
-  "首次安装：\n": "First install:\n"
+  "首次安装：\n": "First install:\n",
+  "剪贴板文本为空": "Clipboard text is empty",
+  "剪贴板为空，或系统限制了读取": "The clipboard is empty or access is restricted",
+  "手机剪贴板没有可用的纯文本": "The phone clipboard contains no plain text",
+  "系统拒绝访问剪贴板": "The system denied clipboard access",
+  "请解锁并点亮手机屏幕后重试": "Wake and unlock the phone, then try again",
+  "单条文本最多支持 64 KiB": "Each entry can contain up to 64 KiB of text",
+  "无法确认这台手机的锁屏状态": "Could not determine whether this phone is locked",
+  "无法监听手机剪贴板": "Could not monitor the phone clipboard",
+  "手机系统无法完成剪贴板操作": "Android could not complete the clipboard operation",
+  "剪贴板操作失败": "Clipboard operation failed"
 }

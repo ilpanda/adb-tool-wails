@@ -69,6 +69,10 @@ The application supports English and Simplified Chinese. It follows the system l
 
 ![File Management](imgs/file-manager.png)
 
+### Clipboard
+
+The app automatically records new plain text copied on the selected, unlocked phone, even while you use another page. Each device has its own history of up to 20 entries on this computer. Android-marked sensitive text is excluded from history. Open **Clipboard** to copy an entry to your computer, send text to the phone, or delete saved entries.
+
 ### More Features
 
 - **Automatic ADB setup** - If adb is not detected, Google platform-tools are downloaded automatically in the background. No manual installation is needed.

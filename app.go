@@ -4,6 +4,7 @@ import (
 	"adb-tool-wails/internal/adb"
 	"adb-tool-wails/internal/applog"
 	"adb-tool-wails/internal/aya"
+	"adb-tool-wails/internal/clipboard"
 	"adb-tool-wails/internal/perf"
 	"adb-tool-wails/internal/platformtools"
 	"adb-tool-wails/internal/storage"
@@ -35,6 +36,7 @@ type App struct {
 	pendingDevices    []adb.DeviceInfo
 	ayaClient         *aya.Client
 	ayaDexPath        string
+	clipboard         *clipboard.Service
 	perfMonitor       *perf.Monitor
 	appLoader         aya.Loader
 	updater           *update.Updater
@@ -67,6 +69,10 @@ func (a *App) startup(ctx context.Context) {
 		a.ayaDexPath = path
 		applog.Infof(applog.CategoryStartup, "aya_dex_ready path=%s", a.ayaDexPath)
 	}
+
+	a.clipboard = clipboard.NewService(ctx, a.store, a.ayaDexPath)
+	a.clipboard.OnWatchChanged = func() { runtime.EventsEmit(ctx, "clipboard-watch-updated") }
+	a.clipboard.OnHistoryChanged = func(serial string) { runtime.EventsEmit(ctx, "clipboard-history-updated", serial) }
 
 	a.setupEnv()
 	saveAdbPath := ""
@@ -133,6 +139,9 @@ func (a *App) installBuiltinAdb() {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	if a.clipboard != nil {
+		a.clipboard.Close()
+	}
 	if a.deviceTracker != nil {
 		a.deviceTracker.Stop(time.Second)
 	}
@@ -154,6 +163,11 @@ func (a *App) shutdown(ctx context.Context) {
 			applog.Warnf(applog.CategoryStartup, "aya_client_close_failed err=%q", err.Error())
 		}
 		a.ayaClient = nil
+	}
+	if a.ayaDexPath != "" {
+		if err := os.Remove(a.ayaDexPath); err != nil {
+			applog.Warnf(applog.CategoryStartup, "aya_dex_cleanup_failed err=%q", err.Error())
+		}
 	}
 
 	if a.store != nil {

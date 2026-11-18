@@ -3,6 +3,8 @@ import {useEffect, useRef, useState} from 'react';
 import {EventsOn} from "../../wailsjs/runtime";
 import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
 import {GetDeviceNameArray, GetVersion} from "../../wailsjs/go/main/App";
+import {useClipboardWatchStore} from '../hooks/useClipboardWatch';
+import {VIEW} from "../store/navStore";
 import {Eyebrow} from "./PageHeader";
 import WirelessModal from "./WirelessModal";
 import {downloadPercent, useUpdateStore} from "../store/updateStore";
@@ -17,6 +19,7 @@ const MENU_GROUPS = (): Array<{title: string; items: Array<{key: string; label: 
             {key: '4', label: t("应用列表"), icon: 'fa-table-cells-large'},
             {key: '5', label: t("性能监控"), icon: 'fa-chart-line'},
             {key: '6', label: t("文件管理"), icon: 'fa-folder'},
+            {key: VIEW.clipboard, label: t("剪贴板"), icon: 'fa-clipboard'},
         ],
     },
     {
@@ -47,6 +50,7 @@ function LeftContainer({selectedView, onViewChange}: {
 }) {
     useLocale();
     const {devices, selectedDevice, setSelectedDevices} = useDeviceStore();
+    const clipboardWatching = useClipboardWatchStore(state => state.state === 'watching' && state.serial === selectedDevice?.id);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [wirelessOpen, setWirelessOpen] = useState(false);
     const update = useUpdateStore(state => state.info);
@@ -55,12 +59,19 @@ function LeftContainer({selectedView, onViewChange}: {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        return EventsOn("adb_update", (next: DeviceInfo[]) => syncSelection(next || []));
-    }, []);
-
-    useEffect(() => {
-        GetDeviceNameArray().then(result => syncSelection(result || []));
+        let useInitialList = true;
+        const unsubscribe = EventsOn("adb_update", (next: DeviceInfo[]) => {
+            useInitialList = false;
+            syncSelection(next || []);
+        });
+        GetDeviceNameArray().then(result => {
+            if (useInitialList) syncSelection(result || []);
+        });
         GetVersion().then(setVersion);
+        return () => {
+            useInitialList = false;
+            unsubscribe();
+        };
     }, []);
 
     // 点击外部关闭下拉框
@@ -179,6 +190,9 @@ function LeftContainer({selectedView, onViewChange}: {
                                     >
                                         <i className={`fa-solid ${item.icon} w-4 text-center text-[13px] ${isActive ? 'text-ink' : 'text-mute'}`}/>
                                         <span className="truncate">{item.label}</span>
+                                        {item.key === VIEW.clipboard && clipboardWatching && <span
+                                            aria-label={t("自动记录已开启")} title={t("自动记录已开启")}
+                                            className="ml-auto h-2 w-2 shrink-0 rounded-full bg-link"/>}
                                     </button>
                                 );
                             })}

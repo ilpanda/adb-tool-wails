@@ -26,13 +26,8 @@ func GetDeviceNameByDeviceId(adbPath string, deviceId string) string {
 func GetDevices(data string, devices []string) []string {
 	lines := strings.Split(data, "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.Contains(line, "List of devices") || strings.Contains(line, "unauthorized") {
-			continue
-		}
-
 		fields := strings.Fields(line)
-		if len(fields) == 2 {
+		if len(fields) == 2 && fields[1] == "device" {
 			devices = append(devices, fields[0])
 		}
 	}

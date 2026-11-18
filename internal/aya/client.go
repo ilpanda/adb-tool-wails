@@ -26,11 +26,11 @@ import (
 )
 
 // AyaDexVersion 当前 aya.dex 的版本号，需要与 server/build.gradle 中的 versionName 保持一致
-const AyaDexVersion = "1.4"
+const AyaDexVersion = "1.7"
 
 type Client struct {
 	param       adb.ExecuteParams
-	conn        net.Conn
+	conn        io.ReadWriteCloser
 	localPort   string
 	resolves    map[string]chan *pb.Response
 	mu          sync.Mutex
@@ -204,6 +204,9 @@ func (c *Client) runAdb(timeout time.Duration, args ...string) (string, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return string(out), ctx.Err()
+		}
 		return string(out), fmt.Errorf("%w %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return string(out), nil
@@ -297,7 +300,9 @@ func (c *Client) readLoop() {
 		}
 
 		// 设置读取超时，以便能定期检查关闭状态
-		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		if socket, ok := conn.(net.Conn); ok {
+			socket.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		}
 
 		n, err := conn.Read(tempBuf)
 		if err != nil {
@@ -376,7 +381,9 @@ func (c *Client) sendMessage(method string, params interface{}, timeout time.Dur
 		Params: string(paramsJSON),
 	}
 
-	applog.Infof(applog.CategoryAya, "request_sent device=%s method=%s id=%s", c.param.DeviceId, method, id)
+	if method != "nextClipboardChange" {
+		applog.Infof(applog.CategoryAya, "request_sent device=%s method=%s id=%s", c.param.DeviceId, method, id)
+	}
 
 	respCh := make(chan *pb.Response, 1)
 	c.mu.Lock()
@@ -435,7 +442,9 @@ func (c *Client) sendMessage(method string, params interface{}, timeout time.Dur
 		return nil, fmt.Errorf("connection closed")
 	}
 
-	applog.Infof(applog.CategoryAya, "response_received device=%s id=%s", c.param.DeviceId, resp.Id)
+	if method != "nextClipboardChange" {
+		applog.Infof(applog.CategoryAya, "response_received device=%s id=%s", c.param.DeviceId, resp.Id)
+	}
 
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(resp.Result), &result); err != nil {

@@ -5,16 +5,19 @@ import SettingsContainer from "./SettingsContainer";
 import ApplicationList from "./ApplicationList";
 import PerfMonitor from "./PerfMonitor";
 import FileManager from "./FileManager";
+import ClipboardPanel from "./ClipboardPanel";
 import LogViewer from "./LogViewer";
 import APKInstallConfirm from "./APKInstallConfirm";
+import {useClipboardWatch} from "../hooks/useClipboardWatch";
 import {useAppListPreload} from "../hooks/useAppListPreload";
-import {useNavStore} from "../store/navStore";
+import {useNavStore, VIEW} from "../store/navStore";
 import {useDropHint, useFileDrop} from "../hooks/useFileDrop";
 import {useUpdateCheck} from "../hooks/useUpdateCheck";
 
 function RootContainer() {
     const {view: selectedView, setView: setSelectedView} = useNavStore();
     useAppListPreload();
+    useClipboardWatch();
     useFileDrop();
     useUpdateCheck();
     const dropHint = useDropHint();
@@ -32,6 +35,7 @@ function RootContainer() {
         {selectedView === '4' && <ApplicationList />}
         {selectedView === '5' && <PerfMonitor />}
         {selectedView === '6' && <FileManager />}
+        {selectedView === VIEW.clipboard && <ClipboardPanel />}
         {selectedView === '7' && <LogViewer />}
     </div>)
 }
