@@ -1,14 +1,13 @@
 import {t, useLocale} from '../i18n';
 import {useEffect, useRef, useState} from 'react';
-import {EventsOn} from "../../wailsjs/runtime";
+import {message} from 'antd';
+import {BrowserOpenURL, ClipboardSetText, EventsOn} from "../../wailsjs/runtime";
 import {DeviceInfo, useDeviceStore} from "../store/deviceStore";
 import {GetDeviceNameArray, GetVersion} from "../../wailsjs/go/main/App";
-import {useClipboardWatchStore} from '../hooks/useClipboardWatch';
 import {VIEW} from "../store/navStore";
 import {Eyebrow} from "./PageHeader";
 import WirelessModal from "./WirelessModal";
 import {downloadPercent, useUpdateStore} from "../store/updateStore";
-import {BrowserOpenURL} from "../../wailsjs/runtime";
 import {installUpdate} from "../hooks/useUpdateCheck";
 
 const MENU_GROUPS = (): Array<{title: string; items: Array<{key: string; label: string; icon: string}>}> => ([
@@ -50,7 +49,6 @@ function LeftContainer({selectedView, onViewChange}: {
 }) {
     useLocale();
     const {devices, selectedDevice, setSelectedDevices} = useDeviceStore();
-    const clipboardWatching = useClipboardWatchStore(state => state.state === 'watching' && state.serial === selectedDevice?.id);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [wirelessOpen, setWirelessOpen] = useState(false);
     const update = useUpdateStore(state => state.info);
@@ -87,6 +85,15 @@ function LeftContainer({selectedView, onViewChange}: {
 
     const connected = devices.length > 0;
     const current = selectedDevice ? devices.find(device => device.id === selectedDevice.id) : undefined;
+    const copySerial = async () => {
+        if (!current) return;
+        if (await ClipboardSetText(current.id).catch(() => false)) {
+            setIsDropdownOpen(false);
+            message.success(t("已复制设备序列号"));
+        } else {
+            message.error(t("复制失败"));
+        }
+    };
 
     return (
         <div className="flex h-full w-[220px] shrink-0 flex-col border-r border-hairline bg-canvas text-left">
@@ -104,6 +111,7 @@ function LeftContainer({selectedView, onViewChange}: {
                     type="button"
                     onClick={() => connected && setIsDropdownOpen(open => !open)}
                     disabled={!connected}
+                    aria-expanded={connected && isDropdownOpen}
                     className={`flex w-full items-center gap-2.5 rounded-lg border border-hairline bg-elevated px-3 py-2.5 text-left shadow-whisper transition-colors ${
                         connected ? 'cursor-pointer hover:border-hairline-strong' : 'cursor-default'
                     } ${isDropdownOpen ? 'border-hairline-strong' : ''}`}
@@ -125,7 +133,7 @@ function LeftContainer({selectedView, onViewChange}: {
                     )}
                 </button>
 
-                {isDropdownOpen && (
+                {connected && isDropdownOpen && (
                     <div className="absolute left-3 right-3 top-full z-20 mt-1.5 overflow-hidden rounded-lg border border-hairline bg-elevated p-1 shadow-floating">
                         <div className="px-2.5 pb-1 pt-1.5">
                             <Eyebrow>Devices · {devices.length}</Eyebrow>
@@ -154,6 +162,13 @@ function LeftContainer({selectedView, onViewChange}: {
                                 );
                             })}
                         </div>
+                        {current && <div className="mt-1 border-t border-hairline pt-1">
+                            <button type="button" onClick={copySerial}
+                                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-body hover:bg-canvas hover:text-ink">
+                                <i aria-hidden="true" className="fa-regular fa-copy"/>
+                                {t("复制设备序列号")}
+                            </button>
+                        </div>}
                     </div>
                 )}
 
@@ -190,9 +205,6 @@ function LeftContainer({selectedView, onViewChange}: {
                                     >
                                         <i className={`fa-solid ${item.icon} w-4 text-center text-[13px] ${isActive ? 'text-ink' : 'text-mute'}`}/>
                                         <span className="truncate">{item.label}</span>
-                                        {item.key === VIEW.clipboard && clipboardWatching && <span
-                                            aria-label={t("自动记录已开启")} title={t("自动记录已开启")}
-                                            className="ml-auto h-2 w-2 shrink-0 rounded-full bg-link"/>}
                                     </button>
                                 );
                             })}

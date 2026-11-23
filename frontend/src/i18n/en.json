@@ -751,5 +751,6 @@
   "正在自动记录": "Recording automatically",
   "正在连接手机…": "Connecting to phone…",
   "自动记录已停止": "Automatic recording stopped",
-  "自动记录已开启": "Automatic recording is on"
+  "复制设备序列号": "Copy device serial",
+  "已复制设备序列号": "Device serial copied"
 }
